@@ -7,10 +7,41 @@ import {
   formatTime,
 } from '../lib/format'
 
-export default function ItemCard({ item, compact = false }: { item: FeedItem; compact?: boolean }) {
+type Props = {
+  item: FeedItem
+  compact?: boolean
+  watched?: boolean
+  onToggleWatch?: () => void
+}
+
+function StarButton({ watched, onClick }: { watched: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
+      className={`shrink-0 transition ${watched ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}`}
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill={watched ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    </button>
+  )
+}
+
+export default function ItemCard({ item, compact = false, watched = false, onToggleWatch }: Props) {
   const tier = materialityTier(item.materiality_score)
   const rel = reliabilityLabel[item.reliability]
   const dir = directionLabel[item.direction]
+  const canWatch = Boolean(item.company_id && onToggleWatch)
 
   const scoreBadge = (
     <span
@@ -21,11 +52,11 @@ export default function ItemCard({ item, compact = false }: { item: FeedItem; co
     </span>
   )
 
-  // תצוגה תמציתית — שורה אחת
   if (compact) {
     return (
       <article className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:shadow-sm">
         {scoreBadge}
+        {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
         {item.company_name && (
           <span className="shrink-0 text-xs font-bold text-brand">{item.company_name}</span>
         )}
@@ -38,13 +69,15 @@ export default function ItemCard({ item, compact = false }: { item: FeedItem; co
     )
   }
 
-  // תצוגה מלאה
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {item.company_name && (
-            <div className="text-sm font-extrabold text-brand">{item.company_name}</div>
+            <div className="flex items-center gap-1.5">
+              {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
+              <span className="text-sm font-extrabold text-brand">{item.company_name}</span>
+            </div>
           )}
           <h2 className="mt-0.5 text-[15px] font-bold leading-snug text-slate-900">{item.title}</h2>
         </div>

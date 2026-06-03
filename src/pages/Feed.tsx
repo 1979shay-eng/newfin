@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ItemCard from '../components/ItemCard'
 import { fetchFeed } from '../lib/queries'
+import { loadWatch, saveWatch } from '../lib/watchlist'
 import type { FeedItem } from '../types/db'
 
 const MAT_PRESETS = [
@@ -12,17 +13,21 @@ const MAT_PRESETS = [
 
 type Menu = '' | 'mat' | 'src' | 'sort'
 type Sort = 'materiality' | 'time'
+type Tab = 'general' | 'watch'
 
 export default function Feed() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<Tab>('general')
   const [min, setMin] = useState(5)
   const [query, setQuery] = useState('')
   const [excluded, setExcluded] = useState<string[]>([])
   const [sort, setSort] = useState<Sort>('materiality')
   const [compact, setCompact] = useState(false)
   const [menu, setMenu] = useState<Menu>('')
+  const [watch, setWatch] = useState<string[]>(() => loadWatch())
   const barRef = useRef<HTMLDivElement>(null)
+  const watchSet = useMemo(() => new Set(watch), [watch])
 
   useEffect(() => {
     fetchFeed(80).then((data) => {
@@ -39,21 +44,30 @@ export default function Feed() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  function toggleWatch(id: string) {
+    setWatch((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      saveWatch(next)
+      return next
+    })
+  }
+
   const allSources = useMemo(() => [...new Set(items.map((i) => i.source_name))], [items])
 
   const filtered = useMemo(() => {
-    const r = items.filter(
+    let r = items.filter(
       (it) =>
         it.materiality_score >= min &&
         !excluded.includes(it.source_name) &&
         (!query || it.title.includes(query) || (it.company_name ?? '').includes(query)),
     )
+    if (tab === 'watch') r = r.filter((it) => it.company_id && watchSet.has(it.company_id))
     return r.sort((a, b) =>
       sort === 'time'
         ? +new Date(b.published_at) - +new Date(a.published_at)
         : b.materiality_score - a.materiality_score,
     )
-  }, [items, min, query, excluded, sort])
+  }, [items, min, query, excluded, sort, tab, watchSet])
 
   const toggleSource = (s: string) =>
     setExcluded((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]))
@@ -65,12 +79,21 @@ export default function Feed() {
         <p className="mt-1 text-sm text-slate-500">דיווחים ממאיה, מדורגים לפי מהותיות.</p>
       </div>
 
-      {/* בר חיפוש וסינון מלא */}
+      {/* לשוניות כללי / במעקב */}
+      <div className="mb-3 flex w-fit gap-1 rounded-lg bg-slate-100 p-1">
+        <TabBtn active={tab === 'general'} onClick={() => setTab('general')}>
+          כללי
+        </TabBtn>
+        <TabBtn active={tab === 'watch'} onClick={() => setTab('watch')}>
+          ⭐ במעקב{watch.length > 0 ? ` (${watch.length})` : ''}
+        </TabBtn>
+      </div>
+
+      {/* בר חיפוש וסינון */}
       <div
         ref={barRef}
         className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
       >
-        {/* מהותיות */}
         <div className="relative">
           <button onClick={() => setMenu(menu === 'mat' ? '' : 'mat')} className={btn(menu === 'mat' || min > 1)}>
             <FunnelIcon />
@@ -103,7 +126,6 @@ export default function Feed() {
           )}
         </div>
 
-        {/* מקורות */}
         <div className="relative">
           <button onClick={() => setMenu(menu === 'src' ? '' : 'src')} className={btn(menu === 'src' || excluded.length > 0)}>
             <FunnelIcon />
@@ -116,16 +138,8 @@ export default function Feed() {
               <div className="space-y-0.5">
                 {allSources.length === 0 && <div className="text-xs text-slate-400">—</div>}
                 {allSources.map((s) => (
-                  <label
-                    key={s}
-                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!excluded.includes(s)}
-                      onChange={() => toggleSource(s)}
-                      className="accent-brand"
-                    />
+                  <label key={s} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50">
+                    <input type="checkbox" checked={!excluded.includes(s)} onChange={() => toggleSource(s)} className="accent-brand" />
                     <span className="text-slate-700">{s}</span>
                   </label>
                 ))}
@@ -134,7 +148,6 @@ export default function Feed() {
           )}
         </div>
 
-        {/* מיון */}
         <div className="relative">
           <button onClick={() => setMenu(menu === 'sort' ? '' : 'sort')} className={btn(menu === 'sort')}>
             <SortIcon />
@@ -152,12 +165,10 @@ export default function Feed() {
           )}
         </div>
 
-        {/* תצוגה תמציתית */}
         <button onClick={() => setCompact((c) => !c)} className={btn(compact)}>
           תצוגה תמציתית
         </button>
 
-        {/* חיפוש */}
         <input
           type="text"
           value={query}
@@ -176,12 +187,23 @@ export default function Feed() {
             <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
           ))}
         </div>
+      ) : tab === 'watch' && watch.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center">
+          <p className="text-slate-500">עדיין לא סימנת חברות למעקב.</p>
+          <p className="mt-1 text-sm text-slate-400">לחץ על הכוכב ⭐ ליד שם חברה בפיד הכללי כדי לעקוב אחריה.</p>
+        </div>
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-slate-400">אין דיווחים שתואמים את הסינון.</p>
       ) : (
         <div className={compact ? 'space-y-1.5' : 'space-y-3'}>
           {filtered.map((item) => (
-            <ItemCard key={item.id} item={item} compact={compact} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              compact={compact}
+              watched={!!item.company_id && watchSet.has(item.company_id)}
+              onToggleWatch={item.company_id ? () => toggleWatch(item.company_id as string) : undefined}
+            />
           ))}
         </div>
       )}
@@ -196,6 +218,19 @@ function btn(active: boolean) {
   }`
 }
 
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-4 py-1.5 text-sm font-semibold transition ${
+        active ? 'bg-white text-brand shadow-sm' : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function Badge({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-brand px-1 text-[11px] font-bold text-white">
@@ -206,11 +241,7 @@ function Badge({ children }: { children: ReactNode }) {
 
 function Panel({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
   return (
-    <div
-      className={`absolute right-0 z-20 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg ${
-        narrow ? 'w-44' : 'w-64'
-      }`}
-    >
+    <div className={`absolute right-0 z-20 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg ${narrow ? 'w-44' : 'w-64'}`}>
       {children}
     </div>
   )
