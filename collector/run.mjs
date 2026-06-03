@@ -1,64 +1,84 @@
-// הרצת איסוף מלאה: מאיה → נירמול → ציון מהותיות → שמירה ב-Supabase
+// הרצת איסוף מלאה: מאיה → נירמול → ציון כללים → העשרת SIGNAL (AI) → Supabase
 import { openMaya, fetchRecentReports, normalizeReport, fetchUpcomingCorporateActions } from './maya.mjs'
 import { scoreReport } from './materiality.mjs'
-import { db, upsertCompany, getMayaSourceId, insertItems } from './db.mjs'
+import { enrich, signalEnabled } from './signal.mjs'
+import { db, upsertCompany, getMayaSourceId, upsertItems } from './db.mjs'
+
+const ENRICH_TOP = 24 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 console.log('🕷️  NewFin Collector — מתחיל איסוף ממאיה...')
+console.log(
+  signalEnabled
+    ? '🧠 מנוע SIGNAL (AI) פעיל'
+    : '⚠️  מנוע SIGNAL כבוי (אין GROQ_API_KEY) — ציון מבוסס-כללים בלבד',
+)
 const t0 = Date.now()
 
 const { browser, ctx } = await openMaya()
 try {
-  // שליפה
   const raw = await fetchRecentReports(ctx, { pages: 4, limit: 20 })
   console.log(`נשלפו ${raw.length} דיווחים גולמיים ממאיה`)
-
-  // קטליזטורים
   const ca = await fetchUpcomingCorporateActions(ctx, 8)
-  console.log(`נשלפו ${ca.length} קטליזטורים קרובים`)
-
-  // מזהה מקור מאיה
   const sourceId = await getMayaSourceId()
 
-  // נירמול + ציון + upsert חברות
-  const items = []
+  // בסיס: נירמול + ציון כללים + חברה
+  const base = []
   for (const r of raw) {
     const norm = normalizeReport(r)
     const score = scoreReport(norm)
-
-    // מוצא/יוצר חברה
     let company_id = null
     if (norm.maya_company_id && norm.company_name) {
       try {
         company_id = await upsertCompany(norm.maya_company_id, norm.company_name)
-      } catch (e) {
-        console.warn('upsertCompany:', e.message)
+      } catch {
+        /* ignore */
       }
     }
-
-    items.push({
-      source_id: sourceId,
-      company_id,
-      maya_report_id: norm.maya_report_id,
-      title: norm.title,
-      body: '',
-      original_url: norm.original_url,
-      published_at: norm.published_at,
-      source_type: norm.source_type,
-      reliability: norm.reliability,
-      materiality_score: score.materiality_score,
-      direction: score.direction,
-      status: 'published',
-      is_public: score.materiality_score >= 4,
-      lang: norm.lang,
-    })
+    base.push({ norm, score, company_id, bottom_line: null })
   }
 
-  // שמירה במסד
-  const { inserted, skipped } = await insertItems(items)
-  console.log(`✅ נשמרו: ${inserted} חדשים | דולגו (כפולים): ${skipped}`)
+  // העשרת AI לפריטים המהותיים ביותר
+  base.sort((a, b) => b.score.materiality_score - a.score.materiality_score)
+  let enriched = 0
+  if (signalEnabled) {
+    for (let i = 0; i < Math.min(ENRICH_TOP, base.length); i++) {
+      const e = await enrich(base[i].norm)
+      if (e) {
+        base[i].score.materiality_score = e.materiality_score
+        base[i].score.direction = e.direction
+        base[i].bottom_line = e.bottom_line
+        enriched++
+      }
+      await sleep(2500) // כיבוד מגבלת הקצב של Groq
+    }
+    console.log(`🧠 הועשרו ${enriched} פריטים ע"י SIGNAL`)
+  }
 
-  // שמירת קטליזטורים
-  if (ca.length > 0) {
+  // בניית רשומות ל-DB
+  const items = base.map(({ norm, score, company_id, bottom_line }) => ({
+    source_id: sourceId,
+    company_id,
+    maya_report_id: norm.maya_report_id,
+    title: norm.title,
+    body: '',
+    bottom_line,
+    original_url: norm.original_url,
+    published_at: norm.published_at,
+    source_type: norm.source_type,
+    reliability: norm.reliability,
+    materiality_score: score.materiality_score,
+    direction: score.direction,
+    status: 'published',
+    is_public: score.materiality_score >= 4,
+    lang: norm.lang,
+  }))
+
+  const { count } = await upsertItems(items)
+  console.log(`✅ נשמרו/עודכנו: ${count} פריטים`)
+
+  // קטליזטורים → events
+  if (ca.length) {
     const evts = []
     for (const c of ca) {
       const co = c.companies?.[0]
@@ -66,7 +86,9 @@ try {
       let company_id = null
       try {
         company_id = await upsertCompany(String(co.companyId), co.name)
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       evts.push({
         company_id,
         type: 'corporate_action',
@@ -77,19 +99,11 @@ try {
     }
     if (evts.length) {
       await db.from('events').upsert(evts, { ignoreDuplicates: true })
-      console.log(`📅 קטליזטורים נשמרו: ${evts.length}`)
+      console.log(`📅 קטליזטורים: ${evts.length}`)
     }
   }
 
-  // סיכום
-  const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
-  console.log(`\n⏱️  סה"כ זמן: ${elapsed} שניות`)
-  console.log('📊 פיזור ציוני מהותיות:')
-  const dist = {}
-  for (const it of items) dist[it.materiality_score] = (dist[it.materiality_score] || 0) + 1
-  for (const [s, n] of Object.entries(dist).sort((a, b) => b[0] - a[0]))
-    console.log(`   ציון ${s}: ${n} פריטים`)
-
+  console.log(`\n⏱️  ${((Date.now() - t0) / 1000).toFixed(1)} שניות`)
 } finally {
   await browser.close()
 }

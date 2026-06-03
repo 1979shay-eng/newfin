@@ -53,13 +53,13 @@ export async function getMayaSourceId() {
   return mayaSourceId
 }
 
-// מכניס פריטים למסד, מדלג על כפולים (לפי maya_report_id)
-export async function insertItems(items) {
-  if (!items.length) return { inserted: 0, skipped: 0 }
+// מכניס/מעדכן פריטים במסד לפי maya_report_id (מאפשר העשרה חוזרת)
+export async function upsertItems(items) {
+  if (!items.length) return { count: 0 }
   const { data, error } = await db
     .from('items')
-    .upsert(items, { onConflict: 'maya_report_id', ignoreDuplicates: true })
+    .upsert(items, { onConflict: 'maya_report_id' })
     .select('id')
   if (error) throw error
-  return { inserted: data?.length ?? 0, skipped: items.length - (data?.length ?? 0) }
+  return { count: data?.length ?? 0 }
 }
