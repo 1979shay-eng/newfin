@@ -70,7 +70,7 @@ try {
     materiality_score: score.materiality_score,
     direction: score.direction,
     status: 'published',
-    is_public: score.materiality_score >= 4,
+    is_public: true,
     lang: norm.lang,
   }))
 

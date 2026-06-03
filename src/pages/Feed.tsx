@@ -1,24 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import ItemCard from '../components/ItemCard'
 import { fetchFeed } from '../lib/queries'
-import { isSupabaseConfigured } from '../lib/supabase'
 import type { FeedItem } from '../types/db'
-
-// רמות סינון מהותיות — המשתמש בוחר כמה רעש לסנן
-const LEVELS = [
-  { key: 'all', label: 'הכל', min: 0 },
-  { key: 'mid', label: 'בינוני ומעלה', min: 5 },
-  { key: 'high', label: 'חשוב', min: 7 },
-  { key: 'critical', label: 'קריטי בלבד', min: 9 },
-]
 
 export default function Feed() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [min, setMin] = useState(0)
+  const [min, setMin] = useState(5)
 
   useEffect(() => {
-    fetchFeed(60).then((data) => {
+    fetchFeed(80).then((data) => {
       setItems(data)
       setLoading(false)
     })
@@ -30,30 +21,24 @@ export default function Feed() {
     <div>
       <div className="mb-4">
         <h1 className="text-2xl font-extrabold text-slate-900">הפיד</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {isSupabaseConfigured ? 'דיווחים ממאיה, מדורגים לפי מהותיות.' : 'נתוני דמו.'}
-        </p>
+        <p className="mt-1 text-sm text-slate-500">דיווחים ממאיה, מדורגים לפי מהותיות.</p>
       </div>
 
-      {/* פס סינון */}
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <span className="ml-1 text-xs text-slate-400">סינון רעש:</span>
-        {LEVELS.map((l) => (
-          <button
-            key={l.key}
-            onClick={() => setMin(l.min)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              min === l.min
-                ? 'bg-brand text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {l.label}
-          </button>
-        ))}
-        {!loading && (
-          <span className="mr-auto text-xs text-slate-400">{filtered.length} דיווחים</span>
-        )}
+      {/* סינון לפי סולם מספרי */}
+      <div className="mb-5 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <span className="shrink-0 text-sm font-medium text-slate-600">מהותיות מינימלית</span>
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded bg-brand text-xs font-bold text-white">
+          {min}
+        </span>
+        <input
+          type="range"
+          min={1}
+          max={10}
+          value={min}
+          onChange={(e) => setMin(Number(e.target.value))}
+          className="h-1.5 flex-1 cursor-pointer accent-brand"
+        />
+        {!loading && <span className="shrink-0 text-xs text-slate-400">{filtered.length} דיווחים</span>}
       </div>
 
       {loading ? (
@@ -63,7 +48,7 @@ export default function Feed() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-slate-400">אין דיווחים ברמת הסינון הזו.</p>
+        <p className="py-8 text-center text-slate-400">אין דיווחים ברמת המהותיות הזו.</p>
       ) : (
         <div className="space-y-3">
           {filtered.map((item) => (

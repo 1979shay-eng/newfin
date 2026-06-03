@@ -83,7 +83,7 @@ export function normalizeReport(raw) {
     : `${BASE}/he/reports/companies/${company?.companyId ?? ''}`
   return {
     maya_report_id: String(raw.id),
-    title: (raw.title || '').trim() || '(ללא כותרת)',
+    title: (raw.title || '').replace(/בק["״]ע/g, 'בנושא').trim() || '(ללא כותרת)',
     company_name: company?.name || null,
     maya_company_id: company?.companyId != null ? String(company.companyId) : null,
     security_id: company?.mainSecurityId != null ? String(company.mainSecurityId) : null,
