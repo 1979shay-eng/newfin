@@ -5,8 +5,8 @@
 -- ╚══════════════════════════════════════════════════════════════╝
 
 -- ── הרחבות ──────────────────────────────────────────────────────
-create extension if not exists "pgcrypto";   -- gen_random_uuid()
-create extension if not exists vector;        -- pgvector (embeddings / similarity)
+create extension if not exists "pgcrypto";
+create extension if not exists vector;
 
 -- ── טיפוסי enum ─────────────────────────────────────────────────
 do $$ begin create type source_type as enum ('osint','humint','finint'); exception when duplicate_object then null; end $$;
@@ -39,7 +39,7 @@ create table if not exists companies (
   created_at timestamptz not null default now()
 );
 
--- ── ניירות ערך (paper) ──────────────────────────────────────────
+-- ── ניירות ערך ──────────────────────────────────────────────────
 create table if not exists securities (
   id uuid primary key default gen_random_uuid(),
   maya_paper_id text unique,
@@ -49,7 +49,7 @@ create table if not exists securities (
   created_at timestamptz not null default now()
 );
 
--- ── אשכולות (הצלבת מקורות / רצפי דיווחים) ────────────────────────
+-- ── אשכולות (הצלבת מקורות) ───────────────────────────────────────
 create table if not exists clusters (
   id uuid primary key default gen_random_uuid(),
   headline text,
@@ -67,17 +67,18 @@ create table if not exists items (
   company_id uuid references companies(id) on delete set null,
   security_id uuid references securities(id) on delete set null,
   cluster_id uuid references clusters(id) on delete set null,
+  maya_report_id text unique,
   title text not null,
-  body text not null,
+  body text not null default '',
   bottom_line text,
-  original_url text,                 -- deep-link מדויק להודעה
+  original_url text,
   published_at timestamptz not null default now(),
   source_type source_type not null,
   reliability reliability not null default 'reported',
   materiality_score smallint not null default 5 check (materiality_score between 1 and 10),
   direction direction not null default 'neutral',
   status item_status not null default 'draft',
-  is_public boolean not null default false,   -- ל-SEO / חומה היברידית
+  is_public boolean not null default false,
   lang text not null default 'he',
   embedding vector(1536),
   created_at timestamptz not null default now()
@@ -92,7 +93,7 @@ create table if not exists tags (
   id uuid primary key default gen_random_uuid(),
   name_he text not null,
   name_en text,
-  type text not null default 'topic',   -- sector | topic | company
+  type text not null default 'topic',
   slug text unique
 );
 create table if not exists item_tags (
@@ -101,11 +102,11 @@ create table if not exists item_tags (
   primary key (item_id, tag_id)
 );
 
--- ── לוח אירועים (קטליזטורים) ─────────────────────────────────────
+-- ── לוח אירועים ──────────────────────────────────────────────────
 create table if not exists events (
   id uuid primary key default gen_random_uuid(),
   company_id uuid references companies(id) on delete cascade,
-  type text not null,                   -- earnings | dividend | meeting | lockup | macro
+  type text not null,
   title text not null,
   event_date date not null,
   source_id uuid references sources(id) on delete set null,
@@ -119,7 +120,7 @@ create table if not exists insider_moves (
   company_id uuid references companies(id) on delete cascade,
   actor text,
   role text,
-  action text,                          -- buy | sell
+  action text,
   quantity numeric,
   value numeric,
   reported_at timestamptz,
@@ -127,7 +128,7 @@ create table if not exists insider_moves (
   created_at timestamptz not null default now()
 );
 
--- ── נתוני מחיר (FININT) ──────────────────────────────────────────
+-- ── נתוני מחיר ───────────────────────────────────────────────────
 create table if not exists prices (
   security_id uuid references securities(id) on delete cascade,
   date date not null,
@@ -163,7 +164,7 @@ create table if not exists briefs (
   user_id uuid references users(id) on delete cascade,
   date date not null,
   content text,
-  channel text not null default 'web',  -- web | telegram | email
+  channel text not null default 'web',
   sent_at timestamptz
 );
 create table if not exists feature_flags (
@@ -173,13 +174,9 @@ create table if not exists feature_flags (
   description text
 );
 
--- ╔══════════════════════════════════════════════════════════════╗
--- ║  RLS — אבטחת שורות                                             ║
--- ║  תוכן: קריאה ציבורית, כתיבה רק ל-service role (ה-collectors).  ║
--- ║  משתמש: כל אחד רואה רק את שלו.                                 ║
--- ╚══════════════════════════════════════════════════════════════╝
+-- ── RLS (אבטחת שורות) ────────────────────────────────────────────
 
--- חומה היברידית על items: אנונימי רואה רק ציבורי; מחובר רואה הכל מפורסם
+-- פריטים: אנונימי רואה רק ציבורי; מחובר רואה הכל מפורסם
 alter table items enable row level security;
 drop policy if exists "items public read" on items;
 create policy "items public read" on items for select to anon
@@ -188,7 +185,7 @@ drop policy if exists "items member read" on items;
 create policy "items member read" on items for select to authenticated
   using (status = 'published');
 
--- תוכן ציבורי לקריאה (anon + authenticated)
+-- תוכן ציבורי לקריאה חופשית
 do $$
 declare t text;
 begin
@@ -202,7 +199,7 @@ begin
   end loop;
 end $$;
 
--- טבלאות משתמש — בעלות אישית
+-- משתמשים — בעלות אישית
 alter table users enable row level security;
 drop policy if exists "own user row" on users;
 create policy "own user row" on users for select using (auth.uid() = id);
