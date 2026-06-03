@@ -138,7 +138,7 @@ export default function Feed() {
         <div className="relative">
           <button onClick={() => setMenu(menu === 'sort' ? '' : 'sort')} className={btn(menu === 'sort')}>
             <SortIcon />
-            <span>{sort === 'time' ? 'החדש ביותר' : 'לפי מהותיות'}</span>
+            <span>מיון</span>
           </button>
           {menu === 'sort' && (
             <Panel narrow>
