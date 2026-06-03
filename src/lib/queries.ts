@@ -29,3 +29,26 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
     tags: [],
   })) as FeedItem[]
 }
+
+export type CompanyRow = {
+  id: string
+  maya_company_id: string | null
+  name_he: string
+  sector: string | null
+}
+
+export async function fetchCompanies(): Promise<CompanyRow[]> {
+  if (!isSupabaseConfigured) return []
+
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id, maya_company_id, name_he, sector')
+    .order('name_he')
+
+  if (error) {
+    console.error('fetchCompanies error:', error.message)
+    return []
+  }
+
+  return (data ?? []) as CompanyRow[]
+}
