@@ -4,6 +4,7 @@ node_modules
 # build output
 dist
 dist-ssr
+dist.zip
 
 # env (סודות — לא נכנסים ל-git)
 .env

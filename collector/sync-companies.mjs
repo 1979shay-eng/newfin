@@ -1,9 +1,14 @@
 // סנכרון רשימת החברות ל-Supabase. הרצה: node collector/sync-companies.mjs
 import { syncCompanies } from './companies.mjs'
+import { openMaya } from './maya.mjs'
 import { db } from './db.mjs'
 
-console.log('🏢 שואב רשימת חברות מהבורסה...')
-const list = await syncCompanies()
+console.log('🏢 פותח דפדפן ועובר את הגנת Incapsula...')
+const { browser, ctx } = await openMaya()
+
+console.log('🔎 שואב רשימת חברות מהבורסה (חיפוש מעמיק)...')
+const list = await syncCompanies(ctx)
+await browser.close()
 console.log(`נמצאו ${list.length} חברות ייחודיות`)
 
 const rows = list.map((c) => ({ maya_company_id: c.id, name_he: c.name, slug: c.id }))

@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchCompanies, type CompanyRow } from '../lib/queries'
 import { loadWatch, saveWatch } from '../lib/watchlist'
 
+// נרמול לחיפוש גמיש: מסיר גרשיים/נקודות/מקפים/רווחים + lowercase.
+// כך "אורט" מוצא את "או.אר.טי." ו-"אב גד" מוצא את "אב-גד".
+const norm = (s: string) => s.toLowerCase().replace(/['"’.\-\s]/g, '')
+
+const PAGE = 60 // כמה כרטיסים להציג בכל פעם (מונע עומס של 638 בבת אחת)
+
 function Star({ on }: { on: boolean }) {
   return (
     <svg
@@ -24,6 +30,7 @@ export default function Companies() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [onlyWatched, setOnlyWatched] = useState(false)
+  const [shown, setShown] = useState(PAGE)
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
   const watchSet = useMemo(() => new Set(watch), [watch])
 
@@ -33,6 +40,9 @@ export default function Companies() {
       setLoading(false)
     })
   }, [])
+
+  // איפוס מספר המוצגים כשמשנים חיפוש/סינון
+  useEffect(() => setShown(PAGE), [query, onlyWatched])
 
   function toggleWatch(id: string) {
     setWatch((prev) => {
@@ -44,10 +54,13 @@ export default function Companies() {
 
   const filtered = useMemo(() => {
     let r = companies
-    if (query) r = r.filter((c) => c.name_he.includes(query))
+    const q = norm(query)
+    if (q) r = r.filter((c) => norm(c.name_he).includes(q))
     if (onlyWatched) r = r.filter((c) => watchSet.has(c.id))
     return r
   }, [companies, query, onlyWatched, watchSet])
+
+  const visible = filtered.slice(0, shown)
 
   return (
     <div>
@@ -77,6 +90,15 @@ export default function Companies() {
         </button>
       </div>
 
+      {/* מונה תוצאות — נותן ביטחון שהחיפוש סורק את כל החברות */}
+      {!loading && (
+        <p className="mb-2 text-xs text-slate-400">
+          {query || onlyWatched
+            ? `נמצאו ${filtered.length} חברות`
+            : `מציג ${visible.length} מתוך ${filtered.length}`}
+        </p>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[...Array(12)].map((_, i) => (
@@ -88,29 +110,42 @@ export default function Companies() {
           {onlyWatched ? 'עדיין לא סימנת חברות למעקב.' : 'לא נמצאו חברות.'}
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {filtered.map((c) => {
-            const on = watchSet.has(c.id)
-            return (
-              <div
-                key={c.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-slate-800">{c.name_he}</div>
-                  {c.sector && <div className="truncate text-[11px] text-slate-400">{c.sector}</div>}
-                </div>
-                <button
-                  onClick={() => toggleWatch(c.id)}
-                  title={on ? 'הסר ממעקב' : 'הוסף למעקב'}
-                  className={`shrink-0 transition ${on ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}`}
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {visible.map((c) => {
+              const on = watchSet.has(c.id)
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
                 >
-                  <Star on={on} />
-                </button>
-              </div>
-            )
-          })}
-        </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-slate-800">{c.name_he}</div>
+                    {c.sector && (
+                      <div className="truncate text-[11px] text-slate-400">{c.sector}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => toggleWatch(c.id)}
+                    title={on ? 'הסר ממעקב' : 'הוסף למעקב'}
+                    className={`shrink-0 transition ${on ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}`}
+                  >
+                    <Star on={on} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {visible.length < filtered.length && (
+            <button
+              onClick={() => setShown((s) => s + PAGE)}
+              className="mt-4 w-full rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+            >
+              טען עוד ({filtered.length - visible.length})
+            </button>
+          )}
+        </>
       )}
     </div>
   )
