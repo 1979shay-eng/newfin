@@ -3,6 +3,7 @@ import { openMaya, fetchRecentReports, normalizeReport, fetchUpcomingCorporateAc
 import { scoreReport } from './materiality.mjs'
 import { enrich, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems } from './db.mjs'
+import { fetchAllRss } from './rss.mjs'
 
 const ENRICH_TOP = 24 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -75,7 +76,47 @@ try {
   }))
 
   const { count } = await upsertItems(items)
-  console.log(`✅ נשמרו/עודכנו: ${count} פריטים`)
+  console.log(`✅ נשמרו/עודכנו: ${count} פריטים ממאיה`)
+
+  // ── הרחבת מקורות: חדשות RSS (גלובס, TheMarker) + זיהוי חברה מהכותרת ──
+  try {
+    const rssRaw = await fetchAllRss()
+    console.log(`📰 נשלפו ${rssRaw.length} ידיעות RSS`)
+    const rssBase = rssRaw.map((it) => ({ it, score: scoreReport(it), bottom_line: null }))
+    rssBase.sort((a, b) => b.score.materiality_score - a.score.materiality_score)
+    if (signalEnabled) {
+      for (let i = 0; i < Math.min(ENRICH_TOP, rssBase.length); i++) {
+        const e = await enrich(rssBase[i].it)
+        if (e) {
+          rssBase[i].score.materiality_score = e.materiality_score
+          rssBase[i].score.direction = e.direction
+          rssBase[i].bottom_line = e.bottom_line
+        }
+        await sleep(2500)
+      }
+    }
+    const rssItems = rssBase.map(({ it, score, bottom_line }) => ({
+      source_id: it.source_id,
+      company_id: it.company_id,
+      maya_report_id: it.maya_report_id,
+      title: it.title,
+      body: '',
+      bottom_line,
+      original_url: it.original_url,
+      published_at: it.published_at,
+      source_type: it.source_type,
+      reliability: it.reliability,
+      materiality_score: score.materiality_score,
+      direction: score.direction,
+      status: 'published',
+      is_public: true,
+      lang: it.lang,
+    }))
+    const rssRes = await upsertItems(rssItems)
+    console.log(`✅ נשמרו/עודכנו: ${rssRes.count} ידיעות RSS`)
+  } catch (e) {
+    console.warn('⚠️  איסוף RSS נכשל:', e.message)
+  }
 
   // קטליזטורים → events
   if (ca.length) {
