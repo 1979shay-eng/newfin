@@ -1,0 +1,40 @@
+name: איסוף נתונים ממאיה
+
+on:
+  schedule:
+    # כל 30 דקות, בערך 9:00–19:00 שעון ישראל, ימים ראשון–חמישי.
+    # (GitHub Actions רץ ב-UTC; ישראל היא UTC+2/+3)
+    - cron: '*/30 6-16 * * 0-4'
+  workflow_dispatch: {} # מאפשר גם הרצה ידנית בלחיצת כפתור מ-GitHub
+
+# מבטל ריצה קודמת אם חדשה מתחילה (לא להריץ שתיים במקביל)
+concurrency:
+  group: collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: שליפת הקוד
+        uses: actions/checkout@v4
+
+      - name: התקנת Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: התקנת תלויות
+        run: npm ci
+
+      - name: התקנת דפדפן Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: הרצת האספן
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: node collector/run.mjs
