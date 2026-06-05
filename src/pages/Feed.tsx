@@ -18,6 +18,7 @@ type Tab = 'general' | 'watch'
 export default function Feed() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [tab, setTab] = useState<Tab>('general')
   const [min, setMin] = useState(5)
   const [query, setQuery] = useState('')
@@ -29,11 +30,23 @@ export default function Feed() {
   const barRef = useRef<HTMLDivElement>(null)
   const watchSet = useMemo(() => new Set(watch), [watch])
 
+  // טעינה ראשונית + רענון אוטומטי כל 2 דקות (הפיד "חי" בלי F5).
+  // הרענון שקט — לא מציג שלד טעינה מחדש, רק מחליף את הנתונים.
   useEffect(() => {
-    fetchFeed(80).then((data) => {
-      setItems(data)
-      setLoading(false)
-    })
+    let alive = true
+    const load = () =>
+      fetchFeed(80).then((data) => {
+        if (!alive) return
+        setItems(data)
+        setLastUpdated(new Date())
+        setLoading(false)
+      })
+    load()
+    const id = setInterval(load, 120000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
   }, [])
 
   useEffect(() => {
@@ -76,7 +89,17 @@ export default function Feed() {
     <div>
       <div className="mb-4">
         <h1 className="text-2xl font-extrabold text-slate-900">הפיד</h1>
-        <p className="mt-1 text-sm text-slate-500">דיווחים ממאיה, מדורגים לפי מהותיות.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          דיווחים משוק ההון, מדורגים לפי מהותיות.
+          {lastUpdated && (
+            <span className="text-slate-400">
+              {' · '}
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500 align-middle" />{' '}
+              מתעדכן אוטומטית · עודכן{' '}
+              {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </p>
       </div>
 
       {/* לשוניות כללי / במעקב */}
