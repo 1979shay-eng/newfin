@@ -13,7 +13,6 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
       companies ( name_he )
     `)
     .eq('status', 'published')
-    .order('materiality_score', { ascending: false })
     .order('published_at', { ascending: false })
     .limit(limit)
 
