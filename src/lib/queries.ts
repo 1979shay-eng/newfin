@@ -13,6 +13,9 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
       companies ( name_he )
     `)
     .eq('status', 'published')
+    // עיקרון: כל ידיעה בפיד חייבת להכווין למניה. ידיעות בלי חברה (חדשות
+    // מאקרו/כלליות שלא זוהתה להן חברה) מוסתרות — עד שתיווסף שכבת תיוג ענפי.
+    .not('company_id', 'is', null)
     .order('published_at', { ascending: false })
     .limit(limit)
 
