@@ -5,11 +5,14 @@ import Companies from './pages/Companies'
 import CompanyProfile from './pages/CompanyProfile'
 import About from './pages/About'
 import NotFound from './pages/NotFound'
+import { useState } from 'react'
 import Landing from './pages/Landing'
 import { useAuth } from './lib/useAuth'
 
 export default function App() {
   const { session, loading } = useAuth()
+  // מצב "אורח" — מאפשר לצפות באתר בלי כניסה (שלב טרום-השקה; נכבה כשמפעילים שער אמיתי).
+  const [guest, setGuest] = useState(() => localStorage.getItem('nf_guest') === '1')
 
   // טעינת מצב הזיהוי — מסך פתיחה קצר כדי למנוע הבהוב בין נחיתה לאפליקציה
   if (loading) {
@@ -20,8 +23,17 @@ export default function App() {
     )
   }
 
-  // לא מזוהה → דף נחיתה. מזוהה → האפליקציה.
-  if (!session) return <Landing />
+  // לא מזוהה ולא אורח → דף נחיתה. אחרת → האפליקציה.
+  if (!session && !guest) {
+    return (
+      <Landing
+        onGuest={() => {
+          localStorage.setItem('nf_guest', '1')
+          setGuest(true)
+        }}
+      />
+    )
+  }
 
   return (
     <Routes>

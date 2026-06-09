@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import AuthModal from '../components/AuthModal'
 
 // ── דף נחיתה (Brand) — פוגש משתמשים לא-מזוהים. כהה, דינמי, מציג את הבידול. ──
-export default function Landing() {
+export default function Landing({ onGuest }: { onGuest?: () => void }) {
   const [authOpen, setAuthOpen] = useState(false)
   const open = () => setAuthOpen(true)
 
@@ -73,6 +73,16 @@ export default function Landing() {
             </button>
             <span className="text-xs text-slate-400">חינם · בלי כרטיס אשראי</span>
           </div>
+
+          {onGuest && (
+            <button
+              onClick={onGuest}
+              className="animate-fade-up mt-3 text-sm text-slate-400 underline-offset-4 transition-colors hover:text-slate-200 hover:underline"
+              style={{ animationDelay: '220ms' }}
+            >
+              סתם להציץ? המשך לצפייה ←
+            </button>
+          )}
 
           <div
             className="animate-fade-up mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-400 lg:justify-start"
