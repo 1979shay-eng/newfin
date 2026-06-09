@@ -1,47 +1,42 @@
 import { useState, type ReactNode } from 'react'
 import AuthModal from '../components/AuthModal'
 
-// ── דף נחיתה (Brand) — פוגש משתמשים לא-מזוהים. כהה, דינמי, מציג את הבידול. ──
+// ── דף נחיתה (Brand) — נקי, תמציתי, עם מוטיב פיננסי חי ברקע. ──
 export default function Landing({ onGuest }: { onGuest?: () => void }) {
   const [authOpen, setAuthOpen] = useState(false)
   const open = () => setAuthOpen(true)
 
   return (
     <div dir="rtl" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-      {/* זוהר אטמוספרי */}
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="animate-float-glow absolute -top-40 right-[-12%] h-[30rem] w-[30rem] rounded-full bg-brand/30 blur-[130px]" />
-        <div
-          className="animate-float-glow absolute bottom-[-12%] left-[-8%] h-[26rem] w-[26rem] rounded-full bg-brand-light/20 blur-[130px]"
-          style={{ animationDelay: '2.5s' }}
-        />
-      </div>
+      {/* רקע: גרף שוק + רשת מסחר + זוהר רך (סטטי) */}
+      <MarketBackdrop />
 
       {/* כותרת עליונה */}
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-2">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+        <div className="flex items-center gap-2.5">
           <Logo />
           <span className="text-lg font-extrabold tracking-tight">NewFin</span>
-          <span className="hidden text-xs text-slate-400 sm:inline">· מודיעין שוק ההון</span>
         </div>
         <button
           onClick={open}
-          className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold backdrop-blur transition-colors hover:bg-white/10"
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold backdrop-blur transition-colors hover:bg-white/10"
         >
-          כניסה / הרשמה
+          כניסה
         </button>
       </header>
 
       {/* Hero */}
-      <section className="relative z-10 mx-auto grid max-w-6xl items-center gap-12 px-6 pb-20 pt-8 lg:grid-cols-2 lg:gap-10 lg:pt-16">
+      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-220px)] max-w-6xl items-center gap-14 px-6 py-10 lg:grid-cols-2 lg:gap-10">
         <div className="text-center lg:text-right">
-          <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-            מודיעין חכם לשוק ההון הישראלי
+          <div
+            className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            מודיעין שוק ההון הישראלי
           </div>
 
           <h1
-            className="animate-fade-up mt-5 text-4xl font-black leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl"
+            className="animate-fade-up mt-6 text-5xl font-black leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
             style={{ animationDelay: '60ms' }}
           >
             אלפי מקורות.
@@ -52,82 +47,51 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
           </h1>
 
           <p
-            className="animate-fade-up mx-auto mt-5 max-w-md text-base leading-relaxed text-slate-300 lg:mx-0 lg:text-lg"
+            className="animate-fade-up mt-5 text-lg text-slate-300 sm:text-xl"
             style={{ animationDelay: '120ms' }}
           >
-            NewFin אוסף דיווחים ממאיה, מהעיתונות הכלכלית ומהשווקים, מדרג כל ידיעה לפי{' '}
-            <strong className="font-bold text-white">מהותיות</strong>, וכותב לך את השורה התחתונה.
-            הרעש שוקע, החשוב צף.
+            מדורג לפי מהותיות. מזוקק לשורה תחתונה.
           </p>
 
           <div
-            className="animate-fade-up mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start"
+            className="animate-fade-up mt-9 flex flex-col items-center gap-4 sm:flex-row lg:justify-start"
             style={{ animationDelay: '180ms' }}
           >
             <button
               onClick={open}
-              className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand-light px-6 text-sm font-bold text-white shadow-lg shadow-brand-light/25 transition-all hover:bg-sky-400 hover:shadow-brand-light/40 active:scale-[0.98]"
+              className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand-light px-7 text-sm font-bold text-white shadow-lg shadow-brand-light/20 transition-all duration-200 hover:bg-sky-400 hover:shadow-brand-light/35 active:scale-[0.98]"
             >
-              כניסה / הרשמה חינם
-              <span className="transition-transform group-hover:-translate-x-1">←</span>
+              כניסה / הרשמה
+              <span className="transition-transform duration-200 group-hover:-translate-x-1">←</span>
             </button>
-            <span className="text-xs text-slate-400">חינם · בלי כרטיס אשראי</span>
+            {onGuest && (
+              <button
+                onClick={onGuest}
+                className="text-sm text-slate-400 underline-offset-4 transition-colors hover:text-slate-200 hover:underline"
+              >
+                המשך לצפייה ←
+              </button>
+            )}
           </div>
 
-          {onGuest && (
-            <button
-              onClick={onGuest}
-              className="animate-fade-up mt-3 text-sm text-slate-400 underline-offset-4 transition-colors hover:text-slate-200 hover:underline"
-              style={{ animationDelay: '220ms' }}
-            >
-              סתם להציץ? המשך לצפייה ←
-            </button>
-          )}
-
           <div
-            className="animate-fade-up mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-400 lg:justify-start"
+            className="animate-fade-up mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-400 lg:justify-start"
             style={{ animationDelay: '240ms' }}
           >
-            <Trust>ציון מהותיות לכל ידיעה</Trust>
+            <Trust>ציון מהותיות</Trust>
+            <Trust>הצלבת מקורות</Trust>
             <Trust>עדכון חי</Trust>
-            <Trust>אלפי מקורות</Trust>
           </div>
         </div>
 
-        {/* כרטיס פיד לדוגמה — חי ומדורג, בעקביות עם המוצר */}
-        <div className="animate-fade-up" style={{ animationDelay: '160ms' }}>
+        {/* כרטיס פיד — הוכחת מוצר, בעקביות עם האפליקציה */}
+        <div className="animate-fade-up" style={{ animationDelay: '200ms' }}>
           <MockFeed />
         </div>
       </section>
 
-      {/* בידול */}
-      <section className="relative z-10 border-t border-white/5 bg-slate-950/40 py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-center text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
-            למה NewFin
-          </h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <Feature
-              icon="🎯"
-              title="ציון מהותיות"
-              body="כל ידיעה מקבלת ציון 1–10. הרעש שוקע, מה שמזיז מניות צף לראש הפיד."
-            />
-            <Feature
-              icon="🔗"
-              title="הצלבת מקורות"
-              body="כמה מקורות מאשרים את אותה ידיעה — כך יודעים מה אמין ומה רעש."
-            />
-            <Feature
-              icon="✍️"
-              title="שורה תחתונה"
-              body="לא עוד דיווח יבש. בכל ידיעה — מה המשמעות שלה למשקיע, בעברית."
-            />
-          </div>
-        </div>
-      </section>
-
-      <footer className="relative z-10 border-t border-white/5 py-8 text-center text-xs text-slate-500">
-        NewFin · מודיעין פיננסי לשוק ההון · גרסת פיתוח
+      <footer className="relative z-10 border-t border-white/5 py-6 text-center text-xs text-slate-500">
+        NewFin · מודיעין פיננסי לשוק ההון
       </footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
@@ -135,10 +99,55 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
   )
 }
 
+// ── רקע פיננסי ──────────────────────────────────────────────────────
+const LINE =
+  'M0,384 L114,360 L228,392 L342,318 L456,344 L570,280 L684,300 L798,232 L912,256 L1026,176 L1200,118'
+
+function MarketBackdrop() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* זוהר רך סטטי (עומק, בלי פעימה) */}
+      <div className="absolute -top-40 right-[-12%] h-[32rem] w-[32rem] rounded-full bg-brand/25 blur-[140px]" />
+      <div className="absolute bottom-[-16%] left-[-10%] h-[26rem] w-[26rem] rounded-full bg-brand-light/15 blur-[140px]" />
+
+      {/* גרף שוק על תחתית המסך */}
+      <svg
+        className="absolute inset-x-0 bottom-0 h-[55%] w-full"
+        viewBox="0 0 1200 500"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id="nf-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b7dd8" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="#3b7dd8" stopOpacity="0" />
+          </linearGradient>
+          {/* רשת מסחר עדינה */}
+          <pattern id="nf-grid" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path d="M60 0H0V60" fill="none" stroke="#fff" strokeOpacity="0.03" strokeWidth="1" />
+          </pattern>
+        </defs>
+        <rect width="1200" height="500" fill="url(#nf-grid)" />
+        <path className="animate-area" d={`${LINE} L1200,500 L0,500 Z`} fill="url(#nf-area)" />
+        <path
+          className="animate-draw-line"
+          d={LINE}
+          fill="none"
+          stroke="#3b7dd8"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pathLength={1}
+          opacity="0.7"
+        />
+      </svg>
+    </div>
+  )
+}
+
 // ── עזרים ───────────────────────────────────────────────────────────
 function Logo() {
   return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-light/20 text-brand-light ring-1 ring-brand-light/30">
+    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-light/15 text-brand-light ring-1 ring-brand-light/25">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 17l5-5 4 4 8-8" />
         <path d="M16 8h4v4" />
@@ -150,21 +159,11 @@ function Logo() {
 function Trust({ children }: { children: ReactNode }) {
   return (
     <span className="flex items-center gap-1.5">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-emerald-400" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-emerald-400" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 6 9 17l-5-5" />
       </svg>
       {children}
     </span>
-  )
-}
-
-function Feature({ icon, title, body }: { icon: string; title: string; body: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-white/20 hover:bg-white/[0.05]">
-      <div className="text-2xl">{icon}</div>
-      <h3 className="mt-3 text-base font-bold text-white">{title}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{body}</p>
-    </div>
   )
 }
 
@@ -177,17 +176,17 @@ const SCORE_STYLE: Record<string, string> = {
 function MockFeed() {
   const items = [
     { score: 9, tier: 'high', company: 'טאואר', title: 'רבעון שיא; הרווח הנקי זינק 13.7%' },
-    { score: 8, tier: 'high', company: 'אלביט מערכות', title: 'זכייה בחוזה ביטחוני בהיקף מהותי' },
-    { score: 5, tier: 'mid', company: 'עזריאלי', title: 'עדכון שווי נכסים מניב ברבעון' },
-    { score: 3, tier: 'low', sector: 'בנקים', title: 'הפיקוח על הבנקים פרסם הנחיה חדשה' },
+    { score: 8, tier: 'high', company: 'אלביט מערכות', title: 'זכייה בחוזה ביטחוני מהותי' },
+    { score: 5, tier: 'mid', company: 'עזריאלי', title: 'עדכון שווי נכסים מניב' },
+    { score: 3, tier: 'low', sector: 'בנקים', title: 'הפיקוח על הבנקים פרסם הנחיה' },
   ]
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 shadow-2xl shadow-brand/10 backdrop-blur-xl">
+    <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-2xl shadow-brand/10 backdrop-blur-xl">
       <div className="flex items-center justify-between border-b border-white/5 pb-3">
         <span className="text-sm font-bold text-white">הפיד שלי</span>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          LIVE
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          חי
         </span>
       </div>
       <div className="mt-3 space-y-2.5">
@@ -195,7 +194,7 @@ function MockFeed() {
           <div
             key={i}
             className="animate-fade-up flex items-start gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-3"
-            style={{ animationDelay: `${320 + i * 90}ms` }}
+            style={{ animationDelay: `${360 + i * 80}ms` }}
           >
             <span
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold tabular-nums ${SCORE_STYLE[it.tier]}`}
