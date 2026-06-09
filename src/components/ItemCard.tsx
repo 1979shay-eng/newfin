@@ -83,9 +83,17 @@ export default function ItemCard({
           {dir.icon}
         </span>
         {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
-        {item.company_name && (
+        {item.company_name ? (
           <span className="shrink-0 text-xs font-bold text-brand">{item.company_name}</span>
-        )}
+        ) : item.headline_tag ? (
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+              item.headline_type === 'macro' ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {item.headline_tag}
+          </span>
+        ) : null}
         <span className="truncate text-sm text-slate-700">{item.title}</span>
         <span className="mr-auto shrink-0 text-[11px] tabular-nums text-slate-500">
           {formatTime(item.published_at)}
@@ -120,14 +128,24 @@ export default function ItemCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
-            {item.company_name && (
-              <span className="truncate text-xs font-bold text-brand">{item.company_name}</span>
-            )}
-            {item.company_sector && item.company_sector !== 'אחר' && (
-              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                {item.company_sector}
+            {item.company_name ? (
+              <>
+                <span className="truncate text-xs font-bold text-brand">{item.company_name}</span>
+                {item.company_sector && item.company_sector !== 'אחר' && (
+                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    {item.company_sector}
+                  </span>
+                )}
+              </>
+            ) : item.headline_tag ? (
+              <span
+                className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-bold ${
+                  item.headline_type === 'macro' ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {item.headline_tag}
               </span>
-            )}
+            ) : null}
           </div>
           <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
             {formatTime(item.published_at)}

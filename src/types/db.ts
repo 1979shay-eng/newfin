@@ -50,5 +50,7 @@ export interface FeedItem extends Item {
   source_name: string
   company_name?: string | null
   company_sector?: string | null
+  headline_tag?: string | null // תגית סקטור/מאקרו לכתבות בלי חברה
+  headline_type?: 'sector' | 'macro' | null
   tags?: string[]
 }

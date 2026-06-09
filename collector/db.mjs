@@ -82,6 +82,29 @@ export async function getOrCreateSource(name, { type = 'osint', reliability = 'r
   return data.id
 }
 
+// מחזיר Map: maya_report_id → { bottom_line, materiality_score, direction } עבור
+// פריטים שכבר הועשרו (bottom_line לא-null). שני שימושים:
+//   1. לדלג על העשרה חוזרת — כדי לא לשרוף את מכסת הטוקנים היומית של Groq על אותם פריטים.
+//   2. לטעון בחזרה את ההעשרה הקיימת — כדי שה-upsert לא ידרוס bottom_line קיים ל-null
+//      כשהפריט נופל מ-top-ENRICH_TOP בריצה מאוחרת.
+export async function getEnrichedMap(reportIds) {
+  const map = new Map()
+  const ids = [...new Set(reportIds.filter(Boolean))]
+  if (!ids.length) return map
+  const CHUNK = 200 // שמירה על אורך URL סביר ב-filter .in()
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK)
+    const { data, error } = await db
+      .from('items')
+      .select('maya_report_id, bottom_line, materiality_score, direction')
+      .in('maya_report_id', slice)
+      .not('bottom_line', 'is', null)
+    if (error) throw error
+    for (const row of data || []) map.set(row.maya_report_id, row)
+  }
+  return map
+}
+
 // מכניס/מעדכן פריטים במסד לפי maya_report_id (מאפשר העשרה חוזרת)
 export async function upsertItems(items) {
   if (!items.length) return { count: 0 }
@@ -91,4 +114,55 @@ export async function upsertItems(items) {
     .select('id')
   if (error) throw error
   return { count: data?.length ?? 0 }
+}
+
+// מוצא/יוצר תגית לפי slug (ענף/מאקרו) ומחזיר id. ממוטמן בזיכרון לכל ריצה.
+const tagCache = new Map()
+export async function getOrCreateTag(name_he, type) {
+  if (tagCache.has(name_he)) return tagCache.get(name_he)
+  const slug =
+    name_he.replace(/[^֐-׿a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || type
+  const { data: found } = await db.from('tags').select('id').eq('slug', slug).maybeSingle()
+  let id = found?.id
+  if (!id) {
+    const { data, error } = await db.from('tags').insert({ name_he, type, slug }).select('id').single()
+    if (error) {
+      const { data: again } = await db.from('tags').select('id').eq('slug', slug).maybeSingle()
+      if (!again?.id) throw error
+      id = again.id
+    } else {
+      id = data.id
+    }
+  }
+  tagCache.set(name_he, id)
+  return id
+}
+
+// מקשר תגית כותרת (סקטור/מאקרו) לפריטים בלי חברה.
+// entries: [{ maya_report_id, tag, type }]. משתמש ב-item_tags (בלי migration).
+export async function linkHeadlineTags(entries) {
+  if (!entries?.length) return
+  // 1) tag ids
+  for (const e of entries) await getOrCreateTag(e.tag, e.type)
+  // 2) item ids לפי maya_report_id
+  const ids = [...new Set(entries.map((e) => e.maya_report_id).filter(Boolean))]
+  const idMap = new Map()
+  const CHUNK = 200
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data } = await db
+      .from('items')
+      .select('id, maya_report_id')
+      .in('maya_report_id', ids.slice(i, i + CHUNK))
+    for (const row of data || []) idMap.set(row.maya_report_id, row.id)
+  }
+  // 3) upsert קישורים
+  const rows = []
+  for (const e of entries) {
+    const item_id = idMap.get(e.maya_report_id)
+    const tag_id = tagCache.get(e.tag)
+    if (item_id && tag_id) rows.push({ item_id, tag_id })
+  }
+  if (rows.length) {
+    await db.from('item_tags').upsert(rows, { onConflict: 'item_id,tag_id', ignoreDuplicates: true })
+  }
 }
