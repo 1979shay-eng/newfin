@@ -10,7 +10,7 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
     .select(`
       *,
       sources ( name ),
-      companies ( name_he )
+      companies ( name_he, sector )
     `)
     .eq('status', 'published')
     // עיקרון: כל ידיעה בפיד חייבת להכווין למניה. ידיעות בלי חברה (חדשות
@@ -28,6 +28,7 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
     ...row,
     source_name: row.sources?.name ?? row.source_type,
     company_name: row.companies?.name_he ?? null,
+    company_sector: row.companies?.sector ?? null,
     tags: [],
   })) as FeedItem[]
 }

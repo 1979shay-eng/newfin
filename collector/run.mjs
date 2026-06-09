@@ -5,6 +5,7 @@ import { enrich, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems } from './db.mjs'
 import { fetchAllRss } from './rss.mjs'
 import { collectThematic } from './thematic.mjs'
+import { classifyCompanySectors } from './sectors.mjs'
 
 const ENRICH_TOP = 24 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -128,6 +129,14 @@ try {
     }
   } catch (e) {
     console.warn('⚠️  איסוף נושאי נכשל:', e.message)
+  }
+
+  // ── סיווג חברות לסקטור (ממלא בהדרגה את companies.sector) ──
+  try {
+    const { updated, ruled, aied } = await classifyCompanySectors({ aiBatches: 3, batchSize: 20 })
+    if (updated) console.log(`🏷️  סווגו ${updated} חברות לסקטור (כללים: ${ruled}, AI: ${aied})`)
+  } catch (e) {
+    console.warn('⚠️  סיווג סקטורים נכשל:', e.message)
   }
 
   // קטליזטורים → events

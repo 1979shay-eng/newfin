@@ -123,6 +123,11 @@ export default function ItemCard({
             {item.company_name && (
               <span className="truncate text-xs font-bold text-brand">{item.company_name}</span>
             )}
+            {item.company_sector && item.company_sector !== 'אחר' && (
+              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                {item.company_sector}
+              </span>
+            )}
           </div>
           <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
             {formatTime(item.published_at)}
