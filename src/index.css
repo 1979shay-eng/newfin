@@ -50,8 +50,25 @@
     animation: area-fade 1.1s ease-out 1.1s forwards;
   }
 
+  /* נרות שצומחים מהתחתית — כניסה חד-פעמית, transform בלבד */
+  @keyframes grow-up {
+    from {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+  }
+  .animate-grow-up {
+    transform-origin: bottom;
+    animation: grow-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .animate-fade-up {
+    .animate-fade-up,
+    .animate-grow-up {
       animation: none;
     }
     .animate-draw-line {

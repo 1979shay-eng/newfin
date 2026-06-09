@@ -5,6 +5,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Assistant', 'Heebo', 'system-ui', 'sans-serif'],
+        serif: ['"Frank Ruhl Libre"', 'Georgia', 'serif'],
       },
       colors: {
         // פלטת מותג NewFin (זמני, נכוונן בהמשך)
