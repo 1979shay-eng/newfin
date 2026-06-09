@@ -4,6 +4,8 @@ import {
   directionLabel,
   materialityTier,
   materialityStyle,
+  materialityAnchor,
+  reliabilityDot,
   formatTime,
 } from '../lib/format'
 
@@ -12,18 +14,34 @@ type Props = {
   compact?: boolean
   watched?: boolean
   onToggleWatch?: () => void
+  index?: number
 }
 
-function StarButton({ watched, onClick }: { watched: boolean; onClick: () => void }) {
+// השהיית כניסה מדורגת (capped) — תחושת "פיד חי" בלי לעכב פריטים מאוחרים
+function delayStyle(index = 0) {
+  return { animationDelay: `${Math.min(index * 40, 360)}ms` }
+}
+
+function StarButton({
+  watched,
+  onClick,
+  size = 15,
+}: {
+  watched: boolean
+  onClick: () => void
+  size?: number
+}) {
   return (
     <button
       onClick={onClick}
       title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
-      className={`shrink-0 transition ${watched ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}`}
+      className={`shrink-0 transition-colors ${
+        watched ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
+      }`}
     >
       <svg
-        width="15"
-        height="15"
+        width={size}
+        height={size}
         viewBox="0 0 24 24"
         fill={watched ? 'currentColor' : 'none'}
         stroke="currentColor"
@@ -37,74 +55,101 @@ function StarButton({ watched, onClick }: { watched: boolean; onClick: () => voi
   )
 }
 
-export default function ItemCard({ item, compact = false, watched = false, onToggleWatch }: Props) {
+export default function ItemCard({
+  item,
+  compact = false,
+  watched = false,
+  onToggleWatch,
+  index = 0,
+}: Props) {
   const tier = materialityTier(item.materiality_score)
   const rel = reliabilityLabel[item.reliability]
   const dir = directionLabel[item.direction]
   const canWatch = Boolean(item.company_id && onToggleWatch)
 
-  const scoreBadge = (
-    <span
-      className={`inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded px-1 text-[11px] font-bold ${materialityStyle[tier]}`}
-      title={`מהותיות ${item.materiality_score}/10`}
-    >
-      {item.materiality_score}
-    </span>
-  )
-
   if (compact) {
     return (
-      <article className="flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:shadow-sm">
-        {scoreBadge}
-        {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
-        {item.company_name && (
-          <span className="shrink-0 text-xs font-bold text-brand">{item.company_name}</span>
-        )}
+      <article
+        style={delayStyle(index)}
+        className="animate-fade-up flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-shadow hover:shadow-sm"
+      >
+        <span
+          className={`flex h-6 min-w-[24px] items-center justify-center rounded text-xs font-bold tabular-nums ${materialityStyle[tier]}`}
+          title={`מהותיות ${item.materiality_score}/10`}
+        >
+          {item.materiality_score}
+        </span>
         <span className={`shrink-0 text-xs ${dir.className}`} title={dir.text}>
           {dir.icon}
         </span>
-        <span className="truncate text-sm text-slate-800">{item.title}</span>
-        <span className="mr-auto shrink-0 text-xs text-slate-400">{formatTime(item.published_at)}</span>
+        {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
+        {item.company_name && (
+          <span className="shrink-0 text-xs font-bold text-brand">{item.company_name}</span>
+        )}
+        <span className="truncate text-sm text-slate-700">{item.title}</span>
+        <span className="mr-auto shrink-0 text-[11px] tabular-nums text-slate-500">
+          {formatTime(item.published_at)}
+        </span>
       </article>
     )
   }
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {item.company_name && (
-            <div className="flex items-center gap-1.5">
-              {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
-              <span className="text-sm font-extrabold text-brand">{item.company_name}</span>
-            </div>
-          )}
-          <h2 className="mt-0.5 text-[15px] font-bold leading-snug text-slate-900">{item.title}</h2>
-        </div>
-        <span className="mt-0.5">{scoreBadge}</span>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
-        <span>{item.source_name}</span>
-        <span className={`font-medium ${dir.className}`} title={`כיוון: ${dir.text}`}>
+    <article
+      style={delayStyle(index)}
+      className="animate-fade-up flex gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow duration-200 hover:border-slate-300 hover:shadow-md"
+    >
+      {/* עוגן: ציון מהותיות + כיוון — היחידה הנסרקת ראשונה */}
+      <div className="flex shrink-0 flex-col items-center gap-1">
+        <span
+          className={`flex h-11 w-11 items-center justify-center rounded-lg text-lg font-bold tabular-nums ${materialityAnchor[tier]}`}
+          title={`מהותיות ${item.materiality_score}/10`}
+        >
+          {item.materiality_score}
+        </span>
+        <span
+          className={`text-sm leading-none ${dir.className}`}
+          title={`כיוון: ${dir.text}`}
+        >
           {dir.icon}
         </span>
-        <span title={`מהימנות: ${rel.text}`}>{rel.icon}</span>
-        <span className="mr-auto">{formatTime(item.published_at)}</span>
       </div>
 
-      {item.body && <p className="mt-3 text-sm leading-relaxed text-slate-700">{item.body}</p>}
+      {/* גוף */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
+            {item.company_name && (
+              <span className="truncate text-xs font-bold text-brand">{item.company_name}</span>
+            )}
+          </div>
+          <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
+            {formatTime(item.published_at)}
+          </span>
+        </div>
 
-      {item.bottom_line && (
-        <p className="mt-2.5 border-r-[3px] border-brand/40 pr-3 text-sm leading-relaxed text-slate-600">
-          {item.bottom_line}
-        </p>
-      )}
+        <h2 className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{item.title}</h2>
 
-      {(item.tags?.length || item.original_url) && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        {item.body && (
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.body}</p>
+        )}
+
+        {item.bottom_line && (
+          <p className="mt-2 rounded-lg border-r-2 border-brand/30 bg-slate-50 px-3 py-2 text-[13px] leading-relaxed text-slate-600">
+            {item.bottom_line}
+          </p>
+        )}
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+          <span>{item.source_name}</span>
+          <span className="text-slate-300">·</span>
+          <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
+            {rel.text}
+          </span>
           {item.tags?.map((t) => (
-            <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+            <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
               #{t}
             </span>
           ))}
@@ -113,13 +158,13 @@ export default function ItemCard({ item, compact = false, watched = false, onTog
               href={item.original_url}
               target="_blank"
               rel="noreferrer"
-              className="mr-auto text-xs font-medium text-brand hover:underline"
+              className="mr-auto font-medium text-brand hover:underline"
             >
               למקור ↗
             </a>
           )}
         </div>
-      )}
+      </div>
     </article>
   )
 }

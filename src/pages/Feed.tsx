@@ -218,11 +218,12 @@ export default function Feed() {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-slate-400">אין דיווחים שתואמים את הסינון.</p>
       ) : (
-        <div className={compact ? 'space-y-1.5' : 'space-y-3'}>
-          {filtered.map((item) => (
+        <div className={compact ? 'space-y-2' : 'space-y-4'}>
+          {filtered.map((item, i) => (
             <ItemCard
               key={item.id}
               item={item}
+              index={i}
               compact={compact}
               watched={!!item.company_id && watchSet.has(item.company_id)}
               onToggleWatch={item.company_id ? () => toggleWatch(item.company_id as string) : undefined}

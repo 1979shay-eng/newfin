@@ -38,9 +38,24 @@ export const materialityStyle: Record<MaterialityTier, string> = {
   low: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',
 }
 
+// סגנון עוגן הציון הגדול (לב הכרטיס) — מעט מובלט יותר מה-badge הקטן
+export const materialityAnchor: Record<MaterialityTier, string> = {
+  high: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+  mid: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+  low: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',
+}
+
+// נקודת צבע למהימנות (במקום אימוג'י) — לשורת המטא של הכרטיס
+export const reliabilityDot: Record<Reliability, string> = {
+  verified: 'bg-emerald-500',
+  reported: 'bg-brand',
+  estimate: 'bg-amber-500',
+}
+
 export function formatTime(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleString('he-IL', {
+    timeZone: 'Asia/Jerusalem',
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
