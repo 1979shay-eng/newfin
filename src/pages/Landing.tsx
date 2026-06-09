@@ -9,9 +9,19 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
   return (
     <div dir="rtl" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <div aria-hidden className="pointer-events-none absolute -top-48 right-[-10%] h-[34rem] w-[34rem] rounded-full bg-brand/20 blur-[150px]" />
+      {/* גרעין-פילם עדין — שובר את ה"שטיחות" של CSS */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0 opacity-[0.04] mix-blend-overlay"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+        }}
+      />
 
-      {/* כותרת */}
-      <header className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+      {/* כותרת — דביקה עם זכוכית */}
+      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-slate-950/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2.5">
           <Logo />
           <span className="text-lg font-extrabold tracking-tight">NewFin</span>
@@ -22,6 +32,7 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
         >
           כניסה
         </button>
+        </div>
       </header>
 
       {/* Hero עריכותי */}
@@ -59,7 +70,8 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
               className="animate-fade-up mt-7 max-w-md text-lg leading-relaxed text-slate-300 lg:mr-0"
               style={{ animationDelay: '220ms' }}
             >
-              כל דיווח משוק ההון — מדורג לפי מהותיות, מזוקק לשורה תחתונה.
+              מאיה, העיתונות הכלכלית והשווקים — במקום אחד. כל ידיעה מדורגת לפי מהותיות
+              ומזוקקת לשורה תחתונה אחת.
             </p>
 
             <div
@@ -68,7 +80,7 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
             >
               <button
                 onClick={open}
-                className="group inline-flex h-12 items-center gap-2 rounded-full bg-white px-7 text-sm font-bold text-slate-900 transition-all duration-200 hover:bg-slate-100 active:scale-[0.98]"
+                className="group inline-flex h-12 items-center gap-2 rounded-full bg-gradient-to-b from-white to-slate-200 px-7 text-sm font-bold text-slate-900 shadow-[0_10px_30px_-8px_rgba(255,255,255,0.3)] ring-1 ring-white/50 transition-all duration-200 hover:to-white hover:shadow-[0_12px_36px_-8px_rgba(255,255,255,0.45)] active:scale-[0.98]"
               >
                 כניסה / הרשמה חינם
                 <span className="transition-transform duration-200 group-hover:-translate-x-1">←</span>
@@ -93,10 +105,10 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
       {/* רצועת מספרים */}
       <section className="relative z-10 border-y border-white/5 bg-white/[0.02]">
         <div className="mx-auto grid max-w-6xl grid-cols-2 px-6 sm:grid-cols-4">
-          <Stat value="10,000+" label="דיווחים נאספו" />
-          <Stat value="638" label="חברות במעקב" />
+          <Stat value="+10,000" label="דיווחים מנותחים" />
+          <Stat value="638" label="חברות סחירות" />
           <Stat value="5" label="מנועי ניתוח" />
-          <Stat value="24/7" label="איסוף חי" />
+          <Stat value="24/7" label="עדכון חי" />
         </div>
       </section>
 
@@ -110,9 +122,9 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
               <br />
               <span className="font-serif font-medium text-slate-300">החשוב צף.</span>
             </h2>
-            <p className="mt-5 max-w-md text-slate-400 lg:mr-0">
-              פיד אחד, מדורג לפי מהותיות, שמחבר כל ידיעה למניה או לסקטור — עם שורה תחתונה
-              שמסבירה מה המשמעות.
+            <p className="mt-5 max-w-md leading-relaxed text-slate-400 lg:mr-0">
+              פיד אחד שמחבר כל ידיעה למניה או לסקטור, מדרג אותה לפי מהותיות, ומסביר בשורה
+              אחת מה המשמעות למשקיע — בטון עיתונאי, בלי גוף ראשון ובלי רעש.
             </p>
           </div>
           <FeedDashboard />
@@ -133,14 +145,16 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
 
       {/* CTA סופי */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
-        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-l from-brand/40 via-slate-900 to-slate-900 p-10 text-center sm:p-16">
+        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-l from-brand/40 via-slate-900 to-slate-900 p-10 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-16">
           <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
             מוכן לראות את השוק <span className="font-serif font-medium text-brand-light">בבירור?</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-md text-slate-300">הצטרף חינם וקבל את הפיד המדורג שלך תוך שניות.</p>
+          <p className="mx-auto mt-4 max-w-md text-slate-300">
+            הרשמה חינם, בלי כרטיס אשראי. הפיד המדורג שלך מוכן תוך שניות.
+          </p>
           <button
             onClick={open}
-            className="group mt-8 inline-flex h-12 items-center gap-2 rounded-full bg-white px-8 text-sm font-bold text-slate-900 transition-all duration-200 hover:bg-slate-100 active:scale-[0.98]"
+            className="group mt-8 inline-flex h-12 items-center gap-2 rounded-full bg-gradient-to-b from-white to-slate-200 px-8 text-sm font-bold text-slate-900 shadow-[0_10px_30px_-8px_rgba(255,255,255,0.3)] ring-1 ring-white/50 transition-all duration-200 hover:to-white hover:shadow-[0_12px_36px_-8px_rgba(255,255,255,0.45)] active:scale-[0.98]"
           >
             כניסה / הרשמה חינם
             <span className="transition-transform duration-200 group-hover:-translate-x-1">←</span>
@@ -186,6 +200,26 @@ function CandleArt() {
           </div>
         ))}
       </div>
+
+      {/* קו מגמה זוהר מעל הנרות (עולה שמאלה ב-RTL) */}
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none">
+        <path
+          className="animate-draw-line"
+          d="M97,72 L83,66 L69,69 L55,57 L41,51 L27,38 L13,31 L2,25"
+          stroke="#e2e8f0"
+          strokeOpacity="0.65"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pathLength={1}
+          vectorEffect="non-scaling-stroke"
+          style={{ filter: 'drop-shadow(0 0 4px rgba(226,232,240,0.55))' }}
+        />
+      </svg>
+      <div
+        className="animate-area absolute h-2 w-2 rounded-full bg-white shadow-[0_0_14px_4px_rgba(255,255,255,0.6)]"
+        style={{ left: '2%', top: '25%', marginRight: '-4px', marginTop: '-4px' }}
+      />
     </div>
   )
 }
@@ -282,7 +316,7 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 function Feature({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return (
-    <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition-colors duration-200 hover:border-brand-light/30 hover:bg-white/[0.05]">
+    <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors duration-200 hover:border-brand-light/30 hover:bg-white/[0.05]">
       <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-light/10 text-brand-light ring-1 ring-brand-light/20">
         {icon}
       </span>
