@@ -25,10 +25,28 @@
     }
   }
   .animate-fade-up {
-    animation: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+
+  /* זוהר אטמוספרי בדף הנחיתה — ריחוף איטי, transform+opacity בלבד, ease-in-out */
+  @keyframes float-glow {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.55;
+    }
+    50% {
+      transform: translate3d(24px, -18px, 0) scale(1.12);
+      opacity: 0.8;
+    }
+  }
+  .animate-float-glow {
+    animation: float-glow 9s ease-in-out infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .animate-fade-up {
+    .animate-fade-up,
+    .animate-float-glow {
       animation: none;
     }
   }
