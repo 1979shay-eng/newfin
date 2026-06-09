@@ -4,6 +4,7 @@ import { scoreReport } from './materiality.mjs'
 import { enrich, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems } from './db.mjs'
 import { fetchAllRss } from './rss.mjs'
+import { collectThematic } from './thematic.mjs'
 
 const ENRICH_TOP = 24 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -116,6 +117,17 @@ try {
     console.log(`✅ נשמרו/עודכנו: ${rssRes.count} ידיעות RSS`)
   } catch (e) {
     console.warn('⚠️  איסוף RSS נכשל:', e.message)
+  }
+
+  // ── מקורות נושאיים: שער-AI מחמיר (DroneXL וכו') → השלכה ישראלית בלבד ──
+  try {
+    const themItems = await collectThematic({ signalEnabled })
+    if (themItems.length) {
+      const themRes = await upsertItems(themItems)
+      console.log(`✅ נשמרו/עודכנו: ${themRes.count} פריטים נושאיים`)
+    }
+  } catch (e) {
+    console.warn('⚠️  איסוף נושאי נכשל:', e.message)
   }
 
   // קטליזטורים → events

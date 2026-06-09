@@ -74,6 +74,29 @@ export async function fetchUpcomingCorporateActions(ctx, limit = 8) {
   }
 }
 
+// Maya לפעמים מחזירה offset +02:00 (IST חורף) גם בקיץ (IDT = UTC+3).
+// פותרים: מסירים את ה-offset שמאיה מצהירה עליו ומפרשים מחדש כ-Asia/Jerusalem.
+function getIsraelOffsetMin(d) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  })
+  const p = Object.fromEntries(fmt.formatToParts(d).map((x) => [x.type, x.value]))
+  const ilLocal = new Date(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`)
+  return Math.round((ilLocal - d) / 60000)
+}
+
+function parseMayaDate(s) {
+  if (!s) return null
+  const naive = s.replace(/([+-]\d{2}:?\d{2}|Z)$/i, '').trim()
+  const asUtc = new Date(naive + 'Z')
+  if (isNaN(asUtc)) return null
+  const offsetMin = getIsraelOffsetMin(asUtc)
+  return new Date(asUtc.getTime() - offsetMin * 60000).toISOString()
+}
+
 // נירמול דיווח גולמי ממאיה למבנה Item שלנו
 export function normalizeReport(raw) {
   const company = raw.companies?.[0] || raw.company || null
@@ -89,7 +112,7 @@ export function normalizeReport(raw) {
     security_id: company?.mainSecurityId != null ? String(company.mainSecurityId) : null,
     form_id: raw.formId || null,
     is_priority: Boolean(raw.isPriority),
-    published_at: raw.publishDate,
+    published_at: parseMayaDate(raw.publishDate) ?? new Date().toISOString(),
     original_url,
     source_type: 'osint',
     reliability: 'verified',

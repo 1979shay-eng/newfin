@@ -1,22 +1,32 @@
 // מודול RSS — קריאת חדשות פיננסיות, זיהוי חברה מהכותרת, ונירמול ל-Item.
 // מבנה הפלט זהה ל-normalizeReport של מאיה, כך שה-flow (ציון + SIGNAL + שמירה) משותף.
-import { db } from './db.mjs'
+import { db, getOrCreateSource } from './db.mjs'
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
-// רשימת הפידים — קל להוסיף עוד (key ייחודי, שם המקור כפי שרשום ב-sources, וכתובת ה-RSS)
+// רשימת הפידים. ה-key הוא ברמת ה*מקור* (לא המקטע) ולכן חוזר על עצמו בין מקטעים:
+// כך אותה כתבה שמופיעה בשני מקטעים של אותו מקור מזוהה ככפילות (maya_report_id = key:guid)
+// ומסוננת. section = הערה אנושית בלבד. לוקחים רק PER_FEED הפריטים החדשים מכל פיד.
+const PER_FEED = 30
 export const FEEDS = [
-  {
-    key: 'globes',
-    source_name: 'גלובס',
-    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=585',
-  },
-  {
-    key: 'themarker',
-    source_name: 'TheMarker',
-    url: 'https://www.themarker.com/cmlink/1.144',
-  },
+  // ── גלובס (עיתון כלכלי) — כל המקטעים ממופים למקור "גלובס" ─────────────
+  { key: 'globes', source_name: 'גלובס', section: 'שוק ההון',
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=585' },
+  { key: 'globes', source_name: 'גלובס', section: 'גלובלי ושוקי עולם',
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1225' },
+  { key: 'globes', source_name: 'גלובס', section: 'טכנולוגיה',
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=594' },
+  { key: 'globes', source_name: 'גלובס', section: 'נדל"ן ותשתיות',
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=607' },
+  // ── TheMarker ──────────────────────────────────────────────────────
+  { key: 'themarker', source_name: 'TheMarker', section: 'כללי',
+    url: 'https://www.themarker.com/cmlink/1.144' },
+  { key: 'themarker', source_name: 'TheMarker', section: 'שווקים',
+    url: 'https://www.themarker.com/cmlink/1.243' },
+  // ── ספונסר (שוק הון; RSS ב-Content_rss_articles, CatId=7) ───────────
+  { key: 'sponser', source_name: 'ספונסר', section: 'שוק הון',
+    url: 'https://www.sponser.co.il/Content_rss_articles.aspx?CatId=7' },
 ]
 
 // פענוח ישויות HTML/XML נפוצות
@@ -40,8 +50,8 @@ function tag(block, name) {
   return m ? m[1].trim() : ''
 }
 
-// פירוק פיד RSS לרשימת פריטים גולמיים
-function parseFeed(xml) {
+// פירוק פיד RSS לרשימת פריטים גולמיים. מיוצא לשימוש חוזר ע"י thematic.mjs.
+export function parseFeed(xml) {
   const out = []
   const re = /<item>([\s\S]*?)<\/item>/gi
   let m
@@ -62,7 +72,7 @@ function parseFeed(xml) {
 // טעינת רשימת החברות פעם אחת, ממוינת לפי אורך השם (ארוך קודם — התאמה מדויקת קודמת).
 // סינון לשמות באורך 4+ : שמות בני 3 אותיות (ארד, חמת, עשות) נבלעים בתוך מילים נפוצות.
 let companiesCache = null
-async function loadCompanies() {
+export async function loadCompanies() {
   if (companiesCache) return companiesCache
   const { data } = await db.from('companies').select('id, name_he')
   companiesCache = (data || [])
@@ -77,11 +87,11 @@ async function loadCompanies() {
 const BOUNDARY = /[\s.,;:!?"'()[\]־–—•·\-/|]/
 
 // שמות-חברה שהם גם מילה עברית נפוצה (תואר/שם-עצם) — מדלגים כדי למנוע התאמות-שווא.
-const STOP = new Set(['בינלאומי'])
+const STOP = new Set(['בינלאומי', 'מבנה'])
 
 // מזהה חברה מהכותרת: מחזיר { company_id, company_name } או ריק.
 // דורש שם מוקף בגבול-מילה משני הצדדים. ארוך-קודם מצמצם התאמות-שווא.
-function matchCompany(title, companies) {
+export function matchCompany(title, companies) {
   for (const c of companies) {
     if (STOP.has(c.name)) continue
     let from = 0
@@ -98,14 +108,10 @@ function matchCompany(title, companies) {
   return { company_id: null, company_name: null }
 }
 
-// מיפוי שם מקור → uuid ב-sources (נטען פעם אחת)
-let sourceIds = null
+// מיפוי שם מקור → uuid ב-sources. יוצר את המקור אם אינו קיים (osint/media/מדווח),
+// כך שמקור RSS חדש נכנס לבד בלי INSERT ידני.
 async function getSourceId(name) {
-  if (!sourceIds) {
-    const { data } = await db.from('sources').select('id, name')
-    sourceIds = Object.fromEntries((data || []).map((s) => [s.name, s.id]))
-  }
-  return sourceIds[name] || null
+  return getOrCreateSource(name, { type: 'osint', reliability: 'reported' })
 }
 
 // שואב פיד יחיד ומחזיר פריטים מנורמלים (כולל זיהוי חברה)
@@ -119,7 +125,7 @@ async function fetchFeed(feed, companies) {
   }
   const xml = await r.text()
   const sourceId = await getSourceId(feed.source_name)
-  const raw = parseFeed(xml)
+  const raw = parseFeed(xml).slice(0, PER_FEED) // RSS מגיע מהחדש לישן — לוקחים את הראש
   return raw
     .filter((it) => it.title && it.link)
     .map((it) => {

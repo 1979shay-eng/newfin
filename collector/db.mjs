@@ -53,6 +53,35 @@ export async function getMayaSourceId() {
   return mayaSourceId
 }
 
+// מוצא מקור לפי שם, ואם אינו קיים — יוצר אותו. כך כל מקור חדש (RSS/נושאי) נכנס
+// לבד בלי צעד ידני ב-DB. ממוטמן בזיכרון לכל ריצה.
+const sourceCache = new Map()
+export async function getOrCreateSource(name, { type = 'osint', reliability = 'reported', base_url = null } = {}) {
+  if (!name) return null
+  if (sourceCache.has(name)) return sourceCache.get(name)
+  const { data: found } = await db.from('sources').select('id').eq('name', name).maybeSingle()
+  if (found?.id) {
+    sourceCache.set(name, found.id)
+    return found.id
+  }
+  const { data, error } = await db
+    .from('sources')
+    .insert({ name, type, reliability_default: reliability, base_url })
+    .select('id')
+    .single()
+  if (error) {
+    // ייתכן מרוץ — מקור נוצר במקביל. ננסה לשלוף שוב.
+    const { data: again } = await db.from('sources').select('id').eq('name', name).maybeSingle()
+    if (again?.id) {
+      sourceCache.set(name, again.id)
+      return again.id
+    }
+    throw error
+  }
+  sourceCache.set(name, data.id)
+  return data.id
+}
+
 // מכניס/מעדכן פריטים במסד לפי maya_report_id (מאפשר העשרה חוזרת)
 export async function upsertItems(items) {
   if (!items.length) return { count: 0 }
