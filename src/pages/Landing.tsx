@@ -123,13 +123,13 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
           <div className="text-center lg:text-right">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-light">הפיד שלך</p>
             <h2 className="mt-4 text-4xl font-black leading-tight tracking-tight sm:text-5xl">
-              הרעש שוקע.
+              פחות רעש.
               <br />
-              <span className="font-serif font-medium text-slate-300">החשוב צף.</span>
+              <span className="font-serif font-medium text-slate-300">יותר סיגנל.</span>
             </h2>
             <p className="mt-5 max-w-md leading-relaxed text-slate-400 lg:mr-0">
-              פיד אחד שמחבר כל ידיעה למניה או לסקטור, מדרג אותה לפי מהותיות, ומסביר בשורה
-              אחת מה המשמעות למשקיע — בטון עיתונאי, בלי גוף ראשון ובלי רעש.
+              פיד אחד שמחבר כל ידיעה למניה או לסקטור, מדרג לפי מהותיות, ונותן לך בשורה
+              אחת את מה שחשוב — חד, ענייני, בלי חפירות.
             </p>
           </div>
           <FeedDashboard />
@@ -139,7 +139,7 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
       {/* יתרונות */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-20">
         <div className="grid gap-4 md:grid-cols-3">
-          <Feature icon={<IconTarget />} title="ציון מהותיות" body="כל ידיעה מקבלת ציון 1–10. מה שמזיז מניות צף לראש." />
+          <Feature icon={<IconTarget />} title="ציון מהותיות" body="כל ידיעה מקבלת ציון 1–10. מה שמזיז מניות — בראש הפיד." />
           <Feature icon={<IconLink />} title="הצלבת מקורות" body="כמה מקורות מאשרים — כך יודעים מה אמין ומה רעש." />
           <Feature icon={<IconPen />} title="שורה תחתונה" body="בכל ידיעה — מה המשמעות שלה למשקיע, בעברית." />
           <Feature icon={<IconCalendar />} title="לוח אירועים" body="מבט קדימה: דוחות, פקיעות ונתוני מאקרו." />
@@ -298,18 +298,12 @@ function FeedDashboard() {
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
         <span className="mr-auto text-[11px] text-slate-500">newfin · הפיד שלי</span>
       </div>
-      <div className="flex items-center justify-between gap-4 border-b border-white/5 px-4 py-3">
-        <div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-sm font-bold text-white">ת"א 35</span>
-            <span className="text-xs font-semibold text-emerald-400">+1.24%</span>
-          </div>
-          <span className="text-[11px] text-slate-500">2,184.50</span>
-        </div>
-        <svg width="118" height="34" viewBox="0 0 118 34" fill="none" className="shrink-0">
+      {/* רצועת מגמה — דימוי ויזואלי בלבד, בלי שמות מדדים ומספרים (אין להציג נתון בלי מקור) */}
+      <div className="flex items-center gap-4 border-b border-white/5 px-4 py-3">
+        <svg viewBox="0 0 118 34" fill="none" preserveAspectRatio="none" className="h-9 min-w-0 flex-1">
           <path className="animate-draw-line" d={SPARK} stroke="#34d399" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength={1} />
         </svg>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           חי
         </span>
