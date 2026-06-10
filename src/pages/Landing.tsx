@@ -177,10 +177,12 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
 }
 
 // ── אמנות-דאטה: נרות זוהרים שצומחים בטעינה ──────────────────────────
+// ווליום שמטפס יחד עם הגרף — נמוך בהיסטוריה השטוחה (שמאל), גבוה ליד השיא (ימין)
 const CANDLES = [
-  { h: 34, up: 0 }, { h: 50, up: 1 }, { h: 43, up: 0 }, { h: 58, up: 1 }, { h: 52, up: 0 },
-  { h: 67, up: 1 }, { h: 61, up: 0 }, { h: 75, up: 1 }, { h: 69, up: 0 }, { h: 83, up: 1 },
-  { h: 78, up: 0 }, { h: 90, up: 1 }, { h: 85, up: 0 }, { h: 97, up: 1 },
+  { h: 14, up: 1 }, { h: 18, up: 0 }, { h: 16, up: 1 }, { h: 22, up: 1 }, { h: 20, up: 0 },
+  { h: 26, up: 1 }, { h: 24, up: 0 }, { h: 32, up: 1 }, { h: 30, up: 1 }, { h: 38, up: 0 },
+  { h: 44, up: 1 }, { h: 42, up: 0 }, { h: 54, up: 1 }, { h: 62, up: 1 }, { h: 58, up: 0 },
+  { h: 72, up: 1 }, { h: 84, up: 1 }, { h: 97, up: 1 },
 ]
 
 // גרף-שטח "מדד לאורך זמן" — דימוי בלבד (שטוח ואז טיפוס מעריכי), בלי שמות ומספרים.
@@ -193,24 +195,31 @@ function MarketArt({ compact = false }: { compact?: boolean }) {
   return (
     <div
       className={`relative flex h-full w-full flex-col justify-center overflow-hidden ${
-        compact ? 'px-4 py-2' : 'px-8 py-10'
+        compact ? 'px-3 py-2' : 'px-6 py-6'
       }`}
     >
-      {/* זוהר מקומי מאחורי הגרף */}
-      <div className="absolute left-[4%] top-[16%] h-[55%] w-[55%] rounded-full bg-emerald-500/10 blur-[110px]" />
+      {/* זוהר מקומי — מתעצם לכיוון השיא (ימין) */}
+      <div className="absolute left-[4%] top-[24%] h-[50%] w-[45%] rounded-full bg-emerald-500/[0.07] blur-[110px]" />
+      <div className="absolute right-[2%] top-[4%] h-[45%] w-[40%] rounded-full bg-emerald-400/15 blur-[100px]" />
 
-      {/* גרף שטח — מצייר את עצמו בכניסה */}
+      {/* גרף שטח — מצייר את עצמו בכניסה, מתחזק לקראת השיא */}
       <div className="relative">
         <svg
           viewBox="0 0 600 300"
           fill="none"
           preserveAspectRatio="none"
-          className={`w-full ${compact ? 'h-28' : 'h-56'}`}
+          className={`w-full ${compact ? 'h-36' : 'h-72'}`}
         >
           <defs>
             <linearGradient id="nf-area-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#34d399" stopOpacity="0.3" />
+              <stop offset="0%" stopColor="#34d399" stopOpacity="0.38" />
               <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
+            </linearGradient>
+            {/* הקו מתחיל עמום ומתעצם עד זוהר מלא בקצה */}
+            <linearGradient id="nf-line-grad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#34d399" stopOpacity="0.25" />
+              <stop offset="55%" stopColor="#34d399" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#6ee7b7" stopOpacity="1" />
             </linearGradient>
           </defs>
           {[75, 150, 225].map((y) => (
@@ -220,56 +229,51 @@ function MarketArt({ compact = false }: { compact?: boolean }) {
           <path
             className="animate-draw-line"
             d={AREA}
-            stroke="#34d399"
-            strokeWidth="2.5"
+            stroke="url(#nf-line-grad)"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
             pathLength={1}
-            style={{ filter: 'drop-shadow(0 0 6px rgba(52,211,153,0.45))' }}
+            style={{ filter: 'drop-shadow(0 0 9px rgba(52,211,153,0.55))' }}
           />
         </svg>
-        {/* נקודת קצה זוהרת בשיא */}
+        {/* שיא: נקודה זוהרת + נצנוץ */}
         <div
-          className="animate-area absolute h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_18px_5px_rgba(52,211,153,0.55)]"
+          className="animate-area absolute h-2.5 w-2.5 rounded-full bg-emerald-200 shadow-[0_0_22px_7px_rgba(52,211,153,0.6)]"
           style={{ left: 'calc(98.7% - 5px)', top: 'calc(8.7% - 5px)' }}
         />
+        <svg
+          className="animate-twinkle absolute"
+          style={{ left: 'calc(98.7% - 10px)', top: 'calc(8.7% - 10px)' }}
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="#d1fae5"
+          aria-hidden
+        >
+          <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8Z" />
+        </svg>
       </div>
 
-      {/* נרות — קטנים, מתחת לגרף */}
-      <div className={`flex items-end gap-[2%] ${compact ? 'mt-3 h-10' : 'mt-6 h-20'}`}>
+      {/* נרות ווליום — עולים יחד עם הגרף (LTR כמו ציר הזמן) */}
+      <div
+        className={`flex items-end gap-[1.6%] ${compact ? 'mt-3 h-14' : 'mt-6 h-28'}`}
+        style={{ direction: 'ltr' }}
+      >
         {CANDLES.map((c, i) => (
           <div
             key={i}
             className={`animate-grow-up flex h-full flex-1 flex-col items-center justify-end ${
               c.up ? 'text-emerald-400' : 'text-rose-400'
             }`}
-            style={{ animationDelay: `${550 + i * 45}ms` }}
+            style={{ animationDelay: `${550 + i * 40}ms` }}
           >
-            <div className="w-px bg-current opacity-40" style={{ height: '16%' }} />
+            <div className="w-px bg-current opacity-40" style={{ height: '14%' }} />
             <div
-              className="w-full max-w-[8px] rounded-[2px] bg-current shadow-[0_0_10px_var(--tw-shadow-color)] shadow-current/25"
+              className="w-full max-w-[12px] rounded-[2px] bg-current shadow-[0_0_10px_var(--tw-shadow-color)] shadow-current/25"
               style={{ height: `${c.h}%` }}
             />
           </div>
-        ))}
-      </div>
-
-      {/* בורר-טווח דקורטיבי — דימוי טאבים, בלי נתונים */}
-      <div
-        className="animate-fade-up mt-5 flex items-center gap-0.5 self-center rounded-full border border-white/10 bg-white/[0.04] p-1 backdrop-blur"
-        style={{ animationDelay: '950ms' }}
-      >
-        {['יום', 'שבוע', 'חודש', 'שנה', 'הכל'].map((t, i) => (
-          <span
-            key={t}
-            className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-              i === 4
-                ? 'bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]'
-                : 'text-slate-500'
-            }`}
-          >
-            {t}
-          </span>
         ))}
       </div>
     </div>

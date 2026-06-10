@@ -66,9 +66,27 @@
     animation: grow-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
+  /* נצנוץ עדין בקצה הגרף — לבקשת המשתמש, מושהה עד שהקו מסיים להצטייר */
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(0.8) rotate(0deg);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.15) rotate(18deg);
+    }
+  }
+  .animate-twinkle {
+    animation: twinkle 2.6s ease-in-out 1.7s infinite backwards;
+    filter: drop-shadow(0 0 6px rgba(167, 243, 208, 0.8));
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-fade-up,
-    .animate-grow-up {
+    .animate-grow-up,
+    .animate-twinkle {
       animation: none;
     }
     .animate-draw-line {
