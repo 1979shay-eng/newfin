@@ -8,7 +8,13 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
 
   return (
     <div dir="rtl" className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-      <div aria-hidden className="pointer-events-none absolute -top-48 right-[-10%] h-[34rem] w-[34rem] rounded-full bg-brand/20 blur-[150px]" />
+      {/* רקע חי — גוני זוהר משתנים לאורך הדף (כחול → ירקרק → כחול-בהיר) */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-48 right-[-10%] h-[34rem] w-[34rem] rounded-full bg-brand/20 blur-[150px]" />
+        <div className="absolute top-[6%] left-[-10%] h-[28rem] w-[28rem] rounded-full bg-emerald-500/[0.08] blur-[150px]" />
+        <div className="absolute top-[48%] right-[-14%] h-[26rem] w-[26rem] rounded-full bg-brand-light/10 blur-[160px]" />
+        <div className="absolute bottom-[-8%] left-[15%] h-[24rem] w-[24rem] rounded-full bg-brand/15 blur-[150px]" />
+      </div>
       {/* גרעין-פילם עדין — שובר את ה"שטיחות" של CSS */}
       <div
         aria-hidden
@@ -37,9 +43,9 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
 
       {/* Hero עריכותי */}
       <section className="relative overflow-hidden">
-        {/* אמנות-דאטה — נשפכת מעבר לקצה השמאלי (דסקטופ) */}
+        {/* אמנות-שוק — נשפכת מעבר לקצה השמאלי (דסקטופ) */}
         <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[54%] lg:block">
-          <CandleArt />
+          <MarketArt />
           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-slate-950" />
         </div>
 
@@ -95,10 +101,9 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
           </div>
         </div>
 
-        {/* אמנות-דאטה — גרסת מובייל (מוכלת, לא נשפכת) */}
-        <div className="relative h-44 w-full lg:hidden">
-          <CandleArt />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950" />
+        {/* אמנות-שוק — גרסת מובייל מוכלת */}
+        <div className="relative mx-auto w-full max-w-md px-2 pb-10 lg:hidden">
+          <MarketArt compact />
         </div>
       </section>
 
@@ -178,48 +183,95 @@ const CANDLES = [
   { h: 78, up: 0 }, { h: 90, up: 1 }, { h: 85, up: 0 }, { h: 97, up: 1 },
 ]
 
-function CandleArt() {
+// גרף-שטח "מדד לאורך זמן" — דימוי בלבד (שטוח ואז טיפוס מעריכי), בלי שמות ומספרים.
+// הזמן זורם משמאל לימין (מוסכמת גרפים גם בעברית) — ההיסטוריה השטוחה נשפכת מעבר
+// לקצה השמאלי, והשיא הזוהר מטפס לכיוון הטקסט.
+const AREA =
+  'M0,262 L30,255 L60,258 L90,251 L120,254 L150,246 L180,249 L210,241 L240,244 L270,234 L300,237 L330,225 L360,228 L390,209 L420,200 L450,176 L480,154 L510,116 L540,90 L570,50 L592,26'
+
+function MarketArt({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="relative h-full w-full overflow-hidden">
-      <div className="absolute left-[8%] top-1/2 h-[24rem] w-[24rem] -translate-y-1/2 rounded-full bg-emerald-500/15 blur-[120px]" />
-      <div className="absolute left-[40%] top-[38%] h-[20rem] w-[20rem] rounded-full bg-brand-light/20 blur-[120px]" />
-      <div className="absolute inset-0 flex items-end gap-[2.2%] px-6 pb-[16%] pt-[14%]">
+    <div
+      className={`relative flex h-full w-full flex-col justify-center overflow-hidden ${
+        compact ? 'px-4 py-2' : 'px-8 py-10'
+      }`}
+    >
+      {/* זוהר מקומי מאחורי הגרף */}
+      <div className="absolute left-[4%] top-[16%] h-[55%] w-[55%] rounded-full bg-emerald-500/10 blur-[110px]" />
+
+      {/* גרף שטח — מצייר את עצמו בכניסה */}
+      <div className="relative">
+        <svg
+          viewBox="0 0 600 300"
+          fill="none"
+          preserveAspectRatio="none"
+          className={`w-full ${compact ? 'h-28' : 'h-56'}`}
+        >
+          <defs>
+            <linearGradient id="nf-area-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#34d399" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[75, 150, 225].map((y) => (
+            <line key={y} x1="0" x2="600" y1={y} y2={y} stroke="#fff" strokeOpacity="0.05" strokeWidth="1" />
+          ))}
+          <path className="animate-area" d={`${AREA} L592,300 L0,300 Z`} fill="url(#nf-area-fill)" />
+          <path
+            className="animate-draw-line"
+            d={AREA}
+            stroke="#34d399"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pathLength={1}
+            style={{ filter: 'drop-shadow(0 0 6px rgba(52,211,153,0.45))' }}
+          />
+        </svg>
+        {/* נקודת קצה זוהרת בשיא */}
+        <div
+          className="animate-area absolute h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_18px_5px_rgba(52,211,153,0.55)]"
+          style={{ left: 'calc(98.7% - 5px)', top: 'calc(8.7% - 5px)' }}
+        />
+      </div>
+
+      {/* נרות — קטנים, מתחת לגרף */}
+      <div className={`flex items-end gap-[2%] ${compact ? 'mt-3 h-10' : 'mt-6 h-20'}`}>
         {CANDLES.map((c, i) => (
           <div
             key={i}
             className={`animate-grow-up flex h-full flex-1 flex-col items-center justify-end ${
               c.up ? 'text-emerald-400' : 'text-rose-400'
             }`}
-            style={{ animationDelay: `${180 + i * 55}ms` }}
+            style={{ animationDelay: `${550 + i * 45}ms` }}
           >
-            <div className="w-px bg-current opacity-40" style={{ height: '12%' }} />
+            <div className="w-px bg-current opacity-40" style={{ height: '16%' }} />
             <div
-              className="w-full max-w-[14px] rounded-[3px] bg-current shadow-[0_0_16px_var(--tw-shadow-color)] shadow-current/25"
+              className="w-full max-w-[8px] rounded-[2px] bg-current shadow-[0_0_10px_var(--tw-shadow-color)] shadow-current/25"
               style={{ height: `${c.h}%` }}
             />
           </div>
         ))}
       </div>
 
-      {/* קו מגמה זוהר מעל הנרות (עולה שמאלה ב-RTL) */}
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none">
-        <path
-          className="animate-draw-line"
-          d="M97,72 L83,66 L69,69 L55,57 L41,51 L27,38 L13,31 L2,25"
-          stroke="#e2e8f0"
-          strokeOpacity="0.65"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          pathLength={1}
-          vectorEffect="non-scaling-stroke"
-          style={{ filter: 'drop-shadow(0 0 4px rgba(226,232,240,0.55))' }}
-        />
-      </svg>
+      {/* בורר-טווח דקורטיבי — דימוי טאבים, בלי נתונים */}
       <div
-        className="animate-area absolute h-2 w-2 rounded-full bg-white shadow-[0_0_14px_4px_rgba(255,255,255,0.6)]"
-        style={{ left: '2%', top: '25%', marginRight: '-4px', marginTop: '-4px' }}
-      />
+        className="animate-fade-up mt-5 flex items-center gap-0.5 self-center rounded-full border border-white/10 bg-white/[0.04] p-1 backdrop-blur"
+        style={{ animationDelay: '950ms' }}
+      >
+        {['יום', 'שבוע', 'חודש', 'שנה', 'הכל'].map((t, i) => (
+          <span
+            key={t}
+            className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+              i === 4
+                ? 'bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]'
+                : 'text-slate-500'
+            }`}
+          >
+            {t}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -260,7 +312,14 @@ function FeedDashboard() {
       </div>
       <div className="flex flex-wrap gap-1.5 px-4 py-3">
         {['הכל', 'מהותיות 7+', 'מאיה', 'גלובס', 'במעקב'].map((c, i) => (
-          <span key={c} className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${i === 0 ? 'bg-brand-light/20 text-brand-light ring-1 ring-brand-light/30' : 'bg-white/5 text-slate-400'}`}>
+          <span
+            key={c}
+            className={`rounded-full px-3 py-1 text-[11px] font-semibold ring-1 ${
+              i === 0
+                ? 'bg-gradient-to-b from-brand-light/30 to-brand-light/10 text-brand-light ring-brand-light/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+                : 'bg-white/[0.04] text-slate-400 ring-white/[0.06]'
+            }`}
+          >
             {c}
           </span>
         ))}
