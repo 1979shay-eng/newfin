@@ -151,11 +151,14 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
       {/* CTA סופי */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
         <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-l from-brand/40 via-slate-900 to-slate-900 p-10 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-16">
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            מוכן לראות את השוק <span className="font-serif font-medium text-brand-light">בבירור?</span>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-light">
+            NEWFINIL · המקום שלך בשוק ההון
+          </p>
+          <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">
+            רוצה לדעת <span className="font-serif font-medium text-brand-light">לפני כולם?</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-slate-300">
-            הרשמה חינם, בלי כרטיס אשראי. הפיד המדורג שלך מוכן תוך שניות.
+            הרשמה חינם — הפיד האישי שלך מחכה בפנים.
           </p>
           <button
             onClick={open}
@@ -168,7 +171,7 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
       </section>
 
       <footer className="relative z-10 border-t border-white/5 py-6 text-center text-xs text-slate-500">
-        NewFin · מודיעין פיננסי לשוק ההון
+        NewFinIL · המקום שלך בשוק ההון
       </footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
