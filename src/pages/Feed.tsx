@@ -115,7 +115,7 @@ export default function Feed() {
       {/* בר חיפוש וסינון */}
       <div
         ref={barRef}
-        className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2 backdrop-blur"
+        className="relative z-[60] mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 p-2 shadow-lg shadow-black/20 backdrop-blur-xl"
       >
         <div className="relative">
           <button onClick={() => setMenu(menu === 'mat' ? '' : 'mat')} className={btn(menu === 'mat' || min > 1)}>
@@ -237,10 +237,10 @@ export default function Feed() {
 
 // ── עזרי תצוגה ──────────────────────────────────────────────────
 function btn(active: boolean) {
-  return `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+  return `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-150 ${
     active
-      ? 'border-brand-light/30 bg-brand-light/10 text-brand-light'
-      : 'border-white/[0.08] text-slate-300 hover:bg-white/[0.06]'
+      ? 'border-brand-light/40 bg-brand-light/15 text-brand-light shadow-[0_0_0_1px_rgba(99,179,237,0.15)]'
+      : 'border-white/[0.09] text-slate-300 hover:border-white/20 hover:bg-white/[0.08] hover:text-white active:scale-[0.97]'
   }`
 }
 
@@ -270,7 +270,7 @@ function Badge({ children }: { children: ReactNode }) {
 function Panel({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
   return (
     <div
-      className={`absolute right-0 z-20 mt-2 rounded-xl border border-white/10 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl ${narrow ? 'w-44' : 'w-64'}`}
+      className={`absolute right-0 z-20 mt-2 rounded-xl border border-white/[0.12] bg-[#0b1220] p-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.04] ${narrow ? 'w-44' : 'w-64'}`}
     >
       {children}
     </div>
