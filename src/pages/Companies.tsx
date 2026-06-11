@@ -65,25 +65,25 @@ export default function Companies() {
   return (
     <div>
       <div className="mb-4">
-        <h1 className="text-2xl font-extrabold text-slate-900">חברות</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-extrabold tracking-tight text-white">חברות</h1>
+        <p className="mt-1 text-sm text-slate-400">
           {companies.length} חברות נסחרות — סמן בכוכב ⭐ כדי לעקוב, והדיווחים שלהן יופיעו ב"במעקב".
         </p>
       </div>
 
-      <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2 backdrop-blur">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="חיפוש חברה..."
-          className="min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none placeholder:text-slate-400"
+          className="min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-500"
         />
         <button
           onClick={() => setOnlyWatched((o) => !o)}
-          className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+          className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
             onlyWatched
-              ? 'border-amber-300 bg-amber-50 text-amber-600'
-              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              ? 'border-amber-300/30 bg-amber-300/10 text-amber-300'
+              : 'border-white/[0.08] text-slate-300 hover:bg-white/[0.06]'
           }`}
         >
           ⭐ במעקב ({watch.length})
@@ -92,7 +92,7 @@ export default function Companies() {
 
       {/* מונה תוצאות — נותן ביטחון שהחיפוש סורק את כל החברות */}
       {!loading && (
-        <p className="mb-2 text-xs text-slate-400">
+        <p className="mb-2 text-xs text-slate-500">
           {query || onlyWatched
             ? `נמצאו ${filtered.length} חברות`
             : `מציג ${visible.length} מתוך ${filtered.length}`}
@@ -102,11 +102,11 @@ export default function Companies() {
       {loading ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[...Array(12)].map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-100" />
+            <div key={i} className="h-14 animate-pulse rounded-lg bg-white/[0.04]" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-slate-400">
+        <p className="py-8 text-center text-slate-500">
           {onlyWatched ? 'עדיין לא סימנת חברות למעקב.' : 'לא נמצאו חברות.'}
         </p>
       ) : (
@@ -117,18 +117,18 @@ export default function Companies() {
               return (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 transition-colors hover:border-white/[0.14]"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-bold text-slate-800">{c.name_he}</div>
+                    <div className="truncate text-sm font-bold text-slate-200">{c.name_he}</div>
                     {c.sector && (
-                      <div className="truncate text-[11px] text-slate-400">{c.sector}</div>
+                      <div className="truncate text-[11px] text-slate-500">{c.sector}</div>
                     )}
                   </div>
                   <button
                     onClick={() => toggleWatch(c.id)}
                     title={on ? 'הסר ממעקב' : 'הוסף למעקב'}
-                    className={`shrink-0 transition ${on ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}`}
+                    className={`shrink-0 transition-colors ${on ? 'text-amber-300' : 'text-slate-600 hover:text-amber-300'}`}
                   >
                     <Star on={on} />
                   </button>
@@ -140,7 +140,7 @@ export default function Companies() {
           {visible.length < filtered.length && (
             <button
               onClick={() => setShown((s) => s + PAGE)}
-              className="mt-4 w-full rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+              className="mt-4 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06]"
             >
               טען עוד ({filtered.length - visible.length})
             </button>

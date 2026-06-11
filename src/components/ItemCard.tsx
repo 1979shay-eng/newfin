@@ -4,7 +4,6 @@ import {
   directionLabel,
   materialityTier,
   materialityStyle,
-  materialityAnchor,
   reliabilityDot,
   formatTime,
 } from '../lib/format'
@@ -36,7 +35,7 @@ function StarButton({
       onClick={onClick}
       title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
       className={`shrink-0 transition-colors ${
-        watched ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
+        watched ? 'text-amber-300' : 'text-slate-600 hover:text-amber-300'
       }`}
     >
       <svg
@@ -55,6 +54,25 @@ function StarButton({
   )
 }
 
+// תג קטן: ציון מהותיות + חץ כיוון — עזר, לא עוגן
+function ScoreChip({ item }: { item: FeedItem }) {
+  const tier = materialityTier(item.materiality_score)
+  const dir = directionLabel[item.direction]
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <span className={`text-xs leading-none ${dir.className}`} title={`כיוון: ${dir.text}`}>
+        {dir.icon}
+      </span>
+      <span
+        className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded px-1 text-[11px] font-bold tabular-nums ${materialityStyle[tier]}`}
+        title={`מהותיות ${item.materiality_score}/10`}
+      >
+        {item.materiality_score}
+      </span>
+    </span>
+  )
+}
+
 export default function ItemCard({
   item,
   compact = false,
@@ -62,39 +80,31 @@ export default function ItemCard({
   onToggleWatch,
   index = 0,
 }: Props) {
-  const tier = materialityTier(item.materiality_score)
   const rel = reliabilityLabel[item.reliability]
-  const dir = directionLabel[item.direction]
   const canWatch = Boolean(item.company_id && onToggleWatch)
 
   if (compact) {
     return (
       <article
         style={delayStyle(index)}
-        className="animate-fade-up flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-shadow hover:shadow-sm"
+        className="animate-fade-up flex items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
       >
-        <span
-          className={`flex h-6 min-w-[24px] items-center justify-center rounded text-xs font-bold tabular-nums ${materialityStyle[tier]}`}
-          title={`מהותיות ${item.materiality_score}/10`}
-        >
-          {item.materiality_score}
-        </span>
-        <span className={`shrink-0 text-xs ${dir.className}`} title={dir.text}>
-          {dir.icon}
-        </span>
+        <ScoreChip item={item} />
         {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
         {item.company_name ? (
-          <span className="shrink-0 text-xs font-bold text-brand">{item.company_name}</span>
+          <span className="shrink-0 text-sm font-extrabold text-brand-light">{item.company_name}</span>
         ) : item.headline_tag ? (
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-              item.headline_type === 'macro' ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-600'
+              item.headline_type === 'macro'
+                ? 'bg-brand-light/15 text-brand-light'
+                : 'bg-white/[0.07] text-slate-300'
             }`}
           >
             {item.headline_tag}
           </span>
         ) : null}
-        <span className="truncate text-sm text-slate-700">{item.title}</span>
+        <span className="truncate text-sm text-slate-400">{item.title}</span>
         <span className="mr-auto shrink-0 text-[11px] tabular-nums text-slate-500">
           {formatTime(item.published_at)}
         </span>
@@ -105,88 +115,72 @@ export default function ItemCard({
   return (
     <article
       style={delayStyle(index)}
-      className="animate-fade-up flex gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow duration-200 hover:border-slate-300 hover:shadow-md"
+      className="animate-fade-up rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 transition-colors duration-200 hover:border-white/[0.15] hover:bg-white/[0.05]"
     >
-      {/* עוגן: ציון מהותיות + כיוון — היחידה הנסרקת ראשונה */}
-      <div className="flex shrink-0 flex-col items-center gap-1">
-        <span
-          className={`flex h-11 w-11 items-center justify-center rounded-lg text-lg font-bold tabular-nums ${materialityAnchor[tier]}`}
-          title={`מהותיות ${item.materiality_score}/10`}
-        >
-          {item.materiality_score}
-        </span>
-        <span
-          className={`text-sm leading-none ${dir.className}`}
-          title={`כיוון: ${dir.text}`}
-        >
-          {dir.icon}
-        </span>
+      {/* שורה ראשונה: שם המניה — הכוכב. הציון תג קטן בצד. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
+          {item.company_name ? (
+            <>
+              <span className="truncate text-base font-extrabold tracking-tight text-brand-light">
+                {item.company_name}
+              </span>
+              {item.company_sector && item.company_sector !== 'אחר' && (
+                <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                  {item.company_sector}
+                </span>
+              )}
+            </>
+          ) : item.headline_tag ? (
+            <span
+              className={`shrink-0 rounded px-2 py-0.5 text-xs font-bold ${
+                item.headline_type === 'macro'
+                  ? 'bg-brand-light/15 text-brand-light'
+                  : 'bg-white/[0.07] text-slate-300'
+              }`}
+            >
+              {item.headline_tag}
+            </span>
+          ) : null}
+        </div>
+        <ScoreChip item={item} />
       </div>
 
-      {/* גוף */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
-            {item.company_name ? (
-              <>
-                <span className="truncate text-xs font-bold text-brand">{item.company_name}</span>
-                {item.company_sector && item.company_sector !== 'אחר' && (
-                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                    {item.company_sector}
-                  </span>
-                )}
-              </>
-            ) : item.headline_tag ? (
-              <span
-                className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-bold ${
-                  item.headline_type === 'macro' ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {item.headline_tag}
-              </span>
-            ) : null}
-          </div>
-          <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
-            {formatTime(item.published_at)}
+      <h2 className="mt-1.5 text-[15px] font-medium leading-snug text-slate-200">{item.title}</h2>
+
+      {item.body && <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.body}</p>}
+
+      {item.bottom_line && (
+        <p className="mt-2.5 rounded-lg border-r-2 border-brand-light/40 bg-white/[0.03] px-3 py-2 text-[13px] leading-relaxed text-slate-400">
+          {item.bottom_line}
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+        <span>{item.source_name}</span>
+        <span className="text-slate-700">·</span>
+        <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
+          {rel.text}
+        </span>
+        <span className="text-slate-700">·</span>
+        <span className="tabular-nums">{formatTime(item.published_at)}</span>
+        {item.tags?.map((t) => (
+          <span key={t} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-400">
+            #{t}
           </span>
-        </div>
-
-        <h2 className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{item.title}</h2>
-
-        {item.body && (
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.body}</p>
+        ))}
+        {item.original_url && (
+          <a
+            href={item.original_url}
+            target="_blank"
+            rel="noreferrer"
+            className="mr-auto font-medium text-brand-light hover:underline"
+          >
+            למקור ↗
+          </a>
         )}
-
-        {item.bottom_line && (
-          <p className="mt-2 rounded-lg border-r-2 border-brand/30 bg-slate-50 px-3 py-2 text-[13px] leading-relaxed text-slate-600">
-            {item.bottom_line}
-          </p>
-        )}
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-          <span>{item.source_name}</span>
-          <span className="text-slate-300">·</span>
-          <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
-            {rel.text}
-          </span>
-          {item.tags?.map((t) => (
-            <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
-              #{t}
-            </span>
-          ))}
-          {item.original_url && (
-            <a
-              href={item.original_url}
-              target="_blank"
-              rel="noreferrer"
-              className="mr-auto font-medium text-brand hover:underline"
-            >
-              למקור ↗
-            </a>
-          )}
-        </div>
       </div>
     </article>
   )

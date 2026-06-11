@@ -7,17 +7,34 @@ const navItems: { to: string; label: string; end?: boolean }[] = [
   { to: '/about', label: 'אודות' },
 ]
 
+function Logo() {
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-light/15 text-brand-light ring-1 ring-brand-light/25">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 17l5-5 4 4 8-8" />
+        <path d="M16 8h4v4" />
+      </svg>
+    </span>
+  )
+}
+
 export default function Layout() {
   const { user, signOut } = useAuth()
   const initial = (user?.email ?? '?').trim().charAt(0).toUpperCase()
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <div className="relative min-h-screen">
+      {/* זוהר רקע עדין — שפת הנחיתה, באיפוק של מוצר */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 right-[-12%] h-[28rem] w-[28rem] rounded-full bg-brand/15 blur-[150px]" />
+        <div className="absolute top-[40%] left-[-14%] h-[24rem] w-[24rem] rounded-full bg-brand-light/[0.07] blur-[150px]" />
+      </div>
+
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-slate-950/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <Link to="/" className="flex items-center gap-2">
-            <span className="text-xl font-extrabold text-brand">NewFin</span>
-            <span className="hidden text-xs text-slate-400 sm:inline">מודיעין פיננסי</span>
+            <Logo />
+            <span className="text-lg font-extrabold tracking-tight text-white">NewFin</span>
           </Link>
           <nav className="flex items-center gap-1">
             {navItems.map((n) => (
@@ -26,8 +43,10 @@ export default function Layout() {
                 to={n.to}
                 end={n.end}
                 className={({ isActive }) =>
-                  `rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                    isActive ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'
+                  `rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                    isActive
+                      ? 'bg-brand-light/15 text-brand-light ring-1 ring-brand-light/25'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                   }`
                 }
               >
@@ -35,9 +54,9 @@ export default function Layout() {
               </NavLink>
             ))}
             {user && (
-              <div className="mr-2 flex items-center gap-1.5 border-r border-slate-200 pr-2">
+              <div className="mr-2 flex items-center gap-1.5 border-r border-white/10 pr-2">
                 <span
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light/15 text-xs font-bold text-brand-light"
                   title={user.email ?? ''}
                 >
                   {initial}
@@ -45,7 +64,7 @@ export default function Layout() {
                 <button
                   onClick={signOut}
                   title="יציאה"
-                  className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -58,12 +77,12 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
         <Outlet />
       </main>
 
-      <footer className="mt-12 border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-        NewFin · מודיעין פיננסי לשוק ההון · גרסת פיתוח
+      <footer className="relative z-10 mt-12 border-t border-white/5 py-6 text-center text-xs text-slate-500">
+        NewFinIL · המקום שלך בשוק ההון
       </footer>
     </div>
   )

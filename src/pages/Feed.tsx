@@ -88,13 +88,13 @@ export default function Feed() {
   return (
     <div>
       <div className="mb-4">
-        <h1 className="text-2xl font-extrabold text-slate-900">הפיד</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-extrabold tracking-tight text-white">הפיד</h1>
+        <p className="mt-1 text-sm text-slate-400">
           דיווחים משוק ההון, מדורגים לפי מהותיות.
           {lastUpdated && (
-            <span className="text-slate-400">
+            <span className="text-slate-500">
               {' · '}
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500 align-middle" />{' '}
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 align-middle" />{' '}
               מתעדכן אוטומטית · עודכן{' '}
               {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -103,7 +103,7 @@ export default function Feed() {
       </div>
 
       {/* לשוניות כללי / במעקב */}
-      <div className="mb-3 flex w-fit gap-1 rounded-lg bg-slate-100 p-1">
+      <div className="mb-3 flex w-fit gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] p-1">
         <TabBtn active={tab === 'general'} onClick={() => setTab('general')}>
           כללי
         </TabBtn>
@@ -115,7 +115,7 @@ export default function Feed() {
       {/* בר חיפוש וסינון */}
       <div
         ref={barRef}
-        className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
+        className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2 backdrop-blur"
       >
         <div className="relative">
           <button onClick={() => setMenu(menu === 'mat' ? '' : 'mat')} className={btn(menu === 'mat' || min > 1)}>
@@ -134,14 +134,14 @@ export default function Feed() {
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">סולם</span>
+                <span className="text-xs text-slate-500">סולם</span>
                 <input
                   type="range"
                   min={1}
                   max={10}
                   value={min}
                   onChange={(e) => setMin(Number(e.target.value))}
-                  className="h-1.5 flex-1 cursor-pointer accent-brand"
+                  className="h-1.5 flex-1 cursor-pointer accent-sky-400"
                 />
                 <Badge>{min}</Badge>
               </div>
@@ -159,11 +159,11 @@ export default function Feed() {
             <Panel>
               <PanelTitle>מקורות מידע</PanelTitle>
               <div className="space-y-0.5">
-                {allSources.length === 0 && <div className="text-xs text-slate-400">—</div>}
+                {allSources.length === 0 && <div className="text-xs text-slate-500">—</div>}
                 {allSources.map((s) => (
-                  <label key={s} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50">
-                    <input type="checkbox" checked={!excluded.includes(s)} onChange={() => toggleSource(s)} className="accent-brand" />
-                    <span className="text-slate-700">{s}</span>
+                  <label key={s} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-white/5">
+                    <input type="checkbox" checked={!excluded.includes(s)} onChange={() => toggleSource(s)} className="accent-sky-400" />
+                    <span className="text-slate-300">{s}</span>
                   </label>
                 ))}
               </div>
@@ -198,25 +198,25 @@ export default function Feed() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setMenu('')}
           placeholder="חיפוש חברה או מילת מפתח..."
-          className="min-w-[140px] flex-1 rounded-lg px-3 py-2 text-sm outline-none placeholder:text-slate-400"
+          className="min-w-[140px] flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-500"
         />
 
-        {!loading && <span className="shrink-0 px-2 text-xs text-slate-400">{filtered.length}</span>}
+        {!loading && <span className="shrink-0 px-2 text-xs text-slate-500">{filtered.length}</span>}
       </div>
 
       {loading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-white/[0.04]" />
           ))}
         </div>
       ) : tab === 'watch' && watch.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center">
-          <p className="text-slate-500">עדיין לא סימנת חברות למעקב.</p>
-          <p className="mt-1 text-sm text-slate-400">לחץ על הכוכב ⭐ ליד שם חברה בפיד הכללי כדי לעקוב אחריה.</p>
+        <div className="rounded-xl border border-dashed border-white/15 py-10 text-center">
+          <p className="text-slate-400">עדיין לא סימנת חברות למעקב.</p>
+          <p className="mt-1 text-sm text-slate-500">לחץ על הכוכב ⭐ ליד שם חברה בפיד הכללי כדי לעקוב אחריה.</p>
         </div>
       ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-slate-400">אין דיווחים שתואמים את הסינון.</p>
+        <p className="py-8 text-center text-slate-500">אין דיווחים שתואמים את הסינון.</p>
       ) : (
         <div className={compact ? 'space-y-2' : 'space-y-4'}>
           {filtered.map((item, i) => (
@@ -237,8 +237,10 @@ export default function Feed() {
 
 // ── עזרי תצוגה ──────────────────────────────────────────────────
 function btn(active: boolean) {
-  return `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-    active ? 'border-brand/30 bg-brand/5 text-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+  return `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+    active
+      ? 'border-brand-light/30 bg-brand-light/10 text-brand-light'
+      : 'border-white/[0.08] text-slate-300 hover:bg-white/[0.06]'
   }`
 }
 
@@ -246,8 +248,10 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-4 py-1.5 text-sm font-semibold transition ${
-        active ? 'bg-white text-brand shadow-sm' : 'text-slate-500 hover:text-slate-700'
+      className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+        active
+          ? 'bg-brand-light/20 text-brand-light shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-brand-light/30'
+          : 'text-slate-400 hover:text-slate-200'
       }`}
     >
       {children}
@@ -257,7 +261,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 function Badge({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-brand px-1 text-[11px] font-bold text-white">
+    <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-brand-light/20 px-1 text-[11px] font-bold text-brand-light">
       {children}
     </span>
   )
@@ -265,14 +269,16 @@ function Badge({ children }: { children: ReactNode }) {
 
 function Panel({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
   return (
-    <div className={`absolute right-0 z-20 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg ${narrow ? 'w-44' : 'w-64'}`}>
+    <div
+      className={`absolute right-0 z-20 mt-2 rounded-xl border border-white/10 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl ${narrow ? 'w-44' : 'w-64'}`}
+    >
       {children}
     </div>
   )
 }
 
 function PanelTitle({ children }: { children: ReactNode }) {
-  return <div className="mb-2 text-xs font-semibold text-slate-500">{children}</div>
+  return <div className="mb-2 text-xs font-semibold text-slate-400">{children}</div>
 }
 
 function Chip({
@@ -289,9 +295,13 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`text-xs font-medium transition ${
+      className={`text-xs font-medium transition-colors ${
         block ? 'mb-1 block w-full rounded-lg px-3 py-2 text-right' : 'rounded-full px-2.5 py-1'
-      } ${active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      } ${
+        active
+          ? 'bg-brand-light/20 text-brand-light ring-1 ring-brand-light/40'
+          : 'bg-white/[0.06] text-slate-400 hover:bg-white/10'
+      }`}
     >
       {children}
     </button>
