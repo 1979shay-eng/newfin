@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useAuth } from '../lib/useAuth'
 
 function GoogleIcon() {
@@ -25,10 +25,7 @@ function GoogleIcon() {
 }
 
 export default function AuthModal({ onClose }: { onClose: () => void }) {
-  const { signInWithGoogle, signInWithEmail, configured } = useAuth()
-  const [email, setEmail] = useState('')
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
-  const [errorMsg, setErrorMsg] = useState('')
+  const { signInWithGoogle, configured } = useAuth()
 
   // Escape לסגירה + נעילת גלילת רקע
   useEffect(() => {
@@ -40,24 +37,6 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
       document.body.style.overflow = ''
     }
   }, [onClose])
-
-  async function sendLink(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email.trim()) return
-    if (!configured) {
-      setStatus('error')
-      setErrorMsg('החיבור עדיין לא הוגדר (Supabase). נסה שוב מאוחר יותר.')
-      return
-    }
-    setStatus('sending')
-    const { error } = await signInWithEmail(email.trim())
-    if (error) {
-      setStatus('error')
-      setErrorMsg(error)
-    } else {
-      setStatus('sent')
-    }
-  }
 
   return (
     <div
@@ -87,65 +66,25 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {status === 'sent' ? (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-            <div className="text-2xl">📨</div>
-            <p className="mt-2 text-sm font-semibold text-emerald-800">קישור כניסה נשלח</p>
-            <p className="mt-1 text-xs text-emerald-700">
-              בדוק את תיבת המייל של <span className="font-medium">{email}</span> ולחץ על הקישור.
-            </p>
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={signInWithGoogle}
-              className="mt-6 flex h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition-all hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99]"
-            >
-              <GoogleIcon />
-              המשך עם Google
-            </button>
+        <button
+          onClick={signInWithGoogle}
+          disabled={!configured}
+          className="mt-6 flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition-all hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] disabled:opacity-60"
+        >
+          <GoogleIcon />
+          המשך עם Google
+        </button>
 
-            <div className="my-5 flex items-center gap-3">
-              <span className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs text-slate-400">או במייל</span>
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
-
-            <form onSubmit={sendLink}>
-              <label htmlFor="auth-email" className="mb-1.5 block text-xs font-medium text-slate-600">
-                כתובת מייל
-              </label>
-              <input
-                id="auth-email"
-                type="email"
-                required
-                dir="ltr"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-left text-sm outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20"
-              />
-              {status === 'error' && (
-                <p className="mt-2 flex items-center gap-1 text-xs text-red-600">
-                  <span>⚠️</span>
-                  {errorMsg}
-                </p>
-              )}
-              <button
-                type="submit"
-                disabled={status === 'sending'}
-                className="mt-3 h-11 w-full rounded-xl bg-brand text-sm font-bold text-white transition-all hover:bg-brand-dark active:scale-[0.99] disabled:opacity-60"
-              >
-                {status === 'sending' ? 'שולח…' : 'שלח קישור כניסה'}
-              </button>
-            </form>
-          </>
+        {!configured && (
+          <p className="mt-3 text-center text-xs text-amber-600">
+            החיבור עדיין לא הוגדר (Supabase). נסה שוב מאוחר יותר.
+          </p>
         )}
 
         <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400">
           בהמשך אתה מאשר את תנאי השימוש ומדיניות הפרטיות.
           <br />
-          חינם, בלי כרטיס אשראי.
+          חינם, בלי כרטיס אשראי. כניסה מהירה דרך חשבון Google.
         </p>
       </div>
     </div>

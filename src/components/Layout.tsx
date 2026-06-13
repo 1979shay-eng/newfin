@@ -1,10 +1,11 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/useAuth'
 
-const navItems: { to: string; label: string; end?: boolean }[] = [
+const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean }[] = [
   { to: '/', label: 'פיד', end: true },
   { to: '/companies', label: 'חברות' },
   { to: '/about', label: 'אודות' },
+  { to: '/admin', label: 'ניהול', adminOnly: true },
 ]
 
 function Logo() {
@@ -19,8 +20,9 @@ function Logo() {
 }
 
 export default function Layout() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, isAdmin } = useAuth()
   const initial = (user?.email ?? '?').trim().charAt(0).toUpperCase()
+  const items = navItems.filter((n) => !n.adminOnly || isAdmin)
 
   return (
     <div className="relative min-h-screen">
@@ -37,7 +39,7 @@ export default function Layout() {
             <span className="text-lg font-extrabold tracking-tight text-white">NewFin</span>
           </Link>
           <nav className="flex items-center gap-1">
-            {navItems.map((n) => (
+            {items.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}

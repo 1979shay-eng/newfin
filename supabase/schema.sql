@@ -150,6 +150,17 @@ create table if not exists users (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   tier user_tier not null default 'free',
+  is_admin boolean not null default false,
+  last_seen timestamptz,
+  created_at timestamptz not null default now()
+);
+-- מעקב שימוש מאוזן (login / page_view / search / watch_add / watch_remove).
+-- ראה supabase/auth-system.sql לטריגרים, RLS, ניקוי אוטומטי ותצוגת הניהול.
+create table if not exists usage_events (
+  id bigint generated always as identity primary key,
+  user_id uuid references users(id) on delete cascade,
+  type text not null,
+  meta jsonb,
   created_at timestamptz not null default now()
 );
 create table if not exists watchlist (

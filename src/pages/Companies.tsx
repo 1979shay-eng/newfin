@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchCompanies, type CompanyRow } from '../lib/queries'
-import { loadWatch, saveWatch } from '../lib/watchlist'
+import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
+import { track } from '../lib/track'
 
 // נרמול לחיפוש גמיש: מסיר גרשיים/נקודות/מקפים/רווחים + lowercase.
 // כך "אורט" מוצא את "או.אר.טי." ו-"אב גד" מוצא את "אב-גד".
@@ -44,10 +45,16 @@ export default function Companies() {
   // איפוס מספר המוצגים כשמשנים חיפוש/סינון
   useEffect(() => setShown(PAGE), [query, onlyWatched])
 
+  // רענון רשימת המעקב אחרי מיזוג-ענן בכניסה (מכשיר אחר)
+  useEffect(() => onWatchChanged(() => setWatch(loadWatch())), [])
+
   function toggleWatch(id: string) {
     setWatch((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      const adding = !prev.includes(id)
+      const next = adding ? [...prev, id] : prev.filter((x) => x !== id)
       saveWatch(next)
+      const company = companies.find((c) => c.id === id)?.name_he ?? null
+      void track(adding ? 'watch_add' : 'watch_remove', { company_id: id, company })
       return next
     })
   }

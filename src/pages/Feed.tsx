@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ItemCard from '../components/ItemCard'
 import { fetchFeed } from '../lib/queries'
-import { loadWatch, saveWatch } from '../lib/watchlist'
+import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
+import { track } from '../lib/track'
 import type { FeedItem } from '../types/db'
 
 const MAT_PRESETS = [
@@ -57,10 +58,24 @@ export default function Feed() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  // רענון רשימת המעקב אחרי מיזוג-ענן בכניסה (מכשיר אחר)
+  useEffect(() => onWatchChanged(() => setWatch(loadWatch())), [])
+
+  // מעקב חיפוש — ממוזער (רושם רק אחרי הקלדה שנעצרה 800ms, ומילה באורך 2+)
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) return
+    const id = setTimeout(() => track('search', { q }), 800)
+    return () => clearTimeout(id)
+  }, [query])
+
   function toggleWatch(id: string) {
     setWatch((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      const adding = !prev.includes(id)
+      const next = adding ? [...prev, id] : prev.filter((x) => x !== id)
       saveWatch(next)
+      const company = items.find((it) => it.company_id === id)?.company_name ?? null
+      void track(adding ? 'watch_add' : 'watch_remove', { company_id: id, company })
       return next
     })
   }
