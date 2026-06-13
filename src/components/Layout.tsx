@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/useAuth'
+import AuthModal from './AuthModal'
 
 const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean }[] = [
   { to: '/', label: 'פיד', end: true },
@@ -21,6 +23,7 @@ function Logo() {
 
 export default function Layout() {
   const { user, signOut, isAdmin } = useAuth()
+  const [authOpen, setAuthOpen] = useState(false)
   const initial = (user?.email ?? '?').trim().charAt(0).toUpperCase()
   const items = navItems.filter((n) => !n.adminOnly || isAdmin)
 
@@ -55,7 +58,7 @@ export default function Layout() {
                 {n.label}
               </NavLink>
             ))}
-            {user && (
+            {user ? (
               <div className="mr-2 flex items-center gap-1.5 border-r border-white/10 pr-2">
                 <span
                   className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light/15 text-xs font-bold text-brand-light"
@@ -74,10 +77,19 @@ export default function Layout() {
                   </svg>
                 </button>
               </div>
+            ) : (
+              <button
+                onClick={() => setAuthOpen(true)}
+                className="mr-2 rounded-full border border-brand-light/30 bg-brand-light/10 px-4 py-1.5 text-sm font-semibold text-brand-light transition-colors hover:bg-brand-light/20"
+              >
+                כניסה
+              </button>
             )}
           </nav>
         </div>
       </header>
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
       <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
         <Outlet />
