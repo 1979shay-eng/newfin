@@ -41,6 +41,9 @@ export const FEEDS = [
   // ── ספונסר (שוק הון; RSS ב-Content_rss_articles, CatId=7) ───────────
   { key: 'sponser', source_name: 'ספונסר', section: 'שוק הון',
     url: 'https://www.sponser.co.il/Content_rss_articles.aspx?CatId=7' },
+  // ── DeepTASE (חדשות וניתוח שוק ההון) ────────────────────────────────
+  { key: 'deeptase', source_name: 'DeepTASE', section: 'כללי',
+    url: 'https://www.deeptase.co.il/he/rss.xml' },
 ]
 
 // פענוח ישויות HTML/XML נפוצות
