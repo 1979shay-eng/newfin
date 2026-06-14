@@ -19,11 +19,25 @@ export const FEEDS = [
     url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=594' },
   { key: 'globes', source_name: 'גלובס', section: 'נדל"ן ותשתיות',
     url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=607' },
+  { key: 'globes', source_name: 'גלובס', section: 'שווקים',
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=2' },
   // ── TheMarker ──────────────────────────────────────────────────────
   { key: 'themarker', source_name: 'TheMarker', section: 'כללי',
     url: 'https://www.themarker.com/cmlink/1.144' },
   { key: 'themarker', source_name: 'TheMarker', section: 'שווקים',
     url: 'https://www.themarker.com/cmlink/1.243' },
+  { key: 'themarker', source_name: 'TheMarker', section: 'שוק ההון',
+    url: 'https://www.themarker.com/cmlink/1.145' },
+  // ── ynet כלכלה ──────────────────────────────────────────────────────
+  { key: 'ynet', source_name: 'ynet כלכלה', section: 'כלכלה',
+    url: 'https://www.ynet.co.il/Integration/StoryRss6.xml' },
+  // ── וואלה ───────────────────────────────────────────────────────────
+  { key: 'walla', source_name: 'וואלה', section: 'כסף',
+    url: 'https://rss.walla.co.il/feed/2686' },
+  { key: 'walla', source_name: 'וואלה', section: 'עסקים',
+    url: 'https://rss.walla.co.il/feed/22' },
+  { key: 'walla', source_name: 'וואלה', section: 'נדל"ן',
+    url: 'https://rss.walla.co.il/feed/2689' },
   // ── ספונסר (שוק הון; RSS ב-Content_rss_articles, CatId=7) ───────────
   { key: 'sponser', source_name: 'ספונסר', section: 'שוק הון',
     url: 'https://www.sponser.co.il/Content_rss_articles.aspx?CatId=7' },
