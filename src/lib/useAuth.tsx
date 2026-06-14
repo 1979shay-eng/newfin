@@ -88,6 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    // ניקוי דגל "אורח" — אחרת התנתקות עדיין נופלת לפיד במקום לדף הנחיתה.
+    localStorage.removeItem('nf_guest')
+    // רענון מלא לדף הבית → App נטען מחדש בלי סשן ובלי אורח → דף נחיתה.
+    window.location.href = '/'
   }
 
   return (
