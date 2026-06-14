@@ -5,6 +5,7 @@ import { enrich, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap, linkHeadlineTags } from './db.mjs'
 import { fetchAllRss } from './rss.mjs'
 import { collectThematic } from './thematic.mjs'
+import { collectYahoo } from './yahoo.mjs'
 import { classifyCompanySectors } from './sectors.mjs'
 import { classifyHeadline } from './headlines.mjs'
 
@@ -177,6 +178,17 @@ try {
     }
   } catch (e) {
     console.warn('⚠️  איסוף נושאי נכשל:', e.message)
+  }
+
+  // ── Yahoo Finance: חברות ישראליות דואליות (תרגום+שיוך מהטיקר) ─────────
+  try {
+    const yItems = await collectYahoo({ signalEnabled })
+    if (yItems.length) {
+      const yRes = await upsertItems(yItems)
+      console.log(`✅ נשמרו/עודכנו: ${yRes.count} פריטים מ-Yahoo Finance`)
+    }
+  } catch (e) {
+    console.warn('⚠️  איסוף Yahoo נכשל:', e.message)
   }
 
   // ── סיווג חברות לסקטור (ממלא בהדרגה את companies.sector) ──
