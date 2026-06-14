@@ -44,6 +44,9 @@ export const FEEDS = [
   // ── DeepTASE (חדשות וניתוח שוק ההון) ────────────────────────────────
   { key: 'deeptase', source_name: 'DeepTASE', section: 'כללי',
     url: 'https://www.deeptase.co.il/he/rss.xml' },
+  // ── ערוץ 10 (ערוץ הכלכלה; WordPress feed — כל האתר פיננסי) ───────────
+  { key: 'tv10', source_name: 'ערוץ 10', section: 'כללי',
+    url: 'https://tv10.co.il/feed/' },
 ]
 
 // פענוח ישויות HTML/XML נפוצות
