@@ -1,0 +1,11 @@
+# הגדרת ה-Worker שמפעיל את הקולקטור. לפריסה דרך CLI:
+#   cd worker && npx wrangler deploy
+#   npx wrangler secret put GH_TOKEN
+# (אפשר גם דרך ה-Dashboard בלי CLI — ראה worker/README.md)
+
+name = "newfin-collector-cron"
+main = "collector-cron.js"
+compatibility_date = "2024-11-01"
+
+[triggers]
+crons = ["*/15 * * * *"]
