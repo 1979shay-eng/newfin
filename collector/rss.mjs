@@ -70,6 +70,20 @@ function tag(block, name) {
   return m ? m[1].trim() : ''
 }
 
+// המרת pubDate גולמי ל-ISO תקין. מטפל בשתי תקלות אמיתיות שנצפו בפיד:
+//   1. CDATA — ynet עוטף את התאריך ב-<![CDATA[...]]> ואז new Date נכשל ונופל ל"עכשיו"
+//      (כל הידיעות מקבלות אותה שעה + ידיעה ישנה מקבלת תאריך היום).
+//   2. תאריך עתידי — אזור-זמן שגוי או עדכון-תאריך מאוחר של כתבה. זמן פרסום לא יכול
+//      להיות אחרי זמן האיסוף, אז חוסמים ונופלים לזמן הנוכחי.
+// בכל מקרה של תאריך חסר/לא-תקין/עתידי → זמן האיסוף (קירוב סביר, האיסוף תכוף).
+export function publishedAtFrom(rawPubDate) {
+  const now = Date.now()
+  const cleaned = (rawPubDate || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim()
+  const d = cleaned ? new Date(cleaned) : null
+  if (!d || isNaN(d.getTime()) || d.getTime() > now + 60000) return new Date().toISOString()
+  return d.toISOString()
+}
+
 // פירוק פיד RSS לרשימת פריטים גולמיים. מיוצא לשימוש חוזר ע"י thematic.mjs.
 export function parseFeed(xml) {
   const out = []
@@ -150,7 +164,6 @@ async function fetchFeed(feed, companies) {
     .filter((it) => it.title && it.link)
     .map((it) => {
       const { company_id, company_name } = matchCompany(it.title, companies)
-      const published_at = it.pubDate ? new Date(it.pubDate) : null
       return {
         source_id: sourceId,
         company_id,
@@ -158,8 +171,7 @@ async function fetchFeed(feed, companies) {
         maya_report_id: `${feed.key}:${it.guid}`, // מזהה ייחודי לכל מקור (משמש ל-upsert)
         title: it.title.slice(0, 500),
         original_url: it.link,
-        published_at:
-          published_at && !isNaN(published_at) ? published_at.toISOString() : new Date().toISOString(),
+        published_at: publishedAtFrom(it.pubDate),
         source_type: 'osint',
         reliability: 'reported',
         lang: 'he',

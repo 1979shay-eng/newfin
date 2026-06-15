@@ -2,7 +2,7 @@
 // השלכה ישראלית סחירה ברורה נשמרות, מנוסחות עובדתית בעברית. זיהוי החברה נעשה
 // דטרמיניסטית (matchCompany על טבלת companies) ולא ע"י ה-LLM — כדי למנוע הזיות.
 import { getOrCreateSource } from './db.mjs'
-import { parseFeed, loadCompanies, matchCompany } from './rss.mjs'
+import { parseFeed, loadCompanies, matchCompany, publishedAtFrom } from './rss.mjs'
 import { gateThematic } from './signal.mjs'
 
 const UA =
@@ -70,7 +70,6 @@ export async function collectThematic({ signalEnabled } = {}) {
       passed++
       // זיהוי חברה דטרמיניסטי: הצלבת ה-headline + רמז החברה מה-LLM מול טבלת החברות
       const { company_id } = matchCompany(`${g.headline_he} ${g.company || ''}`, companies)
-      const pub = it.pubDate ? new Date(it.pubDate) : null
       out.push({
         source_id: sourceId,
         company_id,
@@ -79,7 +78,7 @@ export async function collectThematic({ signalEnabled } = {}) {
         body: '',
         bottom_line: g.bottom_line,
         original_url: it.link,
-        published_at: pub && !isNaN(pub) ? pub.toISOString() : new Date().toISOString(),
+        published_at: publishedAtFrom(it.pubDate),
         source_type: 'osint',
         reliability: 'reported',
         materiality_score: g.score,

@@ -3,7 +3,7 @@
 // דרך שער-AI (gateThematic) שמנסח כותרת + שורה תחתונה בעברית, מסנן רעש, ומדרג.
 // שיוך החברה דטרמיניסטי לפי הטיקר (לא ע"י ה-LLM) — מונע הזיות.
 import { db, getOrCreateSource, getEnrichedMap } from './db.mjs'
-import { parseFeed } from './rss.mjs'
+import { parseFeed, publishedAtFrom } from './rss.mjs'
 import { gateThematic } from './signal.mjs'
 
 const UA =
@@ -103,7 +103,6 @@ export async function collectYahoo({ signalEnabled } = {}) {
     await sleep(2500) // כיבוד מגבלת הקצב של Groq
     if (!g || !g.relevant || !g.headline_he) continue
     passed++
-    const pub = c.it.pubDate ? new Date(c.it.pubDate) : null
     out.push({
       source_id: sourceId,
       company_id: c.company_id, // דטרמיניסטי מהטיקר (לא מה-LLM)
@@ -112,7 +111,7 @@ export async function collectYahoo({ signalEnabled } = {}) {
       body: '',
       bottom_line: g.bottom_line,
       original_url: c.it.link,
-      published_at: pub && !isNaN(pub) ? pub.toISOString() : new Date().toISOString(),
+      published_at: publishedAtFrom(c.it.pubDate),
       source_type: 'osint',
       reliability: 'reported',
       materiality_score: g.score,
