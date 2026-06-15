@@ -9,7 +9,7 @@ import { collectYahoo } from './yahoo.mjs'
 import { classifyCompanySectors } from './sectors.mjs'
 import { classifyHeadline } from './headlines.mjs'
 
-const ENRICH_TOP = 24 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה
+const ENRICH_TOP = 16 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה (מאוזן מול מגבלת 15 דק')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 console.log('🕷️  NewFin Collector — מתחיל איסוף ממאיה...')

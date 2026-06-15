@@ -76,9 +76,10 @@ export async function gateThematic(item) {
         }),
       })
       if (res.status !== 429) break
-      // rate limit — המתנה לפי Retry-After (או 6ש') וניסיון נוסף אחד
-      const wait = Number(res.headers.get('retry-after')) * 1000 || 6000
-      await new Promise((r) => setTimeout(r, Math.min(wait, 12000)))
+      // rate limit — המתנה קצרה וניסיון נוסף אחד. לא ממתינים ארוך (חוסם את הריצה
+      // כולה מול מגבלת הזמן); ידיעה שנדחית תנוסה שוב בריצה הבאה בזכות הדה-דופ.
+      const wait = Number(res.headers.get('retry-after')) * 1000 || 3000
+      await new Promise((r) => setTimeout(r, Math.min(wait, 4000)))
     }
     if (!res.ok) {
       if (res.status === 429) console.warn('Groq rate limit — מדלג (גם אחרי retry)')

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: שליפת הקוד
         uses: actions/checkout@v4
@@ -31,8 +31,21 @@ jobs:
       - name: התקנת תלויות
         run: npm ci
 
+      # קאש לדפדפן Playwright — חוסך ~2-3 דקות הורדה בכל ריצה
+      - name: קאש דפדפן Playwright
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}
+
       - name: התקנת דפדפן Playwright
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: הרצת האספן
         env:

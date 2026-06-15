@@ -8,8 +8,8 @@ import { gateThematic } from './signal.mjs'
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-const PER_FEED = 6 // כמה ידיעות חדשות לבדוק מכל טיקר
-const GATE_CAP = 18 // תקרת קריאות-AI חדשות לכל ריצה (הגנת מכסה/timeout)
+const PER_FEED = 4 // כמה ידיעות חדשות לבדוק מכל טיקר
+const GATE_CAP = 8 // תקרת קריאות-AI חדשות לכל ריצה (הגנת מכסה/timeout)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // טיקר אמריקאי → שם החברה כפי שהוא ב-DB (לשיוך) + ענף (רמז לשער).
