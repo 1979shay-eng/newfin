@@ -80,7 +80,7 @@ export default function ItemCard({
         <DirectionChip item={item} />
         {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
         {item.company_name ? (
-          <span className="shrink-0 text-sm font-extrabold text-brand-light">{item.company_name}</span>
+          <span className="shrink-0 text-base font-extrabold text-brand-light">{item.company_name}</span>
         ) : item.headline_tag ? (
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
@@ -92,7 +92,7 @@ export default function ItemCard({
             {item.headline_tag}
           </span>
         ) : null}
-        <span className="truncate text-sm text-slate-400">{item.title}</span>
+        <span className="truncate text-[15px] text-slate-300">{item.title}</span>
         <span className="mr-auto shrink-0 text-xs font-semibold tabular-nums text-slate-300">
           {formatTime(item.published_at)}
         </span>
@@ -111,11 +111,11 @@ export default function ItemCard({
           {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
           {item.company_name ? (
             <>
-              <span className="truncate text-base font-extrabold tracking-tight text-brand-light">
+              <span className="truncate text-lg font-extrabold tracking-tight text-brand-light">
                 {item.company_name}
               </span>
               {item.company_sector && item.company_sector !== 'אחר' && (
-                <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-medium text-slate-400">
                   {item.company_sector}
                 </span>
               )}
@@ -135,17 +135,17 @@ export default function ItemCard({
         <DirectionChip item={item} />
       </div>
 
-      <h2 className="mt-1.5 text-[15px] font-medium leading-snug text-slate-200">{item.title}</h2>
+      <h2 className="mt-2 text-xl font-semibold leading-snug text-slate-100">{item.title}</h2>
 
-      {item.body && <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.body}</p>}
+      {item.body && <p className="mt-2 text-[15px] leading-relaxed text-slate-300">{item.body}</p>}
 
       {item.bottom_line && (
-        <p className="mt-2.5 rounded-lg border-r-2 border-brand-light/40 bg-white/[0.03] px-3 py-2 text-[13px] leading-relaxed text-slate-400">
+        <p className="mt-3 rounded-lg border-r-2 border-brand-light/40 bg-white/[0.03] px-3 py-2 text-[15px] leading-relaxed text-slate-300">
           {item.bottom_line}
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
         <span>{item.source_name}</span>
         <span className="text-slate-700">·</span>
         <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
