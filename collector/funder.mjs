@@ -1,7 +1,9 @@
 // פאנדר (פורטל קרנות/ביטוח/שוק הון) — מאחורי הגנת Cloudflare שחוסמת fetch רגיל (403).
-// לכן נאסף דרך אותו דפדפן Playwright שכבר פתוח עבור מאיה: טעינת דף הבית מקבלת
-// clearance, ואז שולפים את ה-RSS (rssNews.aspx). הפלט זהה ל-fetchFeed של rss.mjs,
-// כך שה-flow המשותף (ציון + SIGNAL + שמירה) חל גם עליו.
+// נאסף דרך דפדפן Playwright: טעינת דף הבית מקבלת clearance, ואז שולפים rssNews.aspx.
+//
+// ⚠️ לא מחובר ל-run.mjs כרגע: Cloudflare חוסם את Playwright גם מ-IP של GitHub Actions
+// (datacenter). זה עובד מקומית (IP ביתי) אך מחזיר 0 מהשרת. כדי להפעיל בעתיד — להריץ
+// את הקולקטור מ-IP ביתי/פרוקסי-מגורים ולהחזיר את החיווט ב-run.mjs (import + concat ל-rssRaw).
 import { getOrCreateSource } from './db.mjs'
 import { parseFeed, loadCompanies, matchCompany, publishedAtFrom } from './rss.mjs'
 
