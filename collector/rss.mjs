@@ -38,6 +38,9 @@ export const FEEDS = [
     url: 'https://rss.walla.co.il/feed/22' },
   { key: 'walla', source_name: 'וואלה', section: 'נדל"ן',
     url: 'https://rss.walla.co.il/feed/2689' },
+  // ── מעריב כלכלה ─────────────────────────────────────────────────────
+  { key: 'maariv', source_name: 'מעריב', section: 'כלכלה',
+    url: 'https://www.maariv.co.il/rss/business' },
   // ── ספונסר (שוק הון; RSS ב-Content_rss_articles, CatId=7) ───────────
   { key: 'sponser', source_name: 'ספונסר', section: 'שוק הון',
     url: 'https://www.sponser.co.il/Content_rss_articles.aspx?CatId=7' },
