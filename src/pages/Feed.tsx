@@ -12,6 +12,13 @@ const MAT_PRESETS = [
   { label: 'קריטי בלבד', min: 9 },
 ]
 
+// סינון מקורות לשתי קטגוריות: מאיה (דיווחי בורסה רשמיים) מול עיתונות (כל שאר המדיה).
+const SOURCE_CATS = [
+  { key: 'maya', label: 'מאיה', hint: 'דיווחי בורסה' },
+  { key: 'press', label: 'עיתונות', hint: 'גלובס, דהמרקר, ynet ועוד' },
+]
+const sourceCat = (name: string) => (name === 'מאיה' ? 'maya' : 'press')
+
 type Menu = '' | 'mat' | 'src' | 'sort'
 type Sort = 'materiality' | 'time'
 type Tab = 'general' | 'watch'
@@ -23,7 +30,7 @@ export default function Feed() {
   const [tab, setTab] = useState<Tab>('general')
   const [min, setMin] = useState(1)
   const [query, setQuery] = useState('')
-  const [excluded, setExcluded] = useState<string[]>([])
+  const [excludedCats, setExcludedCats] = useState<string[]>([])
   const [sort, setSort] = useState<Sort>('time')
   const [compact, setCompact] = useState(false)
   const [menu, setMenu] = useState<Menu>('')
@@ -80,13 +87,11 @@ export default function Feed() {
     })
   }
 
-  const allSources = useMemo(() => [...new Set(items.map((i) => i.source_name))], [items])
-
   const filtered = useMemo(() => {
     let r = items.filter(
       (it) =>
         it.materiality_score >= min &&
-        !excluded.includes(it.source_name) &&
+        !excludedCats.includes(sourceCat(it.source_name)) &&
         (!query || it.title.includes(query) || (it.company_name ?? '').includes(query)),
     )
     if (tab === 'watch') r = r.filter((it) => it.company_id && watchSet.has(it.company_id))
@@ -95,10 +100,10 @@ export default function Feed() {
         ? +new Date(b.published_at) - +new Date(a.published_at)
         : b.materiality_score - a.materiality_score,
     )
-  }, [items, min, query, excluded, sort, tab, watchSet])
+  }, [items, min, query, excludedCats, sort, tab, watchSet])
 
-  const toggleSource = (s: string) =>
-    setExcluded((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]))
+  const toggleCat = (c: string) =>
+    setExcludedCats((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]))
 
   return (
     <div>
@@ -165,20 +170,20 @@ export default function Feed() {
         </div>
 
         <div className="relative">
-          <button onClick={() => setMenu(menu === 'src' ? '' : 'src')} className={btn(menu === 'src' || excluded.length > 0)}>
+          <button onClick={() => setMenu(menu === 'src' ? '' : 'src')} className={btn(menu === 'src' || excludedCats.length > 0)}>
             <FunnelIcon />
             <span>מקורות</span>
-            {excluded.length > 0 && <Badge>{allSources.length - excluded.length}</Badge>}
+            {excludedCats.length > 0 && <Badge>{SOURCE_CATS.length - excludedCats.length}</Badge>}
           </button>
           {menu === 'src' && (
             <Panel>
               <PanelTitle>מקורות מידע</PanelTitle>
               <div className="space-y-0.5">
-                {allSources.length === 0 && <div className="text-xs text-slate-500">—</div>}
-                {allSources.map((s) => (
-                  <label key={s} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-white/5">
-                    <input type="checkbox" checked={!excluded.includes(s)} onChange={() => toggleSource(s)} className="accent-sky-400" />
-                    <span className="text-slate-300">{s}</span>
+                {SOURCE_CATS.map((c) => (
+                  <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-white/5">
+                    <input type="checkbox" checked={!excludedCats.includes(c.key)} onChange={() => toggleCat(c.key)} className="accent-sky-400" />
+                    <span className="font-medium text-slate-200">{c.label}</span>
+                    <span className="mr-auto text-[11px] text-slate-500">{c.hint}</span>
                   </label>
                 ))}
               </div>
@@ -220,7 +225,7 @@ export default function Feed() {
       </div>
 
       {loading ? (
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-28 animate-pulse rounded-2xl bg-white/[0.04]" />
           ))}
@@ -233,7 +238,7 @@ export default function Feed() {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-slate-500">אין דיווחים שתואמים את הסינון.</p>
       ) : (
-        <div className={`grid items-start ${compact ? 'gap-2.5' : 'gap-4'} lg:grid-cols-2`}>
+        <div className={compact ? 'space-y-2.5' : 'space-y-4'}>
           {filtered.map((item, i) => (
             <ItemCard
               key={item.id}
