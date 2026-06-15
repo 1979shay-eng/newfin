@@ -4,6 +4,7 @@ import { scoreReport } from './materiality.mjs'
 import { enrich, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap, linkHeadlineTags } from './db.mjs'
 import { fetchAllRss } from './rss.mjs'
+import { fetchFunder } from './funder.mjs'
 import { collectThematic } from './thematic.mjs'
 import { collectYahoo } from './yahoo.mjs'
 import { classifyCompanySectors } from './sectors.mjs'
@@ -98,7 +99,13 @@ try {
 
   // ── הרחבת מקורות: חדשות RSS (גלובס, TheMarker) + זיהוי חברה מהכותרת ──
   try {
-    const rssRaw = await fetchAllRss()
+    // פאנדר נאסף דרך הדפדפן הפתוח (ctx) כי הוא מאחורי Cloudflare; שאר ה-RSS ב-fetch רגיל
+    const funderRaw = await fetchFunder(ctx).catch((e) => {
+      console.warn('⚠️  פאנדר נכשל:', e.message)
+      return []
+    })
+    const rssRaw = [...(await fetchAllRss()), ...funderRaw]
+    if (funderRaw.length) console.log(`📰 פאנדר: ${funderRaw.length} ידיעות (דרך Playwright)`)
     // מדיניות תיוג: יש חברה → תיוג חברה. אין חברה → סיווג כותרת: כתבה ענפית→סקטור,
     // מאקרו חשוב→"מאקרו", אחרת נזרק (לא נשמר). כך הפיד לא מוצף ברעש מאקרו/כללי.
     const rssBase = rssRaw
