@@ -102,9 +102,9 @@ export default function Feed() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-white">הפיד</h1>
-        <p className="mt-1 text-sm text-slate-400">
+      <div className="mb-5">
+        <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">הפיד</h1>
+        <p className="mt-2 text-sm text-slate-400">
           דיווחים משוק ההון, מדורגים לפי מהותיות.
           {lastUpdated && (
             <span className="text-slate-500">
@@ -220,9 +220,9 @@ export default function Feed() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-white/[0.04]" />
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-white/[0.04]" />
           ))}
         </div>
       ) : tab === 'watch' && watch.length === 0 ? (
@@ -233,7 +233,7 @@ export default function Feed() {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-slate-500">אין דיווחים שתואמים את הסינון.</p>
       ) : (
-        <div className={compact ? 'space-y-2' : 'space-y-4'}>
+        <div className={`grid items-start ${compact ? 'gap-2.5' : 'gap-4'} lg:grid-cols-2`}>
           {filtered.map((item, i) => (
             <ItemCard
               key={item.id}

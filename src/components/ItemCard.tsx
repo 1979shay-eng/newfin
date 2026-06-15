@@ -75,7 +75,7 @@ export default function ItemCard({
     return (
       <article
         style={delayStyle(index)}
-        className="animate-fade-up flex items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
+        className="animate-fade-up flex h-full items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3.5 py-2.5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
       >
         <DirectionChip item={item} />
         {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
@@ -103,7 +103,7 @@ export default function ItemCard({
   return (
     <article
       style={delayStyle(index)}
-      className="animate-fade-up rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 transition-colors duration-200 hover:border-white/[0.15] hover:bg-white/[0.05]"
+      className="animate-fade-up h-full rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 transition-all duration-200 hover:border-brand-light/25 hover:bg-white/[0.05] hover:shadow-[0_8px_30px_-12px_rgba(99,179,237,0.25)]"
     >
       {/* שורה ראשונה: שם המניה — הכוכב. הציון תג קטן בצד. */}
       <div className="flex items-start justify-between gap-3">
