@@ -1,12 +1,5 @@
 import type { FeedItem } from '../types/db'
-import {
-  reliabilityLabel,
-  directionLabel,
-  materialityTier,
-  materialityStyle,
-  reliabilityDot,
-  formatTime,
-} from '../lib/format'
+import { reliabilityLabel, directionLabel, reliabilityDot, formatTime } from '../lib/format'
 
 type Props = {
   item: FeedItem
@@ -54,21 +47,16 @@ function StarButton({
   )
 }
 
-// תג קטן: ציון מהותיות + חץ כיוון — עזר, לא עוגן
-function ScoreChip({ item }: { item: FeedItem }) {
-  const tier = materialityTier(item.materiality_score)
+// חץ כיוון בלבד (bull/bear/neutral) — אינדיקטור עזר. הציון המספרי הוסר מהתצוגה
+// (הסינון לפי מהותיות נשאר פעיל בבר החיפוש).
+function DirectionChip({ item }: { item: FeedItem }) {
   const dir = directionLabel[item.direction]
   return (
-    <span className="flex shrink-0 items-center gap-1.5">
-      <span className={`text-xs leading-none ${dir.className}`} title={`כיוון: ${dir.text}`}>
-        {dir.icon}
-      </span>
-      <span
-        className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded px-1 text-[11px] font-bold tabular-nums ${materialityStyle[tier]}`}
-        title={`מהותיות ${item.materiality_score}/10`}
-      >
-        {item.materiality_score}
-      </span>
+    <span
+      className={`shrink-0 text-sm leading-none ${dir.className}`}
+      title={`כיוון: ${dir.text}`}
+    >
+      {dir.icon}
     </span>
   )
 }
@@ -89,7 +77,7 @@ export default function ItemCard({
         style={delayStyle(index)}
         className="animate-fade-up flex items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
       >
-        <ScoreChip item={item} />
+        <DirectionChip item={item} />
         {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
         {item.company_name ? (
           <span className="shrink-0 text-sm font-extrabold text-brand-light">{item.company_name}</span>
@@ -105,7 +93,7 @@ export default function ItemCard({
           </span>
         ) : null}
         <span className="truncate text-sm text-slate-400">{item.title}</span>
-        <span className="mr-auto shrink-0 text-[11px] tabular-nums text-slate-500">
+        <span className="mr-auto shrink-0 text-xs font-semibold tabular-nums text-slate-300">
           {formatTime(item.published_at)}
         </span>
       </article>
@@ -144,7 +132,7 @@ export default function ItemCard({
             </span>
           ) : null}
         </div>
-        <ScoreChip item={item} />
+        <DirectionChip item={item} />
       </div>
 
       <h2 className="mt-1.5 text-[15px] font-medium leading-snug text-slate-200">{item.title}</h2>
@@ -165,7 +153,9 @@ export default function ItemCard({
           {rel.text}
         </span>
         <span className="text-slate-700">·</span>
-        <span className="tabular-nums">{formatTime(item.published_at)}</span>
+        <span className="text-[13px] font-bold tabular-nums text-slate-300">
+          {formatTime(item.published_at)}
+        </span>
         {item.tags?.map((t) => (
           <span key={t} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-400">
             #{t}
