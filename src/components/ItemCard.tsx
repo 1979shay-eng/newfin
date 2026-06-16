@@ -1,5 +1,18 @@
+import type { ReactNode } from 'react'
 import type { FeedItem } from '../types/db'
 import { reliabilityLabel, directionLabel, reliabilityDot, formatTime } from '../lib/format'
+import { sectorTagClass, sourceTagClass } from '../lib/tags'
+
+// תווית צבועה אחידה (מקור / סקטור) — color-coding לזיהוי מהיר
+function Tag({ color, children }: { color: string; children: ReactNode }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${color}`}
+    >
+      {children}
+    </span>
+  )
+}
 
 type Props = {
   item: FeedItem
@@ -82,20 +95,15 @@ export default function ItemCard({
         {item.company_name ? (
           <span className="shrink-0 text-base font-extrabold text-brand">{item.company_name}</span>
         ) : item.headline_tag ? (
-          <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-              item.headline_type === 'macro'
-                ? 'bg-brand-light/15 text-brand'
-                : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            {item.headline_tag}
-          </span>
+          <Tag color={sectorTagClass(item.headline_tag)}>{item.headline_tag}</Tag>
         ) : null}
         <span className="truncate text-[15px] text-slate-600">{item.title}</span>
-        <span className="mr-auto shrink-0 text-xs font-semibold tabular-nums text-slate-700">
-          {formatTime(item.published_at)}
-        </span>
+        <div className="mr-auto flex shrink-0 items-center gap-2">
+          <Tag color={sourceTagClass(item.source_name)}>{item.source_name}</Tag>
+          <span className="text-xs font-semibold tabular-nums text-slate-700">
+            {formatTime(item.published_at)}
+          </span>
+        </div>
       </article>
     )
   }
@@ -115,21 +123,11 @@ export default function ItemCard({
                 {item.company_name}
               </span>
               {item.company_sector && item.company_sector !== 'אחר' && (
-                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
-                  {item.company_sector}
-                </span>
+                <Tag color={sectorTagClass(item.company_sector)}>{item.company_sector}</Tag>
               )}
             </>
           ) : item.headline_tag ? (
-            <span
-              className={`shrink-0 rounded px-2 py-0.5 text-xs font-bold ${
-                item.headline_type === 'macro'
-                  ? 'bg-brand-light/15 text-brand'
-                  : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {item.headline_tag}
-            </span>
+            <Tag color={sectorTagClass(item.headline_tag)}>{item.headline_tag}</Tag>
           ) : null}
         </div>
         <DirectionChip item={item} />
@@ -145,9 +143,8 @@ export default function ItemCard({
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-        <span>{item.source_name}</span>
-        <span className="text-slate-300">·</span>
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+        <Tag color={sourceTagClass(item.source_name)}>{item.source_name}</Tag>
         <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
           {rel.text}

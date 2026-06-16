@@ -36,7 +36,7 @@ export default function Layout() {
       </div>
 
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
             <Logo />
             <span className="text-lg font-extrabold tracking-tight text-slate-900">NewFin</span>
@@ -91,7 +91,7 @@ export default function Layout() {
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
-      <main className="relative z-10 mx-auto max-w-4xl px-4 py-6 sm:px-6">
+      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-6">
         <Outlet />
       </main>
 
