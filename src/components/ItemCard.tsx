@@ -83,6 +83,9 @@ export default function ItemCard({
 }: Props) {
   const rel = reliabilityLabel[item.reliability]
   const canWatch = Boolean(item.company_id && onToggleWatch)
+  // הסקטור לתצוגה: סקטור החברה, ואם אין — תגית הכותרת (סקטור/מאקרו)
+  const sectorName =
+    item.company_sector && item.company_sector !== 'אחר' ? item.company_sector : item.headline_tag
 
   if (compact) {
     return (
@@ -113,24 +116,21 @@ export default function ItemCard({
       style={delayStyle(index)}
       className="animate-fade-up h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-light/50 hover:shadow-[0_12px_32px_-12px_rgba(15,76,129,0.18)]"
     >
-      {/* שורה ראשונה: שם המניה — הכוכב. הציון תג קטן בצד. */}
+      {/* שורה ראשונה: ימין — שם המניה + כיוון. שמאל-עליון — תגיות סקטור ואז מקור. */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
-          {item.company_name ? (
-            <>
-              <span className="truncate text-lg font-extrabold tracking-tight text-brand">
-                {item.company_name}
-              </span>
-              {item.company_sector && item.company_sector !== 'אחר' && (
-                <Tag color={sectorTagClass(item.company_sector)}>{item.company_sector}</Tag>
-              )}
-            </>
-          ) : item.headline_tag ? (
-            <Tag color={sectorTagClass(item.headline_tag)}>{item.headline_tag}</Tag>
-          ) : null}
+          {item.company_name && (
+            <span className="truncate text-lg font-extrabold tracking-tight text-brand">
+              {item.company_name}
+            </span>
+          )}
+          <DirectionChip item={item} />
         </div>
-        <DirectionChip item={item} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {sectorName && <Tag color={sectorTagClass(sectorName)}>{sectorName}</Tag>}
+          <Tag color={sourceTagClass(item.source_name)}>{item.source_name}</Tag>
+        </div>
       </div>
 
       <h2 className="mt-2 text-xl font-bold leading-snug text-slate-900">{item.title}</h2>
@@ -144,7 +144,6 @@ export default function ItemCard({
       )}
 
       <div className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-        <Tag color={sourceTagClass(item.source_name)}>{item.source_name}</Tag>
         <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
           {rel.text}
