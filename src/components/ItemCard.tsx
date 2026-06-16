@@ -28,7 +28,7 @@ function StarButton({
       onClick={onClick}
       title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
       className={`shrink-0 transition-colors ${
-        watched ? 'text-amber-300' : 'text-slate-600 hover:text-amber-300'
+        watched ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'
       }`}
     >
       <svg
@@ -75,25 +75,25 @@ export default function ItemCard({
     return (
       <article
         style={delayStyle(index)}
-        className="animate-fade-up flex h-full items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3.5 py-2.5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
+        className="animate-fade-up flex h-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 hover:bg-slate-50"
       >
         <DirectionChip item={item} />
         {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
         {item.company_name ? (
-          <span className="shrink-0 text-base font-extrabold text-brand-light">{item.company_name}</span>
+          <span className="shrink-0 text-base font-extrabold text-brand">{item.company_name}</span>
         ) : item.headline_tag ? (
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
               item.headline_type === 'macro'
-                ? 'bg-brand-light/15 text-brand-light'
-                : 'bg-white/[0.07] text-slate-300'
+                ? 'bg-brand-light/15 text-brand'
+                : 'bg-slate-100 text-slate-600'
             }`}
           >
             {item.headline_tag}
           </span>
         ) : null}
-        <span className="truncate text-[15px] text-slate-300">{item.title}</span>
-        <span className="mr-auto shrink-0 text-xs font-semibold tabular-nums text-slate-300">
+        <span className="truncate text-[15px] text-slate-600">{item.title}</span>
+        <span className="mr-auto shrink-0 text-xs font-semibold tabular-nums text-slate-700">
           {formatTime(item.published_at)}
         </span>
       </article>
@@ -103,7 +103,7 @@ export default function ItemCard({
   return (
     <article
       style={delayStyle(index)}
-      className="animate-fade-up h-full rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 transition-all duration-200 hover:border-brand-light/25 hover:bg-white/[0.05] hover:shadow-[0_8px_30px_-12px_rgba(99,179,237,0.25)]"
+      className="animate-fade-up h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-light/50 hover:shadow-[0_12px_32px_-12px_rgba(15,76,129,0.18)]"
     >
       {/* שורה ראשונה: שם המניה — הכוכב. הציון תג קטן בצד. */}
       <div className="flex items-start justify-between gap-3">
@@ -111,11 +111,11 @@ export default function ItemCard({
           {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
           {item.company_name ? (
             <>
-              <span className="truncate text-lg font-extrabold tracking-tight text-brand-light">
+              <span className="truncate text-lg font-extrabold tracking-tight text-brand">
                 {item.company_name}
               </span>
               {item.company_sector && item.company_sector !== 'אחר' && (
-                <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-medium text-slate-400">
+                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
                   {item.company_sector}
                 </span>
               )}
@@ -124,8 +124,8 @@ export default function ItemCard({
             <span
               className={`shrink-0 rounded px-2 py-0.5 text-xs font-bold ${
                 item.headline_type === 'macro'
-                  ? 'bg-brand-light/15 text-brand-light'
-                  : 'bg-white/[0.07] text-slate-300'
+                  ? 'bg-brand-light/15 text-brand'
+                  : 'bg-slate-100 text-slate-600'
               }`}
             >
               {item.headline_tag}
@@ -135,29 +135,29 @@ export default function ItemCard({
         <DirectionChip item={item} />
       </div>
 
-      <h2 className="mt-2 text-xl font-semibold leading-snug text-slate-100">{item.title}</h2>
+      <h2 className="mt-2 text-xl font-bold leading-snug text-slate-900">{item.title}</h2>
 
-      {item.body && <p className="mt-2 text-[15px] leading-relaxed text-slate-300">{item.body}</p>}
+      {item.body && <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{item.body}</p>}
 
       {item.bottom_line && (
-        <p className="mt-3 rounded-lg border-r-2 border-brand-light/40 bg-white/[0.03] px-3 py-2 text-[15px] leading-relaxed text-slate-300">
+        <p className="mt-3 rounded-lg border-r-2 border-brand-light/60 bg-slate-50 px-3 py-2 text-[15px] leading-relaxed text-slate-600">
           {item.bottom_line}
         </p>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
         <span>{item.source_name}</span>
-        <span className="text-slate-700">·</span>
+        <span className="text-slate-300">·</span>
         <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
           {rel.text}
         </span>
-        <span className="text-slate-700">·</span>
-        <span className="text-[13px] font-bold tabular-nums text-slate-300">
+        <span className="text-slate-300">·</span>
+        <span className="text-[13px] font-bold tabular-nums text-slate-700">
           {formatTime(item.published_at)}
         </span>
         {item.tags?.map((t) => (
-          <span key={t} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-slate-400">
+          <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
             #{t}
           </span>
         ))}
@@ -166,7 +166,7 @@ export default function ItemCard({
             href={item.original_url}
             target="_blank"
             rel="noreferrer"
-            className="mr-auto font-medium text-brand-light hover:underline"
+            className="mr-auto font-semibold text-brand hover:underline"
           >
             למקור ↗
           </a>

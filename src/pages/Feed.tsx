@@ -108,11 +108,11 @@ export default function Feed() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">הפיד</h1>
-        <p className="mt-2 text-sm text-slate-400">
+        <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">הפיד</h1>
+        <p className="mt-2 text-sm text-slate-500">
           דיווחים משוק ההון, מדורגים לפי מהותיות.
           {lastUpdated && (
-            <span className="text-slate-500">
+            <span className="text-slate-400">
               {' · '}
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 align-middle" />{' '}
               מתעדכן אוטומטית · עודכן{' '}
@@ -123,7 +123,7 @@ export default function Feed() {
       </div>
 
       {/* לשוניות כללי / במעקב */}
-      <div className="mb-3 flex w-fit gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] p-1">
+      <div className="mb-3 flex w-fit gap-1 rounded-full border border-slate-200 bg-slate-100 p-1">
         <TabBtn active={tab === 'general'} onClick={() => setTab('general')}>
           כללי
         </TabBtn>
@@ -135,7 +135,7 @@ export default function Feed() {
       {/* בר חיפוש וסינון */}
       <div
         ref={barRef}
-        className="relative z-[60] mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 p-2 shadow-lg shadow-black/20 backdrop-blur-xl"
+        className="relative z-[60] mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm backdrop-blur-xl"
       >
         <div className="relative">
           <button onClick={() => setMenu(menu === 'mat' ? '' : 'mat')} className={btn(menu === 'mat' || min > 1)}>
@@ -218,7 +218,7 @@ export default function Feed() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setMenu('')}
           placeholder="חיפוש חברה או מילת מפתח..."
-          className="min-w-[140px] flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-500"
+          className="min-w-[140px] flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
         />
 
         {!loading && <span className="shrink-0 px-2 text-xs text-slate-500">{filtered.length}</span>}
@@ -227,12 +227,12 @@ export default function Feed() {
       {loading ? (
         <div className="space-y-4">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-white/[0.04]" />
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />
           ))}
         </div>
       ) : tab === 'watch' && watch.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/15 py-10 text-center">
-          <p className="text-slate-400">עדיין לא סימנת חברות למעקב.</p>
+        <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center">
+          <p className="text-slate-600">עדיין לא סימנת חברות למעקב.</p>
           <p className="mt-1 text-sm text-slate-500">לחץ על הכוכב ⭐ ליד שם חברה בפיד הכללי כדי לעקוב אחריה.</p>
         </div>
       ) : filtered.length === 0 ? (
@@ -259,8 +259,8 @@ export default function Feed() {
 function btn(active: boolean) {
   return `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-150 ${
     active
-      ? 'border-brand-light/40 bg-brand-light/15 text-brand-light shadow-[0_0_0_1px_rgba(99,179,237,0.15)]'
-      : 'border-white/[0.09] text-slate-300 hover:border-white/20 hover:bg-white/[0.08] hover:text-white active:scale-[0.97]'
+      ? 'border-brand-light/50 bg-brand-light/10 text-brand shadow-[0_0_0_1px_rgba(59,125,216,0.12)]'
+      : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.97]'
   }`
 }
 
@@ -270,8 +270,8 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       onClick={onClick}
       className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
         active
-          ? 'bg-brand-light/20 text-brand-light shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-brand-light/30'
-          : 'text-slate-400 hover:text-slate-200'
+          ? 'bg-white text-brand shadow-sm ring-1 ring-slate-200'
+          : 'text-slate-500 hover:text-slate-900'
       }`}
     >
       {children}
@@ -281,7 +281,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 function Badge({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-brand-light/20 px-1 text-[11px] font-bold text-brand-light">
+    <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-brand-light/15 px-1 text-[11px] font-bold text-brand">
       {children}
     </span>
   )
@@ -290,7 +290,7 @@ function Badge({ children }: { children: ReactNode }) {
 function Panel({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
   return (
     <div
-      className={`absolute right-0 z-20 mt-2 rounded-xl border border-white/[0.12] bg-[#0b1220] p-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.04] ${narrow ? 'w-44' : 'w-64'}`}
+      className={`absolute right-0 z-20 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/60 ${narrow ? 'w-44' : 'w-64'}`}
     >
       {children}
     </div>
@@ -298,7 +298,7 @@ function Panel({ children, narrow = false }: { children: ReactNode; narrow?: boo
 }
 
 function PanelTitle({ children }: { children: ReactNode }) {
-  return <div className="mb-2 text-xs font-semibold text-slate-400">{children}</div>
+  return <div className="mb-2 text-xs font-semibold text-slate-500">{children}</div>
 }
 
 function Chip({
@@ -319,8 +319,8 @@ function Chip({
         block ? 'mb-1 block w-full rounded-lg px-3 py-2 text-right' : 'rounded-full px-2.5 py-1'
       } ${
         active
-          ? 'bg-brand-light/20 text-brand-light ring-1 ring-brand-light/40'
-          : 'bg-white/[0.06] text-slate-400 hover:bg-white/10'
+          ? 'bg-brand-light/15 text-brand ring-1 ring-brand-light/40'
+          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
       }`}
     >
       {children}

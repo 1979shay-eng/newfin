@@ -72,25 +72,25 @@ export default function Companies() {
   return (
     <div>
       <div className="mb-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-white">חברות</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">חברות</h1>
+        <p className="mt-1 text-sm text-slate-500">
           {companies.length} חברות נסחרות — סמן בכוכב ⭐ כדי לעקוב, והדיווחים שלהן יופיעו ב"במעקב".
         </p>
       </div>
 
-      <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2 backdrop-blur">
+      <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="חיפוש חברה..."
-          className="min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-500"
+          className="min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
         />
         <button
           onClick={() => setOnlyWatched((o) => !o)}
           className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
             onlyWatched
-              ? 'border-amber-300/30 bg-amber-300/10 text-amber-300'
-              : 'border-white/[0.08] text-slate-300 hover:bg-white/[0.06]'
+              ? 'border-amber-400/40 bg-amber-50 text-amber-600'
+              : 'border-slate-200 text-slate-600 hover:bg-slate-100'
           }`}
         >
           ⭐ במעקב ({watch.length})
@@ -109,7 +109,7 @@ export default function Companies() {
       {loading ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[...Array(12)].map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-white/[0.04]" />
+            <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-200/60" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -124,10 +124,10 @@ export default function Companies() {
               return (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 transition-colors hover:border-white/[0.14]"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 hover:bg-slate-50"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-bold text-slate-200">{c.name_he}</div>
+                    <div className="truncate text-sm font-bold text-slate-800">{c.name_he}</div>
                     {c.sector && (
                       <div className="truncate text-[11px] text-slate-500">{c.sector}</div>
                     )}
@@ -135,7 +135,7 @@ export default function Companies() {
                   <button
                     onClick={() => toggleWatch(c.id)}
                     title={on ? 'הסר ממעקב' : 'הוסף למעקב'}
-                    className={`shrink-0 transition-colors ${on ? 'text-amber-300' : 'text-slate-600 hover:text-amber-300'}`}
+                    className={`shrink-0 transition-colors ${on ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'}`}
                   >
                     <Star on={on} />
                   </button>
@@ -147,7 +147,7 @@ export default function Companies() {
           {visible.length < filtered.length && (
             <button
               onClick={() => setShown((s) => s + PAGE)}
-              className="mt-4 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06]"
+              className="mt-4 w-full rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100"
             >
               טען עוד ({filtered.length - visible.length})
             </button>

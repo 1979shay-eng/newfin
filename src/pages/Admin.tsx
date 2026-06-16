@@ -70,8 +70,8 @@ export default function Admin() {
   if (authLoading) return null
   if (!isAdmin)
     return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-10 text-center">
-        <p className="text-lg font-bold text-white">אין הרשאה</p>
+      <div className="rounded-xl border border-white/10 bg-white shadow-sm p-10 text-center">
+        <p className="text-lg font-bold text-slate-900">אין הרשאה</p>
         <p className="mt-1 text-sm text-slate-400">העמוד הזה זמין למנהלי המערכת בלבד.</p>
       </div>
     )
@@ -79,7 +79,7 @@ export default function Admin() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-2xl font-extrabold tracking-tight text-white">ניהול</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">ניהול</h1>
         <p className="mt-1 text-sm text-slate-400">משתמשים, פעילות ושימוש במערכת.</p>
       </div>
 
@@ -94,17 +94,17 @@ export default function Admin() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-lg bg-white/[0.04]" />
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-slate-200/60" />
           ))}
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-5">
           {/* טבלת משתמשים */}
           <div className="lg:col-span-3">
-            <h2 className="mb-2 text-sm font-semibold text-slate-300">משתמשים ({users.length})</h2>
-            <div className="overflow-hidden rounded-xl border border-white/[0.08]">
+            <h2 className="mb-2 text-sm font-semibold text-slate-600">משתמשים ({users.length})</h2>
+            <div className="overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full text-right text-sm">
-                <thead className="bg-white/[0.03] text-[11px] uppercase text-slate-500">
+                <thead className="bg-white shadow-sm text-[11px] uppercase text-slate-500">
                   <tr>
                     <th className="px-3 py-2 font-medium">משתמש</th>
                     <th className="px-3 py-2 font-medium">כניסה אחרונה</th>
@@ -114,10 +114,10 @@ export default function Admin() {
                 </thead>
                 <tbody className="divide-y divide-white/[0.05]">
                   {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-white/[0.02]">
+                    <tr key={u.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
-                          <span className="truncate text-slate-200" dir="ltr">
+                          <span className="truncate text-slate-800" dir="ltr">
                             {u.email ?? '—'}
                           </span>
                           {u.is_admin && (
@@ -133,8 +133,8 @@ export default function Admin() {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-slate-400">{relTime(u.last_seen)}</td>
-                      <td className="px-3 py-2.5 text-center tabular-nums text-slate-300">{u.login_count}</td>
-                      <td className="px-3 py-2.5 text-center tabular-nums text-slate-300">{u.watch_count}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-slate-600">{u.login_count}</td>
+                      <td className="px-3 py-2.5 text-center tabular-nums text-slate-600">{u.watch_count}</td>
                     </tr>
                   ))}
                   {users.length === 0 && (
@@ -151,15 +151,15 @@ export default function Admin() {
 
           {/* פעילות אחרונה */}
           <div className="lg:col-span-2">
-            <h2 className="mb-2 text-sm font-semibold text-slate-300">פעילות אחרונה</h2>
-            <div className="max-h-[28rem] space-y-1.5 overflow-y-auto rounded-xl border border-white/[0.08] p-2">
+            <h2 className="mb-2 text-sm font-semibold text-slate-600">פעילות אחרונה</h2>
+            <div className="max-h-[28rem] space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 p-2">
               {events.map((e) => (
-                <div key={e.id} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-[13px] hover:bg-white/[0.03]">
-                  <span className="mt-0.5 shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                <div key={e.id} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-[13px] hover:bg-white shadow-sm">
+                  <span className="mt-0.5 shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
                     {EVENT_LABEL[e.type] ?? e.type}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-slate-300" dir="ltr">
+                    <div className="truncate text-slate-600" dir="ltr">
                       {e.users?.email ?? '—'}
                     </div>
                     {metaText(e) && <div className="truncate text-[11px] text-slate-500">{metaText(e)}</div>}
@@ -180,8 +180,8 @@ export default function Admin() {
 
 function StatCard({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-4">
-      <div className={`text-2xl font-black tabular-nums ${accent ? 'text-brand-light' : 'text-white'}`}>
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
+      <div className={`text-2xl font-black tabular-nums ${accent ? 'text-brand-light' : 'text-slate-900'}`}>
         {value.toLocaleString('he-IL')}
       </div>
       <div className="mt-0.5 text-xs text-slate-400">{label}</div>

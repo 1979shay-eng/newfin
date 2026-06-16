@@ -19,9 +19,9 @@ export const directionLabel: Record<
   Direction,
   { text: string; icon: string; className: string }
 > = {
-  bull: { text: 'חיובי', icon: '▲', className: 'text-emerald-400' },
-  bear: { text: 'שלילי', icon: '▼', className: 'text-rose-400' },
-  neutral: { text: 'ניטרלי', icon: '◆', className: 'text-slate-500' },
+  bull: { text: 'חיובי', icon: '▲', className: 'text-emerald-600' },
+  bear: { text: 'שלילי', icon: '▼', className: 'text-rose-600' },
+  neutral: { text: 'ניטרלי', icon: '◆', className: 'text-slate-400' },
 }
 
 export type MaterialityTier = 'high' | 'mid' | 'low'
