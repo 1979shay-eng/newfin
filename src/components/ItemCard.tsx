@@ -109,14 +109,14 @@ export default function ItemCard({
         </div>
       </div>
 
-      {/* כותרת — סריף */}
-      <h2 className="mt-2.5 font-serif text-[22px] font-bold leading-[1.38]" style={{ color: 'var(--ink)' }}>
+      {/* כותרת — פונט מעוגל (Rubik), קריא ונוח */}
+      <h2 className="mt-2.5 font-display text-[21px] font-bold leading-[1.4]" style={{ color: 'var(--ink)' }}>
         {item.title}
       </h2>
 
-      {/* סיכום — מוסתר בתצוגה תמציתית */}
+      {/* סיכום — 2-3 שורות; מוסתר בתצוגה תמציתית */}
       {!compact && summary && (
-        <p className="mt-1.5 text-[15px] leading-[1.6]" style={{ color: 'var(--muted)' }}>
+        <p className="mt-2 text-[15px] leading-[1.65]" style={{ color: 'var(--muted)' }}>
           {summary}
         </p>
       )}

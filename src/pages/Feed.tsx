@@ -106,7 +106,7 @@ export default function Feed() {
   }, [items, importance, sector, query, sort, tab, watchSet])
 
   return (
-    <div className="mx-auto max-w-[880px]">
+    <div className="mx-auto max-w-[1200px]">
       {/* כותרת */}
       <h1 className="font-serif text-[38px] font-black leading-[1.05] tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
         הפיד

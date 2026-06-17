@@ -56,7 +56,7 @@ export default function Layout() {
         className="sticky top-0 z-30 border-b backdrop-blur-xl"
         style={{ background: 'var(--nav)', borderColor: 'var(--line2)' }}
       >
-        <div className="mx-auto flex max-w-[920px] items-center justify-between px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
             <Logo />
             <span className="text-[19px] font-extrabold tracking-tight" style={{ color: 'var(--ink)' }}>
@@ -128,7 +128,7 @@ export default function Layout() {
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
-      <main className="relative z-10 mx-auto max-w-[920px] px-4 py-7 sm:px-6">
+      <main className="relative z-10 mx-auto max-w-[1200px] px-4 py-7 sm:px-6">
         <Outlet />
       </main>
 

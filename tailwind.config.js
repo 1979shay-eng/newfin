@@ -6,6 +6,8 @@ export default {
       fontFamily: {
         sans: ['Assistant', 'Heebo', 'system-ui', 'sans-serif'],
         serif: ['"Frank Ruhl Libre"', 'Georgia', 'serif'],
+        // פונט מעוגל וקריא לכותרות ההודעות (handoff feedback)
+        display: ['Rubik', 'Assistant', 'system-ui', 'sans-serif'],
       },
       colors: {
         // פלטת מותג NewFin (זמני, נכוונן בהמשך)
