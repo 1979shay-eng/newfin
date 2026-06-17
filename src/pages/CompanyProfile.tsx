@@ -5,8 +5,10 @@ export default function CompanyProfile() {
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold tracking-tight text-white">דף חברה: {slug}</h1>
-      <p className="mt-2 text-slate-400">
+      <h1 className="font-serif text-[32px] font-black tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+        דף חברה: {slug}
+      </h1>
+      <p className="mt-2" style={{ color: 'var(--muted)' }}>
         עמוד חברה ציבורי (כותרת, מחיר, פיד מסונן, גרפים) — ייבנה ב-Phase 3 ו-Phase 5.
       </p>
     </div>

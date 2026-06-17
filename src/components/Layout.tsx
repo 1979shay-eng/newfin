@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/useAuth'
+import { useTheme } from '../lib/theme'
 import AuthModal from './AuthModal'
 
 const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean }[] = [
@@ -12,7 +13,10 @@ const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean 
 
 function Logo() {
   return (
-    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-white shadow-sm">
+    <span
+      className="flex h-[27px] w-[27px] items-center justify-center rounded-lg text-white"
+      style={{ background: 'var(--accent)' }}
+    >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 17l5-5 4 4 8-8" />
         <path d="M16 8h4v4" />
@@ -23,23 +27,41 @@ function Logo() {
 
 export default function Layout() {
   const { user, signOut, isAdmin } = useAuth()
+  const { theme, toggle } = useTheme()
   const [authOpen, setAuthOpen] = useState(false)
   const initial = (user?.email ?? '?').trim().charAt(0).toUpperCase()
   const items = navItems.filter((n) => !n.adminOnly || isAdmin)
 
   return (
-    <div className="relative min-h-screen bg-slate-50 text-slate-900">
-      {/* זוהר רקע עדין ואוורירי — גוונים בהירים על רקע בהיר */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 right-[-12%] h-[28rem] w-[28rem] rounded-full bg-brand-light/[0.10] blur-[150px]" />
-        <div className="absolute top-[40%] left-[-14%] h-[24rem] w-[24rem] rounded-full bg-sky-300/[0.10] blur-[150px]" />
+    <div className="relative min-h-screen" style={{ backgroundColor: 'var(--bg)', color: 'var(--ink)' }}>
+      {/* ── רקע מונפש: גריד ממוסך + 3 כתמי זוהר נודדים ── */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              'linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px)',
+            backgroundSize: '36px 36px',
+            maskImage: 'radial-gradient(ellipse 100% 55% at 50% 0%, #000 30%, transparent 78%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 100% 55% at 50% 0%, #000 30%, transparent 78%)',
+          }}
+        />
+        <div className="nf-drift1 absolute -top-40 right-[-8%] h-[600px] w-[600px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow1), transparent 65%)' }} />
+        <div className="nf-drift2 absolute top-[30%] left-[-10%] h-[560px] w-[560px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow2), transparent 65%)' }} />
+        <div className="nf-drift3 absolute bottom-[-12%] right-[20%] h-[520px] w-[520px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow1), transparent 65%)' }} />
       </div>
 
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+      {/* ── ניווט ── */}
+      <header
+        className="sticky top-0 z-30 border-b backdrop-blur-xl"
+        style={{ background: 'var(--nav)', borderColor: 'var(--line2)' }}
+      >
+        <div className="mx-auto flex max-w-[920px] items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
             <Logo />
-            <span className="text-lg font-extrabold tracking-tight text-slate-900">NewFin</span>
+            <span className="text-[19px] font-extrabold tracking-tight" style={{ color: 'var(--ink)' }}>
+              NewFin
+            </span>
           </Link>
           <nav className="flex items-center gap-1">
             {items.map((n) => (
@@ -47,21 +69,34 @@ export default function Layout() {
                 key={n.to}
                 to={n.to}
                 end={n.end}
-                className={({ isActive }) =>
-                  `rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                    isActive
-                      ? 'bg-brand-light/15 text-brand ring-1 ring-brand-light/30'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-                  }`
+                className="rounded-[9px] px-3.5 py-[7px] text-sm font-bold transition-colors"
+                style={({ isActive }) =>
+                  isActive
+                    ? { color: 'var(--accent)', background: 'var(--chip)' }
+                    : { color: 'var(--muted)' }
                 }
               >
                 {n.label}
               </NavLink>
             ))}
+
+            <span className="mx-1.5 h-5 w-px" style={{ background: 'var(--line2)' }} />
+
+            {/* מתג כהה/בהיר */}
+            <button
+              onClick={toggle}
+              title="החלף ערכת נושא"
+              className="rounded-[9px] px-3 py-[7px] text-sm font-bold transition-colors"
+              style={{ color: 'var(--muted)' }}
+            >
+              {theme === 'dark' ? '☀ בהיר' : '🌙 כהה'}
+            </button>
+
             {user ? (
-              <div className="mr-2 flex items-center gap-1.5 border-r border-slate-200 pr-2">
+              <div className="mr-1.5 flex items-center gap-1.5 border-r pr-2" style={{ borderColor: 'var(--line2)' }}>
                 <span
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light/15 text-xs font-bold text-brand"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white"
+                  style={{ background: 'var(--accent)' }}
                   title={user.email ?? ''}
                 >
                   {initial}
@@ -69,7 +104,8 @@ export default function Layout() {
                 <button
                   onClick={signOut}
                   title="יציאה"
-                  className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                  className="rounded-lg p-1.5 transition-colors"
+                  style={{ color: 'var(--muted2)' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -80,7 +116,8 @@ export default function Layout() {
             ) : (
               <button
                 onClick={() => setAuthOpen(true)}
-                className="mr-2 rounded-full bg-brand px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-dark"
+                className="mr-1.5 rounded-full px-4 py-1.5 text-sm font-semibold text-white"
+                style={{ background: 'var(--accent)' }}
               >
                 כניסה
               </button>
@@ -91,11 +128,11 @@ export default function Layout() {
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
-      <main className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <main className="relative z-10 mx-auto max-w-[920px] px-4 py-7 sm:px-6">
         <Outlet />
       </main>
 
-      <footer className="relative z-10 mt-12 border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+      <footer className="relative z-10 mt-12 border-t py-6 text-center text-xs" style={{ borderColor: 'var(--line2)', color: 'var(--muted2)' }}>
         NewFinIL · המקום שלך בשוק ההון
       </footer>
     </div>

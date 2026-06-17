@@ -72,34 +72,41 @@ export default function Companies() {
   return (
     <div>
       <div className="mb-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">חברות</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {companies.length} חברות נסחרות — סמן בכוכב ⭐ כדי לעקוב, והדיווחים שלהן יופיעו ב"במעקב".
+        <h1 className="font-serif text-[32px] font-black tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+          חברות
+        </h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
+          {companies.length} חברות נסחרות — סמן בכוכב ☆ כדי לעקוב, והדיווחים שלהן יופיעו ב"במעקב".
         </p>
       </div>
 
-      <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div
+        className="mb-4 flex items-center gap-2 rounded-xl border p-2"
+        style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
+      >
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="חיפוש חברה..."
-          className="min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+          className="min-w-0 flex-1 rounded-lg bg-transparent px-3 py-2 text-sm outline-none placeholder:opacity-70"
+          style={{ color: 'var(--ink)' }}
         />
         <button
           onClick={() => setOnlyWatched((o) => !o)}
-          className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+          className="shrink-0 rounded-lg px-3 py-2 text-sm font-bold transition-colors"
+          style={
             onlyWatched
-              ? 'border-amber-400/40 bg-amber-50 text-amber-600'
-              : 'border-slate-200 text-slate-600 hover:bg-slate-100'
-          }`}
+              ? { background: 'rgba(224,169,63,.14)', color: '#e0a93f' }
+              : { background: 'var(--field)', color: 'var(--muted)' }
+          }
         >
-          ⭐ במעקב ({watch.length})
+          ☆ במעקב ({watch.length})
         </button>
       </div>
 
       {/* מונה תוצאות — נותן ביטחון שהחיפוש סורק את כל החברות */}
       {!loading && (
-        <p className="mb-2 text-xs text-slate-500">
+        <p className="mb-2 text-xs" style={{ color: 'var(--muted2)' }}>
           {query || onlyWatched
             ? `נמצאו ${filtered.length} חברות`
             : `מציג ${visible.length} מתוך ${filtered.length}`}
@@ -109,11 +116,11 @@ export default function Companies() {
       {loading ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[...Array(12)].map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-200/60" />
+            <div key={i} className="h-14 animate-pulse rounded-lg" style={{ background: 'var(--hover)' }} />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-slate-500">
+        <p className="py-8 text-center" style={{ color: 'var(--muted)' }}>
           {onlyWatched ? 'עדיין לא סימנת חברות למעקב.' : 'לא נמצאו חברות.'}
         </p>
       ) : (
@@ -124,18 +131,20 @@ export default function Companies() {
               return (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 hover:bg-slate-50"
+                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 transition-colors"
+                  style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }}
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-bold text-slate-800">{c.name_he}</div>
+                    <div className="truncate text-sm font-bold" style={{ color: 'var(--ink2)' }}>{c.name_he}</div>
                     {c.sector && (
-                      <div className="truncate text-[11px] text-slate-500">{c.sector}</div>
+                      <div className="truncate text-[11px]" style={{ color: 'var(--muted2)' }}>{c.sector}</div>
                     )}
                   </div>
                   <button
                     onClick={() => toggleWatch(c.id)}
                     title={on ? 'הסר ממעקב' : 'הוסף למעקב'}
-                    className={`shrink-0 transition-colors ${on ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'}`}
+                    className="shrink-0 transition-colors"
+                    style={{ color: on ? '#e0a93f' : 'var(--muted2)' }}
                   >
                     <Star on={on} />
                   </button>
@@ -147,7 +156,8 @@ export default function Companies() {
           {visible.length < filtered.length && (
             <button
               onClick={() => setShown((s) => s + PAGE)}
-              className="mt-4 w-full rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100"
+              className="mt-4 w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
+              style={{ background: 'var(--surface)', borderColor: 'var(--line2)', color: 'var(--muted)' }}
             >
               טען עוד ({filtered.length - visible.length})
             </button>

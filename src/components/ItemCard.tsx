@@ -1,18 +1,15 @@
-import type { ReactNode } from 'react'
 import type { FeedItem } from '../types/db'
-import { reliabilityLabel, directionLabel, reliabilityDot, formatTime } from '../lib/format'
-import { sectorTagClass, sourceTagClass } from '../lib/tags'
-
-// תווית צבועה אחידה (מקור / סקטור) — color-coding לזיהוי מהיר
-function Tag({ color, children }: { color: string; children: ReactNode }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${color}`}
-    >
-      {children}
-    </span>
-  )
-}
+import {
+  impLevel,
+  impLabel,
+  impColor,
+  impDots,
+  sentiment,
+  sectorColor,
+  tint,
+  avatarColor,
+  clockParts,
+} from '../lib/feedVisual'
 
 type Props = {
   item: FeedItem
@@ -22,58 +19,11 @@ type Props = {
   index?: number
 }
 
-// השהיית כניסה מדורגת (capped) — תחושת "פיד חי" בלי לעכב פריטים מאוחרים
 function delayStyle(index = 0) {
   return { animationDelay: `${Math.min(index * 40, 360)}ms` }
 }
 
-function StarButton({
-  watched,
-  onClick,
-  size = 15,
-}: {
-  watched: boolean
-  onClick: () => void
-  size?: number
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
-      className={`shrink-0 transition-colors ${
-        watched ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'
-      }`}
-    >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill={watched ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
-    </button>
-  )
-}
-
-// חץ כיוון בלבד (bull/bear/neutral) — אינדיקטור עזר. הציון המספרי הוסר מהתצוגה
-// (הסינון לפי מהותיות נשאר פעיל בבר החיפוש).
-function DirectionChip({ item }: { item: FeedItem }) {
-  const dir = directionLabel[item.direction]
-  return (
-    <span
-      className={`shrink-0 text-sm leading-none ${dir.className}`}
-      title={`כיוון: ${dir.text}`}
-    >
-      {dir.icon}
-    </span>
-  )
-}
-
+// שורת דיווח עריכותית (handoff). מנוהלת ע"י טוקני CSS — עובדת זהה בכהה ובהיר.
 export default function ItemCard({
   item,
   compact = false,
@@ -81,88 +31,117 @@ export default function ItemCard({
   onToggleWatch,
   index = 0,
 }: Props) {
-  const rel = reliabilityLabel[item.reliability]
   const canWatch = Boolean(item.company_id && onToggleWatch)
-  // הסקטור לתצוגה: סקטור החברה, ואם אין — תגית הכותרת (סקטור/מאקרו)
+  const lvl = impLevel(item.materiality_score)
+  const dots = impDots(item.materiality_score)
+  const sent = sentiment(item.direction)
+  const company = item.company_name
   const sectorName =
     item.company_sector && item.company_sector !== 'אחר' ? item.company_sector : item.headline_tag
-
-  if (compact) {
-    return (
-      <article
-        style={delayStyle(index)}
-        className="animate-fade-up flex h-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 hover:bg-slate-50"
-      >
-        <DirectionChip item={item} />
-        {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} size={13} />}
-        {item.company_name ? (
-          <span className="shrink-0 text-base font-extrabold text-brand">{item.company_name}</span>
-        ) : item.headline_tag ? (
-          <Tag color={sectorTagClass(item.headline_tag)}>{item.headline_tag}</Tag>
-        ) : null}
-        <span className="truncate text-[15px] text-slate-600">{item.title}</span>
-        <div className="mr-auto flex shrink-0 items-center gap-2">
-          <Tag color={sourceTagClass(item.source_name)}>{item.source_name}</Tag>
-          <span className="text-xs font-semibold tabular-nums text-slate-700">
-            {formatTime(item.published_at)}
-          </span>
-        </div>
-      </article>
-    )
-  }
+  const sColor = sectorColor(sectorName)
+  const summary = item.bottom_line || item.body
+  const { time, date } = clockParts(item.published_at)
 
   return (
     <article
       style={delayStyle(index)}
-      className="animate-fade-up h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-light/50 hover:shadow-[0_12px_32px_-12px_rgba(15,76,129,0.18)]"
+      className="animate-fade-up px-6 py-[22px] transition-colors duration-150 hover:bg-[var(--hover)]"
     >
-      {/* שורה ראשונה: ימין — שם המניה + כיוון. שמאל-עליון — תגיות סקטור ואז מקור. */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {canWatch && <StarButton watched={watched} onClick={onToggleWatch!} />}
-          {item.company_name && (
-            <span className="truncate text-lg font-extrabold tracking-tight text-brand">
-              {item.company_name}
+      {/* שורת מטא עליונה */}
+      <div className="flex items-start justify-between gap-4">
+        {/* ימין: אווטר → חברה → סקטור → סנטימנט */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          {company && (
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white"
+              style={{ background: avatarColor(company) }}
+            >
+              {company.trim().charAt(0)}
             </span>
           )}
-          <DirectionChip item={item} />
+          {company && (
+            <span className="truncate text-[15px] font-bold" style={{ color: 'var(--ink2)' }}>
+              {company}
+            </span>
+          )}
+          {sectorName && (
+            <span
+              className="shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold"
+              style={{ color: sColor, background: tint(sColor) }}
+            >
+              {sectorName}
+            </span>
+          )}
+          <span
+            className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+            style={{ color: sent.color, background: sent.bg }}
+          >
+            {sent.symbol} {sent.label}
+          </span>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {sectorName && <Tag color={sectorTagClass(sectorName)}>{sectorName}</Tag>}
-          <Tag color={sourceTagClass(item.source_name)}>{item.source_name}</Tag>
+
+        {/* שמאל: חשיבות (5 נקודות + תווית) + כוכב מעקב */}
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex gap-1">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span
+                  key={i}
+                  className="h-[7px] w-[7px] rounded-full"
+                  style={{ background: i < dots ? impColor[lvl] : 'var(--dot-empty)' }}
+                />
+              ))}
+            </div>
+            <span className="text-[11.5px] font-bold leading-none" style={{ color: impColor[lvl] }}>
+              {impLabel[lvl]}
+            </span>
+          </div>
+          {canWatch && (
+            <button
+              onClick={onToggleWatch}
+              title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
+              className="shrink-0 text-[19px] leading-none transition-colors"
+              style={{ color: watched ? '#e0a93f' : 'var(--muted2)' }}
+            >
+              {watched ? '★' : '☆'}
+            </button>
+          )}
         </div>
       </div>
 
-      <h2 className="mt-2 text-xl font-bold leading-snug text-slate-900">{item.title}</h2>
+      {/* כותרת — סריף */}
+      <h2 className="mt-2.5 font-serif text-[22px] font-bold leading-[1.38]" style={{ color: 'var(--ink)' }}>
+        {item.title}
+      </h2>
 
-      {item.body && <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{item.body}</p>}
-
-      {item.bottom_line && (
-        <p className="mt-3 rounded-lg border-r-2 border-brand-light/60 bg-slate-50 px-3 py-2 text-[15px] leading-relaxed text-slate-600">
-          {item.bottom_line}
+      {/* סיכום — מוסתר בתצוגה תמציתית */}
+      {!compact && summary && (
+        <p className="mt-1.5 text-[15px] leading-[1.6]" style={{ color: 'var(--muted)' }}>
+          {summary}
         </p>
       )}
 
-      <div className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-        <span className="flex items-center gap-1" title={`מהימנות: ${rel.text}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${reliabilityDot[item.reliability]}`} />
-          {rel.text}
+      {/* פוטר מטא */}
+      <div
+        className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px]"
+        style={{ color: 'var(--muted2)' }}
+      >
+        <span
+          className="rounded px-2 py-0.5 font-semibold"
+          style={{ background: 'var(--chip)', color: 'var(--chip-ink)' }}
+        >
+          {item.source_name}
         </span>
-        <span className="text-slate-300">·</span>
-        <span className="text-[13px] font-bold tabular-nums text-slate-700">
-          {formatTime(item.published_at)}
+        <span className="tabular-nums">
+          {time} · {date}
         </span>
-        {item.tags?.map((t) => (
-          <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
-            #{t}
-          </span>
-        ))}
         {item.original_url && (
           <a
             href={item.original_url}
             target="_blank"
             rel="noreferrer"
-            className="mr-auto font-semibold text-brand hover:underline"
+            className="mr-auto font-bold hover:underline"
+            style={{ color: 'var(--accent)' }}
           >
             למקור ↗
           </a>

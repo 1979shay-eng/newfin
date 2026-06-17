@@ -7,8 +7,70 @@
     direction: rtl;
   }
 
+  /* ── טוקני עיצוב לפי ה-handoff — בהיר (ברירת מחדל) ──────────────── */
+  :root {
+    --accent: #2f6df0;
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --ink: #141d2b;
+    --ink2: #16202f;
+    --muted: #5b6675;
+    --muted2: #8893a2;
+    --line: #eceff3;
+    --line2: #e6e9ee;
+    --chip: #f1f3f7;
+    --chip-ink: #6b7686;
+    --field: #f5f6f9;
+    --seg: #eef1f5;
+    --seg-active: #ffffff;
+    --hover: rgba(20, 30, 60, 0.028);
+    --nav: rgba(255, 255, 255, 0.85);
+    --shadow: 0 28px 64px -38px rgba(20, 30, 60, 0.26);
+    --grid: rgba(23, 34, 60, 0.045);
+    --glow1: rgba(47, 109, 240, 0.13);
+    --glow2: rgba(20, 184, 166, 0.1);
+    --dot-empty: #d6dbe3;
+    --imp-low: #3f6fd1;
+    --sent-flat: #64748b;
+    --seg-active-shadow: 0 1px 2px rgba(20, 30, 60, 0.12);
+    color-scheme: light;
+  }
+
+  /* ── כהה ──────────────────────────────────────────────────────── */
+  :root[data-theme='dark'] {
+    --bg: #0a0f1a;
+    --surface: #101827;
+    --ink: #eef3fb;
+    --ink2: #dde6f4;
+    --muted: #93a1ba;
+    --muted2: #6f7d95;
+    --line: rgba(255, 255, 255, 0.06);
+    --line2: rgba(255, 255, 255, 0.08);
+    --chip: rgba(255, 255, 255, 0.06);
+    --chip-ink: #aab6cc;
+    --field: rgba(255, 255, 255, 0.05);
+    --seg: rgba(255, 255, 255, 0.05);
+    --seg-active: rgba(255, 255, 255, 0.13);
+    --hover: rgba(255, 255, 255, 0.03);
+    --nav: rgba(12, 19, 34, 0.82);
+    --shadow: 0 28px 64px -38px rgba(0, 0, 0, 0.6);
+    --grid: rgba(255, 255, 255, 0.05);
+    --glow1: rgba(47, 109, 240, 0.26);
+    --glow2: rgba(124, 92, 246, 0.2);
+    --dot-empty: rgba(255, 255, 255, 0.14);
+    --imp-low: #6f9bff;
+    --sent-flat: #9aa6bb;
+    --seg-active-shadow: none;
+    color-scheme: dark;
+  }
+
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    @apply font-sans antialiased;
+    background-color: var(--bg);
+    color: var(--ink);
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
   }
 }
 
@@ -83,10 +145,66 @@
     filter: drop-shadow(0 0 6px rgba(167, 243, 208, 0.8));
   }
 
+  /* ── רקע הפיד (handoff) — נקודה פועמת + 3 כתמי זוהר נודדים ──────── */
+  @keyframes nfPulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(0.82);
+    }
+  }
+  .nf-pulse {
+    animation: nfPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes nfDrift1 {
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+    50% {
+      transform: translate(40px, -30px);
+    }
+  }
+  @keyframes nfDrift2 {
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+    50% {
+      transform: translate(-36px, 24px);
+    }
+  }
+  @keyframes nfDrift3 {
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+    50% {
+      transform: translate(28px, 34px);
+    }
+  }
+  .nf-drift1 {
+    animation: nfDrift1 26s ease-in-out infinite;
+  }
+  .nf-drift2 {
+    animation: nfDrift2 32s ease-in-out infinite;
+  }
+  .nf-drift3 {
+    animation: nfDrift3 38s ease-in-out infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-fade-up,
     .animate-grow-up,
-    .animate-twinkle {
+    .animate-twinkle,
+    .nf-pulse,
+    .nf-drift1,
+    .nf-drift2,
+    .nf-drift3 {
       animation: none;
     }
     .animate-draw-line {

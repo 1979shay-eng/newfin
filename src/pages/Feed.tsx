@@ -1,45 +1,40 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import ItemCard from '../components/ItemCard'
 import { fetchFeed } from '../lib/queries'
 import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
 import { track } from '../lib/track'
+import { impLevel, sectorColor, tint } from '../lib/feedVisual'
 import type { FeedItem } from '../types/db'
 
-const MAT_PRESETS = [
-  { label: 'הכל', min: 1 },
-  { label: 'בינוני ומעלה', min: 5 },
-  { label: 'חשוב', min: 7 },
-  { label: 'קריטי בלבד', min: 9 },
-]
+type Sort = 'importance' | 'time'
+type Tab = 'all' | 'watched'
+type Imp = 'all' | 'high' | 'mid' | 'low'
 
-// סינון מקורות לשתי קטגוריות: מאיה (דיווחי בורסה רשמיים) מול עיתונות (כל שאר המדיה).
-const SOURCE_CATS = [
-  { key: 'maya', label: 'מאיה', hint: 'דיווחי בורסה' },
-  { key: 'press', label: 'עיתונות', hint: 'גלובס, דהמרקר, ynet ועוד' },
+const IMP_OPTS: { key: Imp; label: string }[] = [
+  { key: 'all', label: 'הכל' },
+  { key: 'high', label: 'גבוהה' },
+  { key: 'mid', label: 'בינונית' },
+  { key: 'low', label: 'נמוכה' },
 ]
-const sourceCat = (name: string) => (name === 'מאיה' ? 'maya' : 'press')
-
-type Menu = '' | 'mat' | 'src' | 'sort'
-type Sort = 'materiality' | 'time'
-type Tab = 'general' | 'watch'
+const SORT_OPTS: { key: Sort; label: string }[] = [
+  { key: 'importance', label: 'חשיבות' },
+  { key: 'time', label: 'זמן' },
+]
 
 export default function Feed() {
   const [items, setItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [tab, setTab] = useState<Tab>('general')
-  const [min, setMin] = useState(1)
+  const [tab, setTab] = useState<Tab>('all')
+  const [importance, setImportance] = useState<Imp>('all')
+  const [sector, setSector] = useState<string>('all')
   const [query, setQuery] = useState('')
-  const [excludedCats, setExcludedCats] = useState<string[]>([])
   const [sort, setSort] = useState<Sort>('time')
   const [compact, setCompact] = useState(false)
-  const [menu, setMenu] = useState<Menu>('')
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
-  const barRef = useRef<HTMLDivElement>(null)
   const watchSet = useMemo(() => new Set(watch), [watch])
 
-  // טעינה ראשונית + רענון אוטומטי כל 2 דקות (הפיד "חי" בלי F5).
-  // הרענון שקט — לא מציג שלד טעינה מחדש, רק מחליף את הנתונים.
+  // טעינה + רענון שקט כל 2 דקות (פיד חי)
   useEffect(() => {
     let alive = true
     const load = () =>
@@ -57,18 +52,8 @@ export default function Feed() {
     }
   }, [])
 
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) setMenu('')
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
-
-  // רענון רשימת המעקב אחרי מיזוג-ענן בכניסה (מכשיר אחר)
   useEffect(() => onWatchChanged(() => setWatch(loadWatch())), [])
 
-  // מעקב חיפוש — ממוזער (רושם רק אחרי הקלדה שנעצרה 800ms, ומילה באורך 2+)
   useEffect(() => {
     const q = query.trim()
     if (q.length < 2) return
@@ -87,259 +72,267 @@ export default function Feed() {
     })
   }
 
+  // הסקטור של פריט (חברה או תגית כותרת)
+  const itemSector = (it: FeedItem) =>
+    it.company_sector && it.company_sector !== 'אחר' ? it.company_sector : it.headline_tag
+
+  // רשימת הסקטורים הקיימים בפיד (לצ'יפים), לפי שכיחות
+  const sectors = useMemo(() => {
+    const count = new Map<string, number>()
+    for (const it of items) {
+      const s = itemSector(it)
+      if (s) count.set(s, (count.get(s) ?? 0) + 1)
+    }
+    return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+  }, [items])
+
   const filtered = useMemo(() => {
-    let r = items.filter(
-      (it) =>
-        it.materiality_score >= min &&
-        !excludedCats.includes(sourceCat(it.source_name)) &&
-        (!query || it.title.includes(query) || (it.company_name ?? '').includes(query)),
-    )
-    if (tab === 'watch') r = r.filter((it) => it.company_id && watchSet.has(it.company_id))
+    const q = query.trim()
+    let r = items.filter((it) => {
+      if (importance !== 'all' && impLevel(it.materiality_score) !== importance) return false
+      if (sector !== 'all' && itemSector(it) !== sector) return false
+      if (q) {
+        const hay = `${it.company_name ?? ''} ${it.title} ${it.bottom_line ?? ''} ${itemSector(it) ?? ''}`
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+    if (tab === 'watched') r = r.filter((it) => it.company_id && watchSet.has(it.company_id))
     return r.sort((a, b) =>
       sort === 'time'
         ? +new Date(b.published_at) - +new Date(a.published_at)
         : b.materiality_score - a.materiality_score,
     )
-  }, [items, min, query, excludedCats, sort, tab, watchSet])
-
-  const toggleCat = (c: string) =>
-    setExcludedCats((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]))
+  }, [items, importance, sector, query, sort, tab, watchSet])
 
   return (
-    <div>
-      <div className="mb-5">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">הפיד</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          דיווחים משוק ההון, מדורגים לפי מהותיות.
-          {lastUpdated && (
-            <span className="text-slate-400">
-              {' · '}
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 align-middle" />{' '}
-              מתעדכן אוטומטית · עודכן{' '}
-              {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+    <div className="mx-auto max-w-[880px]">
+      {/* כותרת */}
+      <h1 className="font-serif text-[38px] font-black leading-[1.05] tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+        הפיד
+      </h1>
+      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px]" style={{ color: 'var(--muted)' }}>
+        <span>דיווחים משוק ההון, מדורגים לפי חשיבות</span>
+        {lastUpdated && (
+          <>
+            <Dot />
+            <span className="flex items-center gap-1.5">
+              <span className="nf-pulse inline-block h-[7px] w-[7px] rounded-full bg-[#16a34a]" />
+              מתעדכן אוטומטית
             </span>
-          )}
-        </p>
-      </div>
+            <Dot />
+            <span>
+              עודכן {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </>
+        )}
+      </p>
 
-      {/* לשוניות כללי / במעקב */}
-      <div className="mb-3 flex w-fit gap-1 rounded-full border border-slate-200 bg-slate-100 p-1">
-        <TabBtn active={tab === 'general'} onClick={() => setTab('general')}>
+      {/* לשוניות */}
+      <div className="mt-5 flex gap-2">
+        <Tab active={tab === 'all'} onClick={() => setTab('all')}>
           כללי
-        </TabBtn>
-        <TabBtn active={tab === 'watch'} onClick={() => setTab('watch')}>
-          ⭐ במעקב{watch.length > 0 ? ` (${watch.length})` : ''}
-        </TabBtn>
+        </Tab>
+        <Tab active={tab === 'watched'} onClick={() => setTab('watched')}>
+          במעקב{watch.length > 0 ? ` (${watch.length})` : ''}
+        </Tab>
       </div>
 
-      {/* בר חיפוש וסינון */}
+      {/* Toolbar */}
       <div
-        ref={barRef}
-        className="relative z-[60] mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm backdrop-blur-xl"
+        className="mt-3 rounded-2xl border p-3.5"
+        style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
       >
-        <div className="relative">
-          <button onClick={() => setMenu(menu === 'mat' ? '' : 'mat')} className={btn(menu === 'mat' || min > 1)}>
-            <FunnelIcon />
-            <span>מהותיות</span>
-            <Badge>{min}+</Badge>
+        {/* שורה 1: חיפוש + תצוגה תמציתית */}
+        <div className="flex items-center gap-2">
+          <div
+            className="flex flex-1 items-center gap-2 rounded-[11px] px-3 py-2.5"
+            style={{ background: 'var(--field)', border: '1px solid var(--line2)' }}
+          >
+            <span className="h-[13px] w-[13px] shrink-0 rounded-full border-2" style={{ borderColor: 'var(--muted2)' }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="חיפוש חברה או מילת מפתח..."
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:opacity-70"
+              style={{ color: 'var(--ink)' }}
+            />
+          </div>
+          <button
+            onClick={() => setCompact((c) => !c)}
+            className="shrink-0 rounded-[11px] px-4 py-2.5 text-sm font-bold transition-colors"
+            style={compact ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--field)', color: 'var(--muted)' }}
+          >
+            תצוגה תמציתית
           </button>
-          {menu === 'mat' && (
-            <Panel>
-              <PanelTitle>סינון לפי מהותיות</PanelTitle>
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {MAT_PRESETS.map((p) => (
-                  <Chip key={p.min} active={min === p.min} onClick={() => setMin(p.min)}>
-                    {p.label}
-                  </Chip>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">סולם</span>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={min}
-                  onChange={(e) => setMin(Number(e.target.value))}
-                  className="h-1.5 flex-1 cursor-pointer accent-sky-400"
-                />
-                <Badge>{min}</Badge>
-              </div>
-            </Panel>
-          )}
         </div>
 
-        <div className="relative">
-          <button onClick={() => setMenu(menu === 'src' ? '' : 'src')} className={btn(menu === 'src' || excludedCats.length > 0)}>
-            <FunnelIcon />
-            <span>מקורות</span>
-            {excludedCats.length > 0 && <Badge>{SOURCE_CATS.length - excludedCats.length}</Badge>}
-          </button>
-          {menu === 'src' && (
-            <Panel>
-              <PanelTitle>מקורות מידע</PanelTitle>
-              <div className="space-y-0.5">
-                {SOURCE_CATS.map((c) => (
-                  <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-white/5">
-                    <input type="checkbox" checked={!excludedCats.includes(c.key)} onChange={() => toggleCat(c.key)} className="accent-sky-400" />
-                    <span className="font-medium text-slate-200">{c.label}</span>
-                    <span className="mr-auto text-[11px] text-slate-500">{c.hint}</span>
-                  </label>
-                ))}
-              </div>
-            </Panel>
-          )}
+        {/* שורה 2: חשיבות + מיון */}
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <Seg label="חשיבות" opts={IMP_OPTS} value={importance} onChange={setImportance} />
+          <Seg label="מיון" opts={SORT_OPTS} value={sort} onChange={setSort} />
         </div>
 
-        <div className="relative">
-          <button onClick={() => setMenu(menu === 'sort' ? '' : 'sort')} className={btn(menu === 'sort')}>
-            <SortIcon />
-            <span>מיון</span>
-          </button>
-          {menu === 'sort' && (
-            <Panel narrow>
-              <Chip block active={sort === 'materiality'} onClick={() => { setSort('materiality'); setMenu('') }}>
-                לפי מהותיות
-              </Chip>
-              <Chip block active={sort === 'time'} onClick={() => { setSort('time'); setMenu('') }}>
-                החדש ביותר
-              </Chip>
-            </Panel>
-          )}
-        </div>
-
-        <button onClick={() => setCompact((c) => !c)} className={btn(compact)}>
-          תצוגה תמציתית
-        </button>
-
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setMenu('')}
-          placeholder="חיפוש חברה או מילת מפתח..."
-          className="min-w-[140px] flex-1 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
-        />
-
-        {!loading && <span className="shrink-0 px-2 text-xs text-slate-500">{filtered.length}</span>}
+        {/* שורה 3: צ'יפי סקטור */}
+        {sectors.length > 0 && (
+          <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
+            <SectorChip active={sector === 'all'} accent onClick={() => setSector('all')}>
+              כל הסקטורים
+            </SectorChip>
+            {sectors.map((s) => (
+              <SectorChip key={s} active={sector === s} color={sectorColor(s)} onClick={() => setSector(s)}>
+                {s}
+              </SectorChip>
+            ))}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="space-y-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />
-          ))}
+      {/* רשימה */}
+      <div
+        className="mt-4 overflow-hidden rounded-[18px] border"
+        style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
+      >
+        <div
+          className="flex items-center justify-between px-6 py-3.5 text-[12.5px] font-semibold"
+          style={{ color: 'var(--muted2)', borderBottom: '1px solid var(--line)' }}
+        >
+          <span>{loading ? '—' : `${filtered.length} דיווחים`}</span>
+          <span>מדורג לפי {sort === 'time' ? 'זמן עדכון' : 'חשיבות'}</span>
         </div>
-      ) : tab === 'watch' && watch.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center">
-          <p className="text-slate-600">עדיין לא סימנת חברות למעקב.</p>
-          <p className="mt-1 text-sm text-slate-500">לחץ על הכוכב ⭐ ליד שם חברה בפיד הכללי כדי לעקוב אחריה.</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-slate-500">אין דיווחים שתואמים את הסינון.</p>
-      ) : (
-        <div className={compact ? 'space-y-2.5' : 'space-y-4'}>
-          {filtered.map((item, i) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              index={i}
-              compact={compact}
-              watched={!!item.company_id && watchSet.has(item.company_id)}
-              onToggleWatch={item.company_id ? () => toggleWatch(item.company_id as string) : undefined}
-            />
-          ))}
-        </div>
-      )}
+
+        {loading ? (
+          <div className="divide-y" style={{ borderColor: 'var(--line)' }}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="px-6 py-[22px]">
+                <div className="h-5 w-40 animate-pulse rounded" style={{ background: 'var(--hover)' }} />
+                <div className="mt-3 h-6 w-full animate-pulse rounded" style={{ background: 'var(--hover)' }} />
+              </div>
+            ))}
+          </div>
+        ) : tab === 'watched' && watch.length === 0 ? (
+          <Empty
+            title="עדיין לא סימנת חברות למעקב"
+            sub="לחץ על הכוכב ☆ ליד שם חברה בפיד הכללי כדי לעקוב אחריה."
+          />
+        ) : filtered.length === 0 ? (
+          <Empty title="אין דיווחים תואמים" sub="נסה לשנות את הסינון או לנקות את החיפוש." />
+        ) : (
+          <div className="divide-y divide-[color:var(--line)]">
+            {filtered.map((item, i) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                index={i}
+                compact={compact}
+                watched={!!item.company_id && watchSet.has(item.company_id)}
+                onToggleWatch={item.company_id ? () => toggleWatch(item.company_id as string) : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 // ── עזרי תצוגה ──────────────────────────────────────────────────
-function btn(active: boolean) {
-  return `flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-150 ${
-    active
-      ? 'border-brand-light/50 bg-brand-light/10 text-brand shadow-[0_0_0_1px_rgba(59,125,216,0.12)]'
-      : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.97]'
-  }`
+function Dot() {
+  return <span style={{ color: 'var(--muted2)' }}>·</span>
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+      className="rounded-[11px] px-[18px] py-[9px] text-sm font-bold transition-colors"
+      style={
         active
-          ? 'bg-white text-brand shadow-sm ring-1 ring-slate-200'
-          : 'text-slate-500 hover:text-slate-900'
-      }`}
+          ? { background: 'var(--accent)', color: '#fff' }
+          : { background: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--line2)' }
+      }
     >
       {children}
     </button>
   )
 }
 
-function Badge({ children }: { children: ReactNode }) {
+function Seg<T extends string>({
+  label,
+  opts,
+  value,
+  onChange,
+}: {
+  label: string
+  opts: { key: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+}) {
   return (
-    <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-brand-light/15 px-1 text-[11px] font-bold text-brand">
-      {children}
-    </span>
-  )
-}
-
-function Panel({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
-  return (
-    <div
-      className={`absolute right-0 z-20 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/60 ${narrow ? 'w-44' : 'w-64'}`}
-    >
-      {children}
+    <div className="flex items-center gap-2">
+      <span className="text-[12.5px] font-bold" style={{ color: 'var(--muted2)' }}>
+        {label}
+      </span>
+      <div className="inline-flex gap-0.5 rounded-[11px] p-[3px]" style={{ background: 'var(--seg)' }}>
+        {opts.map((o) => {
+          const on = value === o.key
+          return (
+            <button
+              key={o.key}
+              onClick={() => onChange(o.key)}
+              className="rounded-lg px-3 py-1.5 text-[12.5px] font-bold transition-colors"
+              style={
+                on
+                  ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' }
+                  : { color: 'var(--muted)' }
+              }
+            >
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-function PanelTitle({ children }: { children: ReactNode }) {
-  return <div className="mb-2 text-xs font-semibold text-slate-500">{children}</div>
-}
-
-function Chip({
+function SectorChip({
   active,
+  accent = false,
+  color,
   onClick,
   children,
-  block = false,
 }: {
   active: boolean
+  accent?: boolean
+  color?: string
   onClick: () => void
   children: ReactNode
-  block?: boolean
 }) {
+  let style: React.CSSProperties
+  if (active && accent) style = { background: 'var(--accent)', color: '#fff' }
+  else if (active && color) style = { background: tint(color), color }
+  else style = { background: 'var(--chip)', color: 'var(--chip-ink)', border: '1px solid var(--line2)' }
   return (
     <button
       onClick={onClick}
-      className={`text-xs font-medium transition-colors ${
-        block ? 'mb-1 block w-full rounded-lg px-3 py-2 text-right' : 'rounded-full px-2.5 py-1'
-      } ${
-        active
-          ? 'bg-brand-light/15 text-brand ring-1 ring-brand-light/40'
-          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-      }`}
+      className="shrink-0 whitespace-nowrap rounded-[20px] px-3.5 py-1.5 text-[12.5px] font-bold transition-colors"
+      style={style}
     >
       {children}
     </button>
   )
 }
 
-function FunnelIcon() {
+function Empty({ title, sub }: { title: string; sub: string }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-    </svg>
-  )
-}
-
-function SortIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6h18M6 12h12M9 18h6" />
-    </svg>
+    <div className="px-6 py-14 text-center">
+      <p className="text-base font-bold" style={{ color: 'var(--ink2)' }}>
+        {title}
+      </p>
+      <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
+        {sub}
+      </p>
+    </div>
   )
 }
