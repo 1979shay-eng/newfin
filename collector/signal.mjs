@@ -81,8 +81,13 @@ export async function gateThematic(item) {
       await new Promise((r) => setTimeout(r, Math.min(wait, 4000)))
     }
     if (!res.ok) {
-      if (res.status === 429) console.warn('Groq rate limit — מדלג (גם אחרי retry)')
-      else console.warn('Groq error', res.status, (await res.text()).slice(0, 200))
+      if (res.status === 429) {
+        // מכסה אזלה — מצב זמני. מאותתים לקורא לעצור (לא לשרוף ניסיונות), והפריט
+        // יישאר "טרי" וינוסה שוב בריצה הבאה. לא שומרים שום החלטה כאן.
+        console.warn('Groq rate limit — מדלג (גם אחרי retry)')
+        return { rateLimited: true }
+      }
+      console.warn('Groq error', res.status, (await res.text()).slice(0, 200))
       return null
     }
     const data = await res.json()

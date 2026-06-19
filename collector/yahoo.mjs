@@ -90,18 +90,49 @@ export async function collectYahoo({ signalEnabled } = {}) {
   })
 
   const out = []
-  let checked = 0
+  let evaluated = 0
   let passed = 0
+  let rejected = 0
+  let rateLimited = false
   for (const c of fresh) {
-    if (checked >= GATE_CAP) break
-    checked++
+    if (evaluated >= GATE_CAP) break
     const g = await gateThematic({
       title: c.it.title,
       description: `[חברה ישראלית סחירה: ${c.t.name}] ${c.it.description || ''}`,
       sector: c.t.sector,
     })
+    // מכסת Groq אזלה — עוצרים את הריצה; פריטים שטרם נבדקו יישארו טריים לריצה הבאה.
+    if (g?.rateLimited) {
+      rateLimited = true
+      break
+    }
+    evaluated++
     await sleep(2500) // כיבוד מגבלת הקצב של Groq
-    if (!g || !g.relevant || !g.headline_he) continue
+
+    if (!g) continue // שגיאה זמנית אחרת — דלג, יינסה שוב בריצה הבאה
+
+    if (!g.relevant || !g.headline_he) {
+      // נדחה סופית — שורת "קבר" (draft, לא ציבורית) כדי שה-dedup לא יבדוק אותה שוב.
+      out.push({
+        source_id: sourceId,
+        company_id: c.company_id,
+        maya_report_id: c.id,
+        title: c.it.title.slice(0, 500),
+        body: '',
+        bottom_line: '—', // לא-null: getEnrichedMap מזהה לפיו פריט "מטופל"
+        original_url: c.it.link,
+        published_at: publishedAtFrom(c.it.pubDate),
+        source_type: 'osint',
+        reliability: 'reported',
+        materiality_score: 1,
+        direction: 'neutral',
+        status: 'draft', // לא 'published' → לא מופיע בפיד
+        is_public: false,
+        lang: 'he',
+      })
+      rejected++
+      continue
+    }
     passed++
     out.push({
       source_id: sourceId,
@@ -122,7 +153,8 @@ export async function collectYahoo({ signalEnabled } = {}) {
     })
   }
   console.log(
-    `💹 Yahoo: ${passed}/${checked} ידיעות חדשות עברו (${known.size} כבר נשמרו — דולגו)`,
+    `💹 Yahoo: ${passed} עברו, ${rejected} נדחו (נשמרו כדי לא להיבדק שוב), מתוך ${evaluated} שנבדקו` +
+      `${rateLimited ? ' [נעצר: מכסת Groq אזלה]' : ''} — ${known.size} כבר שמורים, דולגו`,
   )
   return out
 }

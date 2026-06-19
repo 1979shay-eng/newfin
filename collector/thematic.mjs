@@ -109,14 +109,47 @@ export async function collectThematic({ signalEnabled } = {}) {
 
   // 3) שער ל-fresh עד GATE_CAP
   const out = []
-  let checked = 0
+  let evaluated = 0
   let passed = 0
+  let rejected = 0
+  let rateLimited = false
   for (const c of fresh) {
-    if (checked >= GATE_CAP) break
-    checked++
+    if (evaluated >= GATE_CAP) break
     const g = await gateThematic({ title: c.it.title, description: c.it.description, sector: c.feed.sector })
+    // מכסת Groq אזלה — עוצרים את כל הריצה. אין טעם להמשיך לדפוק על מכסה ריקה,
+    // והפריטים שטרם נבדקו יישארו "טריים" ויעברו שער בריצה הבאה.
+    if (g?.rateLimited) {
+      rateLimited = true
+      break
+    }
+    evaluated++
     await sleep(2500) // כיבוד מגבלת הקצב של Groq
-    if (!g || !g.relevant || !g.headline_he) continue
+
+    if (!g) continue // שגיאה זמנית אחרת (לא 429) — דלג, יינסה שוב בריצה הבאה
+
+    if (!g.relevant || !g.headline_he) {
+      // נדחה סופית ע"י השער. שומרים שורת "קבר" (draft, לא ציבורית) רק כדי שה-dedup
+      // יזהה אותה כ"כבר טופלה" ולא יבדוק אותה שוב בכל ריצה — מה ששרף את מכסת Groq.
+      out.push({
+        source_id: c.sourceId,
+        company_id: null,
+        maya_report_id: c.id,
+        title: c.it.title.slice(0, 500),
+        body: '',
+        bottom_line: '—', // לא-null: getEnrichedMap מזהה לפיו פריט "מטופל"
+        original_url: c.it.link,
+        published_at: publishedAtFrom(c.it.pubDate),
+        source_type: 'osint',
+        reliability: 'reported',
+        materiality_score: 1,
+        direction: 'neutral',
+        status: 'draft', // לא 'published' → לא מופיע בפיד (וגם חסום ב-RLS)
+        is_public: false,
+        lang: 'he',
+      })
+      rejected++
+      continue
+    }
     passed++
     // זיהוי חברה דטרמיניסטי: הצלבת ה-headline + רמז החברה מה-LLM מול טבלת החברות
     const { company_id } = matchCompany(`${g.headline_he} ${g.company || ''}`, companies)
@@ -139,7 +172,8 @@ export async function collectThematic({ signalEnabled } = {}) {
     })
   }
   console.log(
-    `🎯 שער נושאי: ${passed}/${checked} עברו (${known.size} כבר שמורים — דולגו)`,
+    `🎯 שער נושאי: ${passed} עברו, ${rejected} נדחו (נשמרו כדי לא להיבדק שוב), מתוך ${evaluated} שנבדקו` +
+      `${rateLimited ? ' [נעצר: מכסת Groq אזלה]' : ''} — ${known.size} כבר שמורים, דולגו`,
   )
   return out
 }
