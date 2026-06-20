@@ -21,3 +21,11 @@ npm-debug.log*
 .idea
 .DS_Store
 Thumbs.db
+
+# כלי Claude Code מקומיים — לא שייכים לרפו הציבורי (סימלינקים עם נתיב מקומי)
+.agents/
+.claude/
+skills-lock.json
+
+# קבצי zip זמניים
+*.zip
