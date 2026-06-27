@@ -1,7 +1,7 @@
 // מיפויים ויזואליים לפיד לפי ה-handoff: חשיבות, סנטימנט, סקטור, אווטר.
 // צבעים מבוססי-hex כדי לעבוד זהה בכהה ובהיר (tint דרך alpha); הצבעים תלויי-התמה
 // (חשיבות נמוכה / ניטרלי / נקודה ריקה) מגיעים כ-CSS variables.
-import type { Direction } from '../types/db'
+import type { Direction, Reliability } from '../types/db'
 
 export type ImpLevel = 'high' | 'mid' | 'low'
 
@@ -27,6 +27,20 @@ export const impColor: Record<ImpLevel, string> = {
 // כמה נקודות מלאות מתוך 5 (handoff: round(materiality/20) על 0–100 → אצלנו /2)
 export function impDots(score: number): number {
   return Math.max(1, Math.min(5, Math.round(score / 2)))
+}
+
+// עדיפות מקור: מאיה (verified) = מקור ראשוני #1 ("הלב"). דיווח רשמי גובר על תקשורת.
+// ה-boost מתווסף לציון המהותיות בדירוג "מומלץ": מצף דיווחי מאיה מהותיים לראש הפיד,
+// אך עדיין מאפשר לכתבה עיתונאית מהותית מאוד לעקוף רעש טכני של מאיה ("הרעש שוקע").
+export function reliabilityBoost(r: Reliability): number {
+  if (r === 'verified') return 3 // מאיה — מקור ראשוני, מאומת
+  if (r === 'estimate') return -1 // הערכה לא מאומתת
+  return 0 // דיווח עיתונאי
+}
+
+// ציון דירוג מורכב לפיד ("מומלץ"): מהותיות + עדיפות מקור. גבוה = ראש הפיד.
+export function rankScore(item: { materiality_score: number; reliability: Reliability }): number {
+  return item.materiality_score + reliabilityBoost(item.reliability)
 }
 
 export type Sentiment = { color: string; bg: string; symbol: string; label: string }

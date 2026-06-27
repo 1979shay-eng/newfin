@@ -3,10 +3,10 @@ import ItemCard from '../components/ItemCard'
 import { fetchFeed } from '../lib/queries'
 import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
 import { track } from '../lib/track'
-import { impLevel, sectorColor, tint } from '../lib/feedVisual'
+import { impLevel, sectorColor, tint, rankScore } from '../lib/feedVisual'
 import type { FeedItem } from '../types/db'
 
-type Sort = 'importance' | 'time'
+type Sort = 'smart' | 'importance' | 'time'
 type Tab = 'all' | 'watched'
 type Imp = 'all' | 'high' | 'mid' | 'low'
 
@@ -17,6 +17,7 @@ const IMP_OPTS: { key: Imp; label: string }[] = [
   { key: 'low', label: 'נמוכה' },
 ]
 const SORT_OPTS: { key: Sort; label: string }[] = [
+  { key: 'smart', label: 'מומלץ' },
   { key: 'importance', label: 'חשיבות' },
   { key: 'time', label: 'זמן' },
 ]
@@ -29,7 +30,7 @@ export default function Feed() {
   const [importance, setImportance] = useState<Imp>('all')
   const [sector, setSector] = useState<string>('all')
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<Sort>('time')
+  const [sort, setSort] = useState<Sort>('smart')
   const [compact, setCompact] = useState(false)
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
   const watchSet = useMemo(() => new Set(watch), [watch])
@@ -98,11 +99,14 @@ export default function Feed() {
       return true
     })
     if (tab === 'watched') r = r.filter((it) => it.company_id && watchSet.has(it.company_id))
-    return r.sort((a, b) =>
-      sort === 'time'
-        ? +new Date(b.published_at) - +new Date(a.published_at)
-        : b.materiality_score - a.materiality_score,
-    )
+    const byTime = (a: FeedItem, b: FeedItem) => +new Date(b.published_at) - +new Date(a.published_at)
+    return r.sort((a, b) => {
+      // "מומלץ": עדיפות מקור + מהותיות (מצף את מאיה לראש), שובר שוויון לפי זמן.
+      // "חשיבות": מהותיות בלבד. "זמן": כרונולוגי בלבד.
+      if (sort === 'time') return byTime(a, b)
+      const diff = sort === 'smart' ? rankScore(b) - rankScore(a) : b.materiality_score - a.materiality_score
+      return diff !== 0 ? diff : byTime(a, b)
+    })
   }, [items, importance, sector, query, sort, tab, watchSet])
 
   return (
@@ -198,7 +202,7 @@ export default function Feed() {
           style={{ color: 'var(--muted2)', borderBottom: '1px solid var(--line)' }}
         >
           <span>{loading ? '—' : `${filtered.length} דיווחים`}</span>
-          <span>מדורג לפי {sort === 'time' ? 'זמן עדכון' : 'חשיבות'}</span>
+          <span>מדורג לפי {sort === 'time' ? 'זמן עדכון' : sort === 'smart' ? 'עדיפות מקור וחשיבות' : 'חשיבות'}</span>
         </div>
 
         {loading ? (
