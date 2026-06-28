@@ -13,6 +13,7 @@ const SECTOR_TAG: Record<string, string> = {
   ביומד: 'bg-teal-50 text-teal-700 ring-teal-600/20',
   'מסחר ושירותים': 'bg-rose-50 text-rose-700 ring-rose-600/20',
   תעשייה: 'bg-orange-50 text-orange-700 ring-orange-600/20',
+  'שוק ההון': 'bg-green-50 text-green-700 ring-green-600/20',
   מאקרו: 'bg-slate-100 text-slate-600 ring-slate-500/20',
 }
 const SECTOR_DEFAULT = 'bg-slate-100 text-slate-600 ring-slate-500/20'
