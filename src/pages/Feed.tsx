@@ -30,7 +30,7 @@ export default function Feed() {
   const [importance, setImportance] = useState<Imp>('all')
   const [sector, setSector] = useState<string>('all')
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<Sort>('smart')
+  const [sort, setSort] = useState<Sort>('time')
   const [compact, setCompact] = useState(false)
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
   const watchSet = useMemo(() => new Set(watch), [watch])

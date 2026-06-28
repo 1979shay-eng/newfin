@@ -38,9 +38,17 @@ export function reliabilityBoost(r: Reliability): number {
   return 0 // דיווח עיתונאי
 }
 
-// ציון דירוג מורכב לפיד ("מומלץ"): מהותיות + עדיפות מקור. גבוה = ראש הפיד.
-export function rankScore(item: { materiality_score: number; reliability: Reliability }): number {
-  return item.materiality_score + reliabilityBoost(item.reliability)
+// ציון דירוג מורכב לפיד ("מומלץ"): מהותיות + עדיפות מקור + טריות. גבוה = ראש הפיד.
+// רכיב הטריות מונע מדיווחים ישנים-וחשובים להישאר תקועים בראש: בונוס שדועך עם הזמן
+// (עד +8 לידיעה טרייה, ~1 פחות לכל 6 שעות, מתאפס אחרי ~48 שעות).
+export function rankScore(item: {
+  materiality_score: number
+  reliability: Reliability
+  published_at: string
+}): number {
+  const ageH = (Date.now() - new Date(item.published_at).getTime()) / 3_600_000
+  const recency = Number.isFinite(ageH) ? Math.max(0, 8 - ageH / 6) : 0
+  return item.materiality_score + reliabilityBoost(item.reliability) + recency
 }
 
 export type Sentiment = { color: string; bg: string; symbol: string; label: string }
