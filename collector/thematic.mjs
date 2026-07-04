@@ -34,6 +34,14 @@ export const THEMATIC_FEEDS = [
     lang: 'en',
     url: 'https://dronexl.co/feed/',
   },
+  // קובץ ת"א-35: רלוונטי לאלביט/נקסט ויז'ן — השער מסנן רק אזכורים ישראליים
+  {
+    key: 'defensenews',
+    source_name: 'Defense News',
+    sector: 'ביטחון',
+    lang: 'en',
+    url: 'https://www.defensenews.com/arc/outboundfeeds/rss/category/land/?outputType=xml',
+  },
 ]
 
 // שזירת רשימות round-robin — כדי ששום פיד לא יבלע את כל תקרת השער

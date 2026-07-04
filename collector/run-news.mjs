@@ -29,9 +29,16 @@ try {
     .filter((r) => {
       if (r.it.company_id) return true
       const h = classifyHeadline(r.it.title)
-      if (!h) return false
-      r.headlineTag = h
-      return true
+      if (h) {
+        r.headlineTag = h
+        return true
+      }
+      // מקור ענפי (קובץ ת"א-35): אין חברה ואין סיווג-כותרת → תגית הענף של הפיד
+      if (r.it.feed_sector) {
+        r.headlineTag = { tag: r.it.feed_sector, type: 'sector' }
+        return true
+      }
+      return false
     })
   console.log(`📰 ${rssRaw.length} ידיעות RSS → ${rssBase.length} נשמרות (חברה/סקטור/מאקרו)`)
   const rssEnrichedMap = await getEnrichedMap(rssBase.map((r) => r.it.maya_report_id))

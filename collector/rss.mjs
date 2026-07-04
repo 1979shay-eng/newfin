@@ -50,6 +50,25 @@ export const FEEDS = [
   // ── ערוץ 10 (ערוץ הכלכלה; WordPress feed — כל האתר פיננסי) ───────────
   { key: 'tv10', source_name: 'ערוץ 10', section: 'כללי',
     url: 'https://tv10.co.il/feed/' },
+
+  // ── מקורות ענפיים (קובץ ת"א-35, 04.07.2026) ─────────────────────────
+  // sector = תגית-ענף שתוצמד לידיעה אם לא זוהתה חברה ולא נמצא סיווג-כותרת.
+  // כך ידיעה ענפית מהמקור הייעודי תמיד רלוונטית למניה או לענף בפיד.
+  { key: 'geektime', source_name: 'Geektime', section: 'הייטק ישראלי', sector: 'טכנולוגיה',
+    url: 'https://www.geektime.co.il/tag/%D7%94%D7%99%D7%99%D7%98%D7%A7-%D7%99%D7%A9%D7%A8%D7%90%D7%9C%D7%99/feed/' },
+  { key: 'geektime', source_name: 'Geektime', section: 'שבבים', sector: 'טכנולוגיה',
+    url: 'https://www.geektime.co.il/tag/semiconductors/feed/' },
+  { key: 'nadlancenter', source_name: 'מרכז הנדל"ן', section: 'ראשי', sector: 'נדל"ן ובינוי',
+    url: 'https://www.nadlancenter.co.il/rss/main' },
+  { key: 'energyinst', source_name: 'המכון לאנרגיה', section: 'עדכונים', sector: 'אנרגיה',
+    url: 'https://energy.org.il/feed/' },
+  { key: 'ynet', source_name: 'ynet כלכלה', section: 'צרכנות', sector: 'מסחר ושירותים',
+    url: 'https://www.ynet.co.il/Integration/StoryRss6780.xml' },
+  { key: 'globes', source_name: 'גלובס', section: 'צרכנות', sector: 'מסחר ושירותים',
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=821' },
+  // אייס (מדיה/תקשורת) — בלי sector: רק ידיעות עם חברה מזוהה או סיווג-כותרת נשמרות
+  { key: 'ice', source_name: 'אייס', section: 'מדיה וצריכה',
+    url: 'https://www.ice.co.il/rss' },
 ]
 
 // פענוח ישויות HTML/XML נפוצות
@@ -178,6 +197,7 @@ async function fetchFeed(feed, companies) {
         source_type: 'osint',
         reliability: 'reported',
         lang: 'he',
+        feed_sector: feed.sector ?? null, // תגית-ענף ברירת מחדל מהפיד (למקורות ענפיים)
       }
     })
 }
