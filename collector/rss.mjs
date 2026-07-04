@@ -73,18 +73,23 @@ export const FEEDS = [
     url: 'https://www.ice.co.il/rss' },
 ]
 
-// פענוח ישויות HTML/XML נפוצות
-function decode(s) {
+// פענוח ישויות HTML/XML נפוצות. שני מעברים: ישויות שהיו מקודדות-כפול
+// (&amp;#8226; → &#8226; → •) נפתחות רק אחרי שה-&amp; הפך ל-&.
+function decodePass(s) {
   return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
+}
+function decode(s) {
+  return decodePass(decodePass(s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')))
     .replace(/<[^>]+>/g, '') // הסרת תגיות HTML שנותרו בתיאור
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
@@ -219,6 +224,9 @@ async function fetchFeed(feed, companies) {
         company_name,
         maya_report_id: `${feed.key}:${it.guid}`, // מזהה ייחודי לכל מקור (משמש ל-upsert)
         title: it.title.slice(0, 500),
+        // תקציר הפיד: fallback תצוגתי כשאין העשרת AI + קלט נוסף ל-AI (חושף את
+        // החברה כשהכותרת קליקבייט). עובדות מהמקור עם קישור — שימוש RSS סטנדרטי.
+        body: (it.description || '').slice(0, 1000),
         original_url: it.link,
         published_at: publishedAtFrom(it.pubDate, feed.tz),
         source_type: 'osint',

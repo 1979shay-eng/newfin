@@ -71,7 +71,8 @@ try {
     company_id: it.company_id,
     maya_report_id: it.maya_report_id,
     title: it.title,
-    body: '',
+    body: it.body ?? '', // תקציר מהמקור — מוצג כשאין עדיין bottom_line
+
     bottom_line,
     original_url: it.original_url,
     published_at: it.published_at,
