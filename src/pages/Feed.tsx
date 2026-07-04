@@ -150,10 +150,23 @@ export default function Feed() {
         {/* שורה 1: חיפוש + תצוגה תמציתית */}
         <div className="flex items-center gap-2">
           <div
-            className="flex flex-1 items-center gap-2 rounded-[11px] px-3 py-2.5"
+            className="nf-search flex flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5"
             style={{ background: 'var(--field)', border: '1px solid var(--line2)' }}
           >
-            <span className="h-[13px] w-[13px] shrink-0 rounded-full border-2" style={{ borderColor: 'var(--muted2)' }} />
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--muted2)"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              className="shrink-0"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -161,6 +174,16 @@ export default function Feed() {
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:opacity-70"
               style={{ color: 'var(--ink)' }}
             />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                title="נקה חיפוש"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[13px] leading-none transition-colors"
+                style={{ background: 'var(--chip)', color: 'var(--chip-ink)' }}
+              >
+                ×
+              </button>
+            )}
           </div>
           <button
             onClick={() => setCompact((c) => !c)}

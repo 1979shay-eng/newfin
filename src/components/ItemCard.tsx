@@ -110,13 +110,19 @@ export default function ItemCard({
       </div>
 
       {/* כותרת — פונט מעוגל (Rubik), קריא ונוח */}
-      <h2 className="mt-2.5 font-display text-[21px] font-bold leading-[1.4]" style={{ color: 'var(--ink)' }}>
+      <h2
+        className="mt-2.5 font-display text-[21px] font-bold leading-[1.4] tracking-[-0.01em]"
+        style={{ color: 'var(--ink)' }}
+      >
         {item.title}
       </h2>
 
-      {/* סיכום — 2-3 שורות; מוסתר בתצוגה תמציתית */}
+      {/* סיכום — עד 4 שורות; רוחב שורה מוגבל לקריאות; מוסתר בתצוגה תמציתית */}
       {!compact && summary && (
-        <p className="mt-2 text-[15px] leading-[1.65]" style={{ color: 'var(--muted)' }}>
+        <p
+          className="mt-2 max-w-[75ch] text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4] overflow-hidden"
+          style={{ color: 'var(--muted)' }}
+        >
           {summary}
         </p>
       )}

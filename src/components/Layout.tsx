@@ -49,6 +49,7 @@ export default function Layout() {
         <div className="nf-drift1 absolute -top-40 right-[-8%] h-[600px] w-[600px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow1), transparent 65%)' }} />
         <div className="nf-drift2 absolute top-[30%] left-[-10%] h-[560px] w-[560px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow2), transparent 65%)' }} />
         <div className="nf-drift3 absolute bottom-[-12%] right-[20%] h-[520px] w-[520px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow1), transparent 65%)' }} />
+        <div className="nf-noise absolute inset-0" />
       </div>
 
       {/* ── ניווט ── */}
