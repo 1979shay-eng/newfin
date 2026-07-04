@@ -31,12 +31,13 @@ export const FEEDS = [
   // ── ynet כלכלה ──────────────────────────────────────────────────────
   { key: 'ynet', source_name: 'ynet כלכלה', section: 'כלכלה',
     url: 'https://www.ynet.co.il/Integration/StoryRss6.xml' },
-  // ── וואלה ───────────────────────────────────────────────────────────
-  { key: 'walla', source_name: 'וואלה', section: 'כסף',
+  // ── וואלה — מצהיר GMT אבל השעה בפועל היא שעון ישראל (אומת מול דפי
+  //    הכתבות: article:published_time = אותה שעה עם +03:00). tz מתקן. ──
+  { key: 'walla', source_name: 'וואלה', section: 'כסף', tz: 'israel',
     url: 'https://rss.walla.co.il/feed/2686' },
-  { key: 'walla', source_name: 'וואלה', section: 'עסקים',
+  { key: 'walla', source_name: 'וואלה', section: 'עסקים', tz: 'israel',
     url: 'https://rss.walla.co.il/feed/22' },
-  { key: 'walla', source_name: 'וואלה', section: 'נדל"ן',
+  { key: 'walla', source_name: 'וואלה', section: 'נדל"ן', tz: 'israel',
     url: 'https://rss.walla.co.il/feed/2689' },
   // ── מעריב כלכלה ─────────────────────────────────────────────────────
   { key: 'maariv', source_name: 'מעריב', section: 'כלכלה',
@@ -66,8 +67,9 @@ export const FEEDS = [
     url: 'https://www.ynet.co.il/Integration/StoryRss6780.xml' },
   { key: 'globes', source_name: 'גלובס', section: 'צרכנות', sector: 'מסחר ושירותים',
     url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=821' },
-  // אייס (מדיה/תקשורת) — בלי sector: רק ידיעות עם חברה מזוהה או סיווג-כותרת נשמרות
-  { key: 'ice', source_name: 'אייס', section: 'מדיה וצריכה',
+  // אייס (מדיה/תקשורת) — בלי sector: רק ידיעות עם חברה מזוהה או סיווג-כותרת נשמרות.
+  // pubDate בלי אזור-זמן והוא שעון ישראל (אומת מול דף הכתבה) — tz מתקן.
+  { key: 'ice', source_name: 'אייס', section: 'מדיה וצריכה', tz: 'israel',
     url: 'https://www.ice.co.il/rss' },
 ]
 
@@ -92,16 +94,41 @@ function tag(block, name) {
   return m ? m[1].trim() : ''
 }
 
-// המרת pubDate גולמי ל-ISO תקין. מטפל בשתי תקלות אמיתיות שנצפו בפיד:
+// offset של שעון ישראל (בדקות) ברגע נתון — 120 בחורף, 180 בקיץ (DST אוטומטי)
+function israelOffsetMin(d) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  })
+  const p = Object.fromEntries(fmt.formatToParts(d).map((x) => [x.type, x.value]))
+  const asIl = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second)
+  return Math.round((asIl - d.getTime()) / 60000)
+}
+
+// המרת pubDate גולמי ל-ISO תקין. מטפל בשלוש תקלות אמיתיות שנצפו בפידים:
 //   1. CDATA — ynet עוטף את התאריך ב-<![CDATA[...]]> ואז new Date נכשל ונופל ל"עכשיו"
 //      (כל הידיעות מקבלות אותה שעה + ידיעה ישנה מקבלת תאריך היום).
-//   2. תאריך עתידי — אזור-זמן שגוי או עדכון-תאריך מאוחר של כתבה. זמן פרסום לא יכול
-//      להיות אחרי זמן האיסוף, אז חוסמים ונופלים לזמן הנוכחי.
+//   2. tz='israel' — מקורות שמשדרים שעון ישראל עם סימון שגוי (וואלה מסמן GMT,
+//      אייס בלי סימון בכלל). מתעלמים מהסימון ומפרשים את השעה כ-Asia/Jerusalem.
+//      בלי זה הידיעות מוצגות 2-3 שעות קדימה. אומת מול article:published_time.
+//   3. תאריך עתידי — עדכון-תאריך מאוחר של כתבה. זמן פרסום לא יכול להיות אחרי
+//      זמן האיסוף, אז חוסמים ונופלים לזמן הנוכחי.
 // בכל מקרה של תאריך חסר/לא-תקין/עתידי → זמן האיסוף (קירוב סביר, האיסוף תכוף).
-export function publishedAtFrom(rawPubDate) {
+export function publishedAtFrom(rawPubDate, tz) {
   const now = Date.now()
   const cleaned = (rawPubDate || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim()
-  const d = cleaned ? new Date(cleaned) : null
+  if (!cleaned) return new Date().toISOString()
+  let d
+  if (tz === 'israel') {
+    // הסרת סימון אזור-הזמן (השקרי) ופירוש השעה הערומה כשעון ישראל
+    const naive = cleaned.replace(/\s*(GMT|UTC|Z|[+-]\d{2}:?\d{2})\s*$/i, '')
+    const asUtc = new Date(naive + ' GMT')
+    d = isNaN(asUtc.getTime()) ? null : new Date(asUtc.getTime() - israelOffsetMin(asUtc) * 60000)
+  } else {
+    d = new Date(cleaned)
+  }
   if (!d || isNaN(d.getTime()) || d.getTime() > now + 60000) return new Date().toISOString()
   return d.toISOString()
 }
@@ -193,7 +220,7 @@ async function fetchFeed(feed, companies) {
         maya_report_id: `${feed.key}:${it.guid}`, // מזהה ייחודי לכל מקור (משמש ל-upsert)
         title: it.title.slice(0, 500),
         original_url: it.link,
-        published_at: publishedAtFrom(it.pubDate),
+        published_at: publishedAtFrom(it.pubDate, feed.tz),
         source_type: 'osint',
         reliability: 'reported',
         lang: 'he',
