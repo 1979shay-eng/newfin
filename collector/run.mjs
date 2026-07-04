@@ -1,13 +1,11 @@
-// הרצת איסוף מלאה: מאיה → נירמול → ציון כללים → העשרת SIGNAL (AI) → Supabase
+// הרצת מאיה: מאיה → נירמול → ציון כללים → העשרת SIGNAL (AI) → Supabase
+// שאר המקורות (RSS/נושאי/Yahoo) פוצלו ל-run-news.mjs — ריצה קלה נפרדת
+// שרצה בתדירות גבוהה יותר בלי דפדפן. הפיצול מכפיל את קצב רענון הפיד.
 import { openMaya, fetchRecentReports, normalizeReport, fetchUpcomingCorporateActions } from './maya.mjs'
 import { scoreReport } from './materiality.mjs'
 import { enrich, signalEnabled } from './signal.mjs'
-import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap, linkHeadlineTags } from './db.mjs'
-import { fetchAllRss } from './rss.mjs'
-import { collectThematic } from './thematic.mjs'
-import { collectYahoo } from './yahoo.mjs'
+import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap } from './db.mjs'
 import { classifyCompanySectors } from './sectors.mjs'
-import { classifyHeadline } from './headlines.mjs'
 
 const ENRICH_TOP = 16 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה (מאוזן מול מגבלת 15 דק')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -95,103 +93,6 @@ try {
 
   const { count } = await upsertItems(items)
   console.log(`✅ נשמרו/עודכנו: ${count} פריטים ממאיה`)
-
-  // ── הרחבת מקורות: חדשות RSS (גלובס, TheMarker) + זיהוי חברה מהכותרת ──
-  try {
-    // פאנדר הוסר: Cloudflare חוסם את Playwright מ-IP של GitHub Actions (datacenter).
-    // עבד מקומית (IP ביתי) אבל לא מהשרת. ראה collector/funder.mjs להפעלה עתידית.
-    const rssRaw = await fetchAllRss()
-    // מדיניות תיוג: יש חברה → תיוג חברה. אין חברה → סיווג כותרת: כתבה ענפית→סקטור,
-    // מאקרו חשוב→"מאקרו", אחרת נזרק (לא נשמר). כך הפיד לא מוצף ברעש מאקרו/כללי.
-    const rssBase = rssRaw
-      .map((it) => ({ it, score: scoreReport(it), bottom_line: null, headlineTag: null }))
-      .filter((r) => {
-        if (r.it.company_id) return true
-        const h = classifyHeadline(r.it.title)
-        if (!h) return false
-        r.headlineTag = h
-        return true
-      })
-    console.log(`📰 ${rssRaw.length} ידיעות RSS → ${rssBase.length} נשמרות (חברה/סקטור/מאקרו)`)
-    // אותו עיקרון כמו מאיה: שמירת העשרה קיימת + דילוג על מה שכבר מועשר
-    const rssEnrichedMap = await getEnrichedMap(rssBase.map((r) => r.it.maya_report_id))
-    for (const r of rssBase) {
-      const ex = rssEnrichedMap.get(r.it.maya_report_id)
-      if (ex) {
-        r.bottom_line = ex.bottom_line
-        r.score.materiality_score = ex.materiality_score
-        r.score.direction = ex.direction
-      }
-    }
-    rssBase.sort((a, b) => b.score.materiality_score - a.score.materiality_score)
-    let rssEnriched = 0
-    if (signalEnabled) {
-      for (let i = 0; i < rssBase.length && rssEnriched < ENRICH_TOP; i++) {
-        if (rssBase[i].bottom_line) continue // כבר מועשר — דילוג
-        const e = await enrich(rssBase[i].it)
-        if (e) {
-          rssBase[i].score.materiality_score = e.materiality_score
-          rssBase[i].score.direction = e.direction
-          rssBase[i].bottom_line = e.bottom_line
-          rssEnriched++
-        }
-        await sleep(2500)
-      }
-      console.log(`🧠 הועשרו ${rssEnriched} ידיעות RSS חדשות (${rssEnrichedMap.size} כבר מועשרות — דולגו)`)
-    }
-    const rssItems = rssBase.map(({ it, score, bottom_line }) => ({
-      source_id: it.source_id,
-      company_id: it.company_id,
-      maya_report_id: it.maya_report_id,
-      title: it.title,
-      body: '',
-      bottom_line,
-      original_url: it.original_url,
-      published_at: it.published_at,
-      source_type: it.source_type,
-      reliability: it.reliability,
-      materiality_score: score.materiality_score,
-      direction: score.direction,
-      status: 'published',
-      is_public: true,
-      lang: it.lang,
-    }))
-    const rssRes = await upsertItems(rssItems)
-    console.log(`✅ נשמרו/עודכנו: ${rssRes.count} ידיעות RSS`)
-
-    // קישור תגיות סקטור/מאקרו לפריטים בלי חברה (item_tags)
-    const tagged = rssBase.filter((r) => r.headlineTag)
-    if (tagged.length) {
-      await linkHeadlineTags(
-        tagged.map((r) => ({ maya_report_id: r.it.maya_report_id, ...r.headlineTag })),
-      )
-      console.log(`🏷️  תויגו ${tagged.length} כתבות ללא חברה (סקטור/מאקרו)`)
-    }
-  } catch (e) {
-    console.warn('⚠️  איסוף RSS נכשל:', e.message)
-  }
-
-  // ── מקורות נושאיים: שער-AI מחמיר (DroneXL וכו') → השלכה ישראלית בלבד ──
-  try {
-    const themItems = await collectThematic({ signalEnabled })
-    if (themItems.length) {
-      const themRes = await upsertItems(themItems)
-      console.log(`✅ נשמרו/עודכנו: ${themRes.count} פריטים נושאיים`)
-    }
-  } catch (e) {
-    console.warn('⚠️  איסוף נושאי נכשל:', e.message)
-  }
-
-  // ── Yahoo Finance: חברות ישראליות דואליות (תרגום+שיוך מהטיקר) ─────────
-  try {
-    const yItems = await collectYahoo({ signalEnabled })
-    if (yItems.length) {
-      const yRes = await upsertItems(yItems)
-      console.log(`✅ נשמרו/עודכנו: ${yRes.count} פריטים מ-Yahoo Finance`)
-    }
-  } catch (e) {
-    console.warn('⚠️  איסוף Yahoo נכשל:', e.message)
-  }
 
   // ── סיווג חברות לסקטור (ממלא בהדרגה את companies.sector) ──
   try {

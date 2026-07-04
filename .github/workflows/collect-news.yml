@@ -1,0 +1,37 @@
+name: איסוף חדשות קל (RSS/נושאי/Yahoo)
+
+on:
+  schedule:
+    # ריצה קלה ומהירה (ללא Playwright) — משלימה את ריצת מאיה הכבדה.
+    # דקות שונות מ-collect.yml (7,22,37,52) כדי לפזר את הסיכוי ש-GitHub
+    # יריץ לפחות אחת מהן בזמן. יחד: כיסוי כל ~7-8 דקות בממוצע.
+    - cron: '0,15,30,45 * * * *'
+  workflow_dispatch: {} # הרצה ידנית / דרך שעון חיצוני
+
+concurrency:
+  group: collector-news
+  cancel-in-progress: false
+
+jobs:
+  collect-news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: שליפת הקוד
+        uses: actions/checkout@v4
+
+      - name: התקנת Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: התקנת תלויות
+        run: npm ci
+
+      - name: הרצת אספן החדשות
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: node collector/run-news.mjs
