@@ -159,9 +159,8 @@ FocusFin (dash.focusfin.co.il) כבר עושה קרולר פיננסי ממוק�
 
 **ארכיטקטורת ההפעלה (קריטי להבין):**
 - ה-repo **ציבורי** ב-GitHub (`1979shay-eng/newfin`) — נדרש כדי ש-GitHub Actions ירוץ ללא הגבלת דקות. הקוד נקי מסודות.
-- ה-cron של GitHub Actions לא אמין (רץ אקראית כל כמה שעות). לכן יש **שעון חיצוני ב-cron-job.org** (console.cron-job.org) שמפעיל את ה-workflow כל 10 דק' דרך GitHub API (`workflow_dispatch` על `collect.yml`). זה מה שעובד. ראה memory [[cron-job-scheduler]].
-- ה-cron-job.org שולח header `Authorization: Bearer <PAT>` — PAT קלאסי עם scopes `repo`+`workflow`. אבחון: 401 "Bad credentials"=המפתח פג/לא תקין; 403=חסר scope; 204=הצליח.
-- **⚠️ 12.06.2026: השעון החיצוני מת (שוב PAT?)** — כל הריצות האחרונות הן `schedule` בלבד בפערי 2.5-4.5 שעות. נדרש: כניסה ל-console.cron-job.org, בדיקת HISTORY (צפוי 401), והדבקת PAT חדש (classic, scopes repo+workflow מ-github.com/settings/tokens). בינתיים: cron בדקות לא-עגולות (`7,22,37,52`) + `collector/trigger-collector.ps1` כגיבוי מקומי (טרם נרשם ב-Task Scheduler — דורש אישור משתמש).
+- **04.07.2026: אסטרטגיית "ריצה מתמשכת" — בלי PAT ובלי שעון חיצוני.** ה-PAT של cron-job.org מת 5 פעמים ולכן נזנח לגמרי. במקום: `collect.yml` מריץ לולאה פנימית ~5.5 שעות (מאיה + חדשות כל 10 דק'), עם schedule כל 3 שעות (`7 */3 * * *`). גם כשה-scheduler של GitHub מתעצל (מעיר כל 2.5-4.5 שעות בפועל) — כל התעוררות מכסה 5.5 שעות איסוף רציף. `concurrency: cancel-in-progress: true` מונע ריצות כפולות.
+- **פיצול אספנים:** `collector/run.mjs` = מאיה בלבד (Playwright, כבד). `collector/run-news.mjs` = RSS/נושאי/Yahoo (קל, ~20 שניות, בלי דפדפן). שניהם רצים בלולאה של collect.yml. יש גם `collect-news.yml` נפרד (schedule `0,15,30,45`) כגיבוי — דה-דופ ההעשרה (getEnrichedMap) מונע שריפת מכסת Groq כפולה.
 
 **⚠️ באג פתוח — לא נסגר (להמשיך מכאן):** השעה המוצגת בכרטיסי הפיד נראית מוסטת (~שעה קדימה לפי המשתמש). הייתי באמצע בדיקת ה-`published_at` הגולמי ב-DB מול ההצגה ב-Asia/Jerusalem כשהשיחה נקטעה. צריך: (א) להריץ query שמשווה `published_at` (UTC) להצגה ב-`he-IL`/`Asia/Jerusalem`; (ב) לבדוק את ItemCard (`src/components/ItemCard.tsx`) — אולי הזמן מוצג בלי timezone או עם offset כפול.
 
