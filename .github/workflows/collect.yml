@@ -2,22 +2,22 @@ name: איסוף נתונים ממאיה
 
 on:
   schedule:
-    # דקות לא-עגולות בכוונה: ה-scheduler של GitHub עמוס בדקות עגולות (0,10,20...)
-    # וריצות שם נדחות בשעות — בדקות "זנוחות" הסיכוי לרוץ בזמן גבוה משמעותית.
-    # בפועל GitHub לא מבטיח תדירות. גיבוי: collector/trigger-collector.ps1 מפעיל
-    # workflow_dispatch כל 15 דק' מ-Task Scheduler במחשב המקומי (כשהוא דלוק).
-    - cron: '7,22,37,52 * * * *'
+    # אסטרטגיית "ריצה מתמשכת": ה-scheduler של GitHub לא אמין (מעיר כל 2.5-4.5 שעות
+    # בפועל). לכן כל ריצה נשארת חיה ~5.5 שעות ואוספת בלולאה כל 10 דקות.
+    # כך מספיקות 4-5 התעוררויות ביום לכיסוי מלא — בלי PAT ובלי שעון חיצוני.
+    # ה-concurrency מבטיח שריצה חדשה לא תרוץ במקביל לקיימת.
+    - cron: '7 */3 * * *'
   workflow_dispatch: {} # מאפשר גם הרצה ידנית בלחיצת כפתור מ-GitHub
 
-# מבטל ריצה קודמת אם חדשה מתחילה (לא להריץ שתיים במקביל)
+# ריצה אחת בלבד בכל רגע; חדשה מבטלת את הישנה (שכבר קרובה לסוף חייה)
 concurrency:
   group: collector
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 355 # מתחת למגבלת 6 שעות של GitHub
     steps:
       - name: שליפת הקוד
         uses: actions/checkout@v4
@@ -47,9 +47,23 @@ jobs:
             npx playwright install --with-deps chromium
           fi
 
-      - name: הרצת האספן
+      - name: לולאת איסוף (כל 10 דקות, עד ~5.5 שעות)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: node collector/run.mjs
+        run: |
+          END=$((SECONDS + 19800))  # 5.5 שעות
+          CYCLE=0
+          while [ $SECONDS -lt $END ]; do
+            CYCLE=$((CYCLE + 1))
+            echo "════════ סבב איסוף #$CYCLE ════════"
+            node collector/run.mjs || echo "⚠️ סבב מאיה #$CYCLE נכשל — ממשיכים"
+            node collector/run-news.mjs || echo "⚠️ סבב חדשות #$CYCLE נכשל — ממשיכים"
+            # אם נשאר פחות מ-10 דקות לסוף — לא שווה לישון, מסיימים
+            REMAIN=$((END - SECONDS))
+            if [ $REMAIN -lt 600 ]; then break; fi
+            echo "😴 המתנה 10 דקות לסבב הבא ($((REMAIN / 60)) דק' נותרו לריצה)..."
+            sleep 600
+          done
+          echo "✅ הריצה המתמשכת הסתיימה אחרי $CYCLE סבבים"
