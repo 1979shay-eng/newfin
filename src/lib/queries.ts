@@ -24,7 +24,15 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
     return mockFeed
   }
 
-  const mapped = (data ?? []).map((row: any) => {
+  // עיקרון: כל ידיעה חייבת הכוונה — חברה, או תגית סקטור/מאקרו. השאר מוסתר.
+  return mapRows(data ?? [])
+    .filter((it: any) => it.company_id || it.headline_tag)
+    .slice(0, limit) as FeedItem[]
+}
+
+// מיפוי שורת DB (עם joins) לצורת FeedItem — משותף לפיד ולחיפוש הארכיון
+function mapRows(rows: any[]): any[] {
+  return rows.map((row: any) => {
     const tag = row.item_tags?.[0]?.tags ?? null
     return {
       ...row,
@@ -36,9 +44,70 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
       tags: [],
     }
   })
+}
 
-  // עיקרון: כל ידיעה חייבת הכוונה — חברה, או תגית סקטור/מאקרו. השאר מוסתר.
-  return mapped.filter((it: any) => it.company_id || it.headline_tag).slice(0, limit) as FeedItem[]
+const ITEM_SELECT = `
+  *,
+  sources ( name ),
+  companies ( name_he, sector ),
+  item_tags ( tags ( name_he, type ) )
+`
+
+// ── חיפוש ארכיון: עד 9 חודשים אחורה, מול המאגר (לא רק מה שנטען למסך) ──
+// מחפש בכותרת + בהסבר, ובנפרד לפי שם חברה (join של PostgREST לא תומך
+// ב-OR על טבלה מקושרת). התוצאות ממוזגות, מדו-דופלקות וממוינות לפי זמן.
+export async function searchFeed(q: string, limit = 120): Promise<FeedItem[]> {
+  if (!isSupabaseConfigured) return []
+  const term = q.trim().replace(/[,%()]/g, ' ').trim()
+  if (term.length < 2) return []
+
+  const since = new Date()
+  since.setMonth(since.getMonth() - 9)
+  const sinceIso = since.toISOString()
+
+  // חיפוש 1: בטקסט הידיעה (כותרת/שורה תחתונה)
+  const textQ = supabase
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq('status', 'published')
+    .gte('published_at', sinceIso)
+    .or(`title.ilike.%${term}%,bottom_line.ilike.%${term}%`)
+    .order('published_at', { ascending: false })
+    .limit(limit)
+
+  // חיפוש 2: לפי שם חברה — קודם מאתרים חברות תואמות, ואז את הידיעות שלהן
+  const compQ = supabase.from('companies').select('id').ilike('name_he', `%${term}%`).limit(30)
+
+  const [textRes, compRes] = await Promise.all([textQ, compQ])
+  if (textRes.error) console.error('searchFeed text error:', textRes.error.message)
+
+  let compItems: any[] = []
+  const compIds = (compRes.data ?? []).map((c: any) => c.id)
+  if (compIds.length) {
+    const { data, error } = await supabase
+      .from('items')
+      .select(ITEM_SELECT)
+      .eq('status', 'published')
+      .gte('published_at', sinceIso)
+      .in('company_id', compIds)
+      .order('published_at', { ascending: false })
+      .limit(limit)
+    if (error) console.error('searchFeed company error:', error.message)
+    compItems = data ?? []
+  }
+
+  // מיזוג + דה-דופ לפי מזהה, מיון מהחדש לישן
+  const seen = new Set<string>()
+  const merged = [...(textRes.data ?? []), ...compItems].filter((r: any) => {
+    if (seen.has(r.id)) return false
+    seen.add(r.id)
+    return true
+  })
+  merged.sort((a: any, b: any) => +new Date(b.published_at) - +new Date(a.published_at))
+
+  return mapRows(merged)
+    .filter((it: any) => it.company_id || it.headline_tag)
+    .slice(0, limit) as FeedItem[]
 }
 
 export type CompanyRow = {

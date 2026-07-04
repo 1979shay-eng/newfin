@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import ItemCard from '../components/ItemCard'
-import { fetchFeed } from '../lib/queries'
+import { fetchFeed, searchFeed } from '../lib/queries'
 import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
 import { track } from '../lib/track'
 import { impLevel, sectorColor, tint, rankScore } from '../lib/feedVisual'
@@ -30,6 +30,9 @@ export default function Feed() {
   const [importance, setImportance] = useState<Imp>('all')
   const [sector, setSector] = useState<string>('all')
   const [query, setQuery] = useState('')
+  // תוצאות חיפוש ארכיון (עד 9 חודשים אחורה) — null כשאין חיפוש פעיל
+  const [archive, setArchive] = useState<FeedItem[] | null>(null)
+  const [searching, setSearching] = useState(false)
   const [sort, setSort] = useState<Sort>('time')
   const [compact, setCompact] = useState(false)
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
@@ -62,6 +65,29 @@ export default function Feed() {
     return () => clearTimeout(id)
   }, [query])
 
+  // חיפוש ארכיון מול המאגר — מופעל בהשהיה קלה אחרי ההקלדה (debounce)
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setArchive(null)
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    let alive = true
+    const id = setTimeout(() => {
+      searchFeed(q).then((results) => {
+        if (!alive) return
+        setArchive(results)
+        setSearching(false)
+      })
+    }, 350)
+    return () => {
+      alive = false
+      clearTimeout(id)
+    }
+  }, [query])
+
   function toggleWatch(id: string) {
     setWatch((prev) => {
       const adding = !prev.includes(id)
@@ -89,10 +115,14 @@ export default function Feed() {
 
   const filtered = useMemo(() => {
     const q = query.trim()
-    let r = items.filter((it) => {
+    // חיפוש פעיל → הבסיס הוא תוצאות הארכיון מהמאגר (עד 9 חודשים אחורה).
+    // בלי חיפוש → 80 הידיעות הטריות כרגיל.
+    const base = archive ?? items
+    let r = base.filter((it) => {
       if (importance !== 'all' && impLevel(it.materiality_score) !== importance) return false
       if (sector !== 'all' && itemSector(it) !== sector) return false
-      if (q) {
+      // סינון טקסט בצד-לקוח רק כשאין תוצאות שרת (המאגר כבר סינן טוב יותר)
+      if (q && !archive) {
         const hay = `${it.company_name ?? ''} ${it.title} ${it.bottom_line ?? ''} ${itemSector(it) ?? ''}`
         if (!hay.includes(q)) return false
       }
@@ -107,7 +137,7 @@ export default function Feed() {
       const diff = sort === 'smart' ? rankScore(b) - rankScore(a) : b.materiality_score - a.materiality_score
       return diff !== 0 ? diff : byTime(a, b)
     })
-  }, [items, importance, sector, query, sort, tab, watchSet])
+  }, [items, archive, importance, sector, query, sort, tab, watchSet])
 
   return (
     <div className="mx-auto max-w-[1200px]">
@@ -224,7 +254,15 @@ export default function Feed() {
           className="flex items-center justify-between px-6 py-3.5 text-[12.5px] font-semibold"
           style={{ color: 'var(--muted2)', borderBottom: '1px solid var(--line)' }}
         >
-          <span>{loading ? '—' : `${filtered.length} דיווחים`}</span>
+          <span>
+            {loading
+              ? '—'
+              : searching
+                ? 'מחפש בארכיון...'
+                : archive
+                  ? `${filtered.length} תוצאות מ-9 החודשים האחרונים`
+                  : `${filtered.length} דיווחים`}
+          </span>
           <span>מדורג לפי {sort === 'time' ? 'זמן עדכון' : sort === 'smart' ? 'עדיפות מקור וחשיבות' : 'חשיבות'}</span>
         </div>
 
