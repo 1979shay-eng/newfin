@@ -177,16 +177,56 @@ const BOUNDARY = /[\s.,;:!?"'()[\]־–—•·\-/|]/
 // שמות-חברה שהם גם מילה עברית נפוצה (תואר/שם-עצם) — מדלגים כדי למנוע התאמות-שווא.
 const STOP = new Set(['בינלאומי', 'מבנה'])
 
+// שמות-חברה דו-משמעיים — מילה עברית יומיומית שהיא גם שם חברה בבורסה
+// ("חשמל", "מקורות", "לאומי"...). התאמה מתקבלת רק אם הכותרת מכילה גם הקשר
+// פיננסי (FIN_CONTEXT) — אחרת "חשמל באוויר" בכתבת רכילות נתפס כחברת החשמל.
+const AMBIGUOUS = new Set([
+  'אדמה', 'אזורים', 'איילון', 'אלומה', 'אלמוג', 'אלעד', 'אמות', 'אמנת',
+  'אנליסט', 'אקסל', 'ארזים', 'בליץ', 'ברנד', 'גולד', 'גולף', 'חשמל',
+  'יוזמות', 'יצוא', 'כנפיים', 'לאומי', 'לכיש', 'מגידו', 'מהדרין', 'מקורות',
+  'ניסן', 'נובה', 'סקופ', 'פוקס', 'פועלים', 'צרפתי', 'קליל', 'רימון', 'תעוזה',
+])
+
+// סימני הקשר כלכלי/שוק-הון בכותרת — תנאי להתאמת שם דו-משמעי.
+const FIN_CONTEXT =
+  /מניה|מניית|מניות|בורס[הת]|דו"ח|דוח|הנפק[הת]|אג"ח|רווח|הפסד|שווי|עסק[הת]|רכיש[הת]|רכשה|רכוש|מיזוג|דיבידנד|משקיע|השקע|גיוס|גייס|תשקיף|מסחר|נסחר|שוק ההון|וול סטריט|נאסד"ק|בנק|המלצת|תשואה|אשראי|ריבית|מכרז|חוזה|הסכם|מנכ"ל|דירקטוריון|שותפות|קרן|חנויות|סניפים|חברת|קבוצת|מיליון|מיליארד|שקל|דולר|נדל"ן/
+
+// צירופים כוזבים ידועים — ביטוי שמכיל שם-חברה דו-משמעי אבל לעולם אינו החברה.
+// מסולקים מהכותרת לפני חיפוש שמות דו-משמעיים ("ביטוח לאומי" ≠ בנק לאומי).
+const FALSE_COLLOC = [
+  /ביטוח לאומי/g,
+  /רעיד(ת|ות) (ה)?אדמה/g,
+  /נתיבי איילון|כביש איילון/g,
+  /פסטיבל נובה|הטבח בנובה/g,
+  /הפסק(ת|ות) (ה)?חשמל/g,
+  /רימון (יד|רסס|הלם)/g,
+  /(רב|בין)[- ]לאומי/g,
+  /כוחות? (ה)?ביטחון פועלים|צוותי (ה)?כיבוי פועלים/g,
+  /מקורות (ביטחוניים|זרים|בכירים|פלסטיניים|לבנוניים|מעורים|יודעי דבר)/g,
+]
+
 // מזהה חברה מהכותרת: מחזיר { company_id, company_name } או ריק.
 // דורש שם מוקף בגבול-מילה משני הצדדים. ארוך-קודם מצמצם התאמות-שווא.
+// שם דו-משמעי (AMBIGUOUS) מותאם רק אם יש הקשר פיננסי, ואחרי סילוק צירופים כוזבים.
 export function matchCompany(title, companies) {
+  const hasFinContext = FIN_CONTEXT.test(title)
+  let strippedCache = null // מחושב פעם אחת, רק אם נתקלים בשם דו-משמעי
   for (const c of companies) {
     if (STOP.has(c.name)) continue
+    let haystack = title
+    if (AMBIGUOUS.has(c.name)) {
+      if (!hasFinContext) continue
+      if (strippedCache === null) {
+        strippedCache = title
+        for (const re of FALSE_COLLOC) strippedCache = strippedCache.replace(re, ' ')
+      }
+      haystack = strippedCache
+    }
     let from = 0
     let idx
-    while ((idx = title.indexOf(c.name, from)) !== -1) {
-      const before = idx === 0 ? ' ' : title[idx - 1]
-      const after = idx + c.name.length >= title.length ? ' ' : title[idx + c.name.length]
+    while ((idx = haystack.indexOf(c.name, from)) !== -1) {
+      const before = idx === 0 ? ' ' : haystack[idx - 1]
+      const after = idx + c.name.length >= haystack.length ? ' ' : haystack[idx + c.name.length]
       if (BOUNDARY.test(before) && BOUNDARY.test(after)) {
         return { company_id: c.id, company_name: c.name }
       }
