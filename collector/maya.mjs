@@ -42,25 +42,35 @@ function asArray(d) {
   return d.reports || d.result || d.items || d.data || []
 }
 
-// הפיד הגלובלי של ההודעות המתפרצות — POST עם דפדוף (pageNumber/offset/limit).
-// מחזיר דיווחים מכל החברות, ממוין מהחדש לישן.
+// שני זרמי דיווחים, אותו מבנה בקשה/תשובה (POST עם pageNumber/offset/limit):
+//   reports/companies            — הזרם המלא של כל הדיווחים המיידיים (מאות ביום!).
+//                                  זה הזרם הראשי — בלעדיו מפספסים מצגות, הנפקות,
+//                                  דוחות ורוב הפעילות. limit מקסימלי = 20 (400 מעליו).
+//   reports/breaking-announcement — ערוץ "מבזקים" מצומצם (~16 ביום) שמאיה מסמנת.
+//                                  נשמר כהשלמה — ליתר ביטחון אם משהו לא בזרם המלא.
+// 05.07.2026: עד היום נשאב רק ערוץ המבזקים — לכן דיווחי מאיה כמעט נעדרו מהפיד.
+const REPORT_STREAMS = ['/api/v1/reports/companies', '/api/v1/reports/breaking-announcement']
+
 export async function fetchRecentReports(ctx, { pages = 3, limit = 20 } = {}) {
+  const perPage = Math.min(limit, 20) // ה-API דוחה limit גדול מ-20
   const byId = new Map()
-  for (let p = 1; p <= pages; p++) {
-    let arr
-    try {
-      const d = await apiPost(ctx, '/api/v1/reports/breaking-announcement', {
-        pageNumber: p,
-        limit,
-        offset: (p - 1) * limit,
-      })
-      arr = asArray(d)
-    } catch {
-      break
+  for (const stream of REPORT_STREAMS) {
+    for (let p = 1; p <= pages; p++) {
+      let arr
+      try {
+        const d = await apiPost(ctx, stream, {
+          pageNumber: p,
+          limit: perPage,
+          offset: (p - 1) * perPage,
+        })
+        arr = asArray(d)
+      } catch {
+        break
+      }
+      if (arr.length === 0) break
+      for (const rep of arr) byId.set(rep.id, rep)
+      if (arr.length < perPage) break
     }
-    if (arr.length === 0) break
-    for (const rep of arr) byId.set(rep.id, rep)
-    if (arr.length < limit) break
   }
   return [...byId.values()].sort((a, b) => new Date(b.publishDate) - new Date(a.publishDate))
 }

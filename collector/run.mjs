@@ -20,7 +20,8 @@ const t0 = Date.now()
 
 const { browser, ctx } = await openMaya()
 try {
-  const raw = await fetchRecentReports(ctx, { pages: 4, limit: 20 })
+  // 6 עמודים × 20 × 2 זרמים — הזרם המלא מכסה ~יום גם בעומס דיווחים
+  const raw = await fetchRecentReports(ctx, { pages: 6, limit: 20 })
   console.log(`נשלפו ${raw.length} דיווחים גולמיים ממאיה`)
   const ca = await fetchUpcomingCorporateActions(ctx, 8)
   const sourceId = await getMayaSourceId()
