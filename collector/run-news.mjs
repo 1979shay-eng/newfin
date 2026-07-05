@@ -5,7 +5,7 @@
 import { scoreReport } from './materiality.mjs'
 import { enrich, signalEnabled } from './signal.mjs'
 import { upsertItems, getEnrichedMap, linkHeadlineTags } from './db.mjs'
-import { fetchAllRss } from './rss.mjs'
+import { fetchAllRss, isClickbait, bodyReveals } from './rss.mjs'
 import { collectThematic } from './thematic.mjs'
 import { collectYahoo } from './yahoo.mjs'
 import { classifyHeadline } from './headlines.mjs'
@@ -27,6 +27,9 @@ try {
   const rssBase = rssRaw
     .map((it) => ({ it, score: scoreReport(it), bottom_line: null, headlineTag: null }))
     .filter((r) => {
+      // קליקבייט: כותרת-חידה שהתקציר לא חושף את העובדות מאחוריה — נזרקת,
+      // גם אם זוהתה חברה. מדיניות: מציגים עובדות, לא פיתיונות.
+      if (isClickbait(r.it.title) && !bodyReveals(r.it.body)) return false
       if (r.it.company_id) return true
       const h = classifyHeadline(r.it.title)
       if (h) {

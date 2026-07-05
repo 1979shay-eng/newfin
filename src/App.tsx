@@ -33,7 +33,8 @@ export default function App() {
   }
 
   // שער מלא: מי שלא מחובר תמיד רואה את דף הנחיתה. כדי להגיע לפיד חובה להתחבר.
-  if (!session) {
+  // בפיתוח מקומי (vite dev) השער פתוח — מאפשר בדיקות UI בלי OAuth. לא משפיע על פרודקשן.
+  if (!session && !import.meta.env.DEV) {
     return <Landing />
   }
 

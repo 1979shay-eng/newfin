@@ -245,14 +245,11 @@ export default function Feed() {
         )}
       </div>
 
-      {/* רשימה */}
-      <div
-        className="mt-4 overflow-hidden rounded-[18px] border"
-        style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
-      >
+      {/* רשימה — כל דיווח בכרטיס נפרד */}
+      <div className="mt-4">
         <div
-          className="flex items-center justify-between px-6 py-3.5 text-[12.5px] font-semibold"
-          style={{ color: 'var(--muted2)', borderBottom: '1px solid var(--line)' }}
+          className="flex items-center justify-between px-2 pb-2.5 text-[12.5px] font-semibold"
+          style={{ color: 'var(--muted2)' }}
         >
           <span>
             {loading
@@ -267,23 +264,31 @@ export default function Feed() {
         </div>
 
         {loading ? (
-          <div className="divide-y" style={{ borderColor: 'var(--line)' }}>
+          <div className="space-y-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="px-6 py-[22px]">
+              <div
+                key={i}
+                className="rounded-[18px] border px-6 py-5"
+                style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }}
+              >
                 <div className="h-5 w-40 animate-pulse rounded" style={{ background: 'var(--hover)' }} />
                 <div className="mt-3 h-6 w-full animate-pulse rounded" style={{ background: 'var(--hover)' }} />
               </div>
             ))}
           </div>
         ) : tab === 'watched' && watch.length === 0 ? (
-          <Empty
-            title="עדיין לא סימנת חברות למעקב"
-            sub="לחץ על הכוכב ☆ ליד שם חברה בפיד הכללי כדי לעקוב אחריה."
-          />
+          <ListCard>
+            <Empty
+              title="עדיין לא סימנת חברות למעקב"
+              sub="לחץ על הכוכב ☆ ליד שם חברה בפיד הכללי כדי לעקוב אחריה."
+            />
+          </ListCard>
         ) : filtered.length === 0 ? (
-          <Empty title="אין דיווחים תואמים" sub="נסה לשנות את הסינון או לנקות את החיפוש." />
+          <ListCard>
+            <Empty title="אין דיווחים תואמים" sub="נסה לשנות את הסינון או לנקות את החיפוש." />
+          </ListCard>
         ) : (
-          <div className="divide-y divide-[color:var(--line)]">
+          <div className="space-y-4">
             {filtered.map((item, i) => (
               <ItemCard
                 key={item.id}
@@ -304,6 +309,18 @@ export default function Feed() {
 // ── עזרי תצוגה ──────────────────────────────────────────────────
 function Dot() {
   return <span style={{ color: 'var(--muted2)' }}>·</span>
+}
+
+// מעטפת כרטיס למצבי ריק/הודעה — אותה שפה ויזואלית כמו כרטיסי הדיווחים
+function ListCard({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="rounded-[18px] border"
+      style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
+    >
+      {children}
+    </div>
+  )
 }
 
 function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {

@@ -3,7 +3,7 @@
 // דרך שער-AI (gateThematic) שמנסח כותרת + שורה תחתונה בעברית, מסנן רעש, ומדרג.
 // שיוך החברה דטרמיניסטי לפי הטיקר (לא ע"י ה-LLM) — מונע הזיות.
 import { db, getOrCreateSource, getEnrichedMap } from './db.mjs'
-import { parseFeed, publishedAtFrom } from './rss.mjs'
+import { parseFeed, publishedAtFrom, isClickbait, bodyReveals } from './rss.mjs'
 import { gateThematic } from './signal.mjs'
 
 const UA =
@@ -74,6 +74,9 @@ export async function collectYahoo({ signalEnabled } = {}) {
     }
     for (const it of raw) {
       if (!it.title || !it.link) continue
+      // קליקבייט ("Is X a Good Stock To Buy Now?") בלי תיאור שחושף עובדות — לא
+      // שווה קריאת AI: השער נוטה לתרגם את סגנון הפיתיון במקום לעבד אותו.
+      if (isClickbait(it.title) && !bodyReveals(it.description)) continue
       candidates.push({ t, company_id, it, id: `yahoo:${t.ticker}:${it.guid}` })
     }
   }

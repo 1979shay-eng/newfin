@@ -236,6 +236,24 @@ export function matchCompany(title, companies) {
   return { company_id: null, company_name: null }
 }
 
+// ── סינון קליקבייט ──────────────────────────────────────────────────
+// כותרת שמסתירה את העיקר (חידה, שאלה מתגרה, "לא תאמינו") פסולה — אלא אם
+// התקציר מהמקור חושף את העובדות עצמן. מדיניות המוצר: עובדות, לא פיתיונות.
+const TEASE =
+  /לא תאמינו|לא יאומן|מה שקרה|זה מה ש|זו הסיבה|זאת הסיבה|נחשו|ניחשתם|לא ידעתם|שלא ידעתם|תופתעו|החידה|כך תגלו|גלו (איך|מי|מה|למה)|מה עומד מאחורי|הבשורה ש|בשורה משמחת|מוצר החובה|כל הפרטים|לחצו כאן|צפו:|התשובה בפנים|לא תנחשו|ולא ידעתם|זו ההצעה|ההטבה החדשה|מה זה אומר עליכם|המ(?:וצר|כשיר)[^,.:]{0,25}המבוקש/
+
+// כותרת קליקבייט: מסתיימת בסימן שאלה או מכילה ניסוח-פיתיון.
+export function isClickbait(title) {
+  const t = (title || '').trim()
+  return /\?\s*$/.test(t) || TEASE.test(t)
+}
+
+// התקציר "חושף" רק אם הוא ארוך מספיק לשאת עובדות וגם לא ממשיך את ההסתרה.
+export function bodyReveals(body) {
+  const b = (body || '').trim()
+  return b.length >= 80 && !TEASE.test(b)
+}
+
 // מיפוי שם מקור → uuid ב-sources. יוצר את המקור אם אינו קיים (osint/media/מדווח),
 // כך שמקור RSS חדש נכנס לבד בלי INSERT ידני.
 async function getSourceId(name) {
@@ -266,7 +284,11 @@ async function fetchFeed(feed, companies) {
         title: it.title.slice(0, 500),
         // תקציר הפיד: fallback תצוגתי כשאין העשרת AI + קלט נוסף ל-AI (חושף את
         // החברה כשהכותרת קליקבייט). עובדות מהמקור עם קישור — שימוש RSS סטנדרטי.
-        body: (it.description || '').slice(0, 1000),
+        // פידים של WordPress (ערוץ 10) מדביקים זנב "The post … appeared first on …" — מסולק.
+        body: (it.description || '')
+          .replace(/The post[\s\S]*appeared first on[\s\S]*$/i, '')
+          .trim()
+          .slice(0, 1000),
         original_url: it.link,
         published_at: publishedAtFrom(it.pubDate, feed.tz),
         source_type: 'osint',

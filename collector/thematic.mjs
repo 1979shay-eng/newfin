@@ -2,7 +2,7 @@
 // השלכה ישראלית סחירה ברורה נשמרות, מנוסחות עובדתית בעברית. זיהוי החברה נעשה
 // דטרמיניסטית (matchCompany על טבלת companies) ולא ע"י ה-LLM — כדי למנוע הזיות.
 import { getOrCreateSource, getEnrichedMap } from './db.mjs'
-import { parseFeed, loadCompanies, matchCompany, publishedAtFrom } from './rss.mjs'
+import { parseFeed, loadCompanies, matchCompany, publishedAtFrom, isClickbait, bodyReveals } from './rss.mjs'
 import { gateThematic } from './signal.mjs'
 
 const UA =
@@ -104,7 +104,8 @@ export async function collectThematic({ signalEnabled } = {}) {
     }
     groups.push(
       raw
-        .filter((it) => it.title)
+        // קליקבייט בלי תיאור שחושף עובדות — לא שווה קריאת-AI בשער
+        .filter((it) => it.title && !(isClickbait(it.title) && !bodyReveals(it.description)))
         .map((it) => ({ feed, sourceId, it, id: `${feed.key}:${it.guid}` })),
     )
   }

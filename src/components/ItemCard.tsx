@@ -23,7 +23,7 @@ function delayStyle(index = 0) {
   return { animationDelay: `${Math.min(index * 40, 360)}ms` }
 }
 
-// שורת דיווח עריכותית (handoff). מנוהלת ע"י טוקני CSS — עובדת זהה בכהה ובהיר.
+// כרטיס דיווח עצמאי (handoff). מנוהל ע"י טוקני CSS — עובד זהה בכהה ובהיר.
 export default function ItemCard({
   item,
   compact = false,
@@ -44,8 +44,13 @@ export default function ItemCard({
 
   return (
     <article
-      style={delayStyle(index)}
-      className="animate-fade-up px-6 py-[22px] transition-colors duration-150 hover:bg-[var(--hover)]"
+      style={{
+        ...delayStyle(index),
+        background: 'var(--surface)',
+        borderColor: 'var(--line2)',
+        boxShadow: 'var(--shadow)',
+      }}
+      className="animate-fade-up rounded-[18px] border px-6 py-5 transition-colors duration-150 hover:bg-[var(--hover)]"
     >
       {/* שורת מטא עליונה */}
       <div className="flex items-start justify-between gap-4">
@@ -117,10 +122,10 @@ export default function ItemCard({
         {item.title}
       </h2>
 
-      {/* סיכום — עד 4 שורות; רוחב שורה מוגבל לקריאות; מוסתר בתצוגה תמציתית */}
+      {/* סיכום — עד 3 שורות, נמתח לכל רוחב הכרטיס; מוסתר בתצוגה תמציתית */}
       {!compact && summary && (
         <p
-          className="mt-2 max-w-[75ch] text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4] overflow-hidden"
+          className="mt-2 text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden"
           style={{ color: 'var(--muted)' }}
         >
           {summary}
