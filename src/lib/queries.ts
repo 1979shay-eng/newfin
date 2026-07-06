@@ -5,29 +5,52 @@ import type { FeedItem } from '../types/db'
 export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
   if (!isSupabaseConfigured) return mockFeed
 
-  // שולפים יותר מהדרוש ומסננים בצד-לקוח, כי כלל התצוגה הוא "חברה או תגית סקטור/מאקרו"
-  // (קשה לבטא OR על משאב מקושר ב-PostgREST).
-  const { data, error } = await supabase
-    .from('items')
-    .select(`
+  const SEL = `
       *,
       sources ( name ),
       companies ( name_he, sector ),
       item_tags ( tags ( name_he, type ) )
-    `)
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(limit * 2)
+    `
+  // שתי שאילתות במקביל:
+  //   1. הטריות ביותר לפי זמן — הפיד הרגיל.
+  //   2. החשובות (7+) מ-3 הימים האחרונים — בזרם המלא של מאיה (מאות דיווחים ביום)
+  //      ידיעה חשובה מהבוקר נדחקת מחלון הזמן, וסינון "חשיבות גבוהה" נשאר ריק בלעדיה.
+  // שולפים יותר מהדרוש ומסננים בצד-לקוח, כי כלל התצוגה הוא "חברה או תגית סקטור/מאקרו"
+  // (קשה לבטא OR על משאב מקושר ב-PostgREST).
+  const since72h = new Date(Date.now() - 72 * 3600e3).toISOString()
+  const [fresh, important] = await Promise.all([
+    supabase
+      .from('items')
+      .select(SEL)
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(limit * 2),
+    supabase
+      .from('items')
+      .select(SEL)
+      .eq('status', 'published')
+      .gte('materiality_score', 7)
+      .gte('published_at', since72h)
+      .order('published_at', { ascending: false })
+      .limit(60),
+  ])
 
-  if (error) {
-    console.error('fetchFeed error:', error.message)
+  if (fresh.error) {
+    console.error('fetchFeed error:', fresh.error.message)
     return mockFeed
   }
 
+  // מיזוג ודה-דופ לפי id, מהחדש לישן
+  const byId = new Map<string, any>()
+  for (const row of [...(fresh.data ?? []), ...(important.data ?? [])]) byId.set(row.id, row)
+  const merged = [...byId.values()].sort(
+    (a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime(),
+  )
+
   // עיקרון: כל ידיעה חייבת הכוונה — חברה, או תגית סקטור/מאקרו. השאר מוסתר.
-  return mapRows(data ?? [])
+  return mapRows(merged)
     .filter((it: any) => it.company_id || it.headline_tag)
-    .slice(0, limit) as FeedItem[]
+    .slice(0, limit + 60) as FeedItem[]
 }
 
 // מיפוי שורת DB (עם joins) לצורת FeedItem — משותף לפיד ולחיפוש הארכיון

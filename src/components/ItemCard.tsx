@@ -39,7 +39,10 @@ export default function ItemCard({
   const sectorName =
     item.company_sector && item.company_sector !== 'אחר' ? item.company_sector : item.headline_tag
   const sColor = sectorColor(sectorName)
-  const summary = item.bottom_line || item.body
+  // מבנה תוכן: body = פירוט עובדתי מהמקור; bottom_line = ניתוח + השלכות (SIGNAL).
+  // כשיש שניהם — מציגים את שניהם; ה"שורה התחתונה" מקבלת בלוק מובלט משלה.
+  const detail = item.body?.trim() || null
+  const bottomLine = item.bottom_line?.trim() || null
   const { time, date } = clockParts(item.published_at)
 
   return (
@@ -122,14 +125,31 @@ export default function ItemCard({
         {item.title}
       </h2>
 
-      {/* סיכום — עד 3 שורות, נמתח לכל רוחב הכרטיס; מוסתר בתצוגה תמציתית */}
-      {!compact && summary && (
+      {/* פירוט מהמקור — עד 3 שורות, נמתח לכל רוחב הכרטיס; מוסתר בתצוגה תמציתית */}
+      {!compact && detail && (
         <p
           className="mt-2 text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden"
           style={{ color: 'var(--muted)' }}
         >
-          {summary}
+          {detail}
         </p>
+      )}
+
+      {/* שורה תחתונה — הניתוח וההשלכות של SIGNAL, בבלוק ציטוט מובלט */}
+      {!compact && bottomLine && (
+        <div
+          className="mt-2.5 rounded-[10px] py-2.5 pl-4 pr-3.5 text-[14.5px] leading-[1.65]"
+          style={{
+            background: 'var(--chip)',
+            color: 'var(--ink2)',
+            borderRight: '3px solid var(--accent)',
+          }}
+        >
+          <span className="font-bold" style={{ color: 'var(--accent)' }}>
+            שורה תחתונה ·{' '}
+          </span>
+          {bottomLine}
+        </div>
       )}
 
       {/* פוטר מטא */}

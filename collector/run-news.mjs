@@ -11,6 +11,7 @@ import { collectYahoo } from './yahoo.mjs'
 import { classifyHeadline } from './headlines.mjs'
 
 const ENRICH_TOP = 16
+const ENRICH_MIN = 5 // סף ציון-כללים להעשרה — מתחתיו לא שורפים מכסת Groq על שגרה
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 console.log('📰 NewFin News Collector — איסוף חדשות קל (ללא מאיה)...')
@@ -57,6 +58,7 @@ try {
   let rssEnriched = 0
   if (signalEnabled) {
     for (let i = 0; i < rssBase.length && rssEnriched < ENRICH_TOP; i++) {
+      if (rssBase[i].score.materiality_score < ENRICH_MIN) break // ממוין יורד
       if (rssBase[i].bottom_line) continue
       const e = await enrich(rssBase[i].it)
       if (e) {

@@ -8,6 +8,7 @@ import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap } from 
 import { classifyCompanySectors } from './sectors.mjs'
 
 const ENRICH_TOP = 16 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה (מאוזן מול מגבלת 15 דק')
+const ENRICH_MIN = 5 // סף ציון-כללים להעשרה — מתחתיו לא שורפים מכסת Groq על שגרה טכנית
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 console.log('🕷️  NewFin Collector — מתחיל איסוף ממאיה...')
@@ -60,6 +61,7 @@ try {
   let enriched = 0
   if (signalEnabled) {
     for (let i = 0; i < base.length && enriched < ENRICH_TOP; i++) {
+      if (base[i].score.materiality_score < ENRICH_MIN) break // ממוין יורד — הבאים נמוכים עוד יותר
       if (base[i].bottom_line) continue // כבר מועשר — דילוג, לא שורפים טוקנים
       const e = await enrich(base[i].norm)
       if (e) {
