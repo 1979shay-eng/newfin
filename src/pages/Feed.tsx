@@ -8,13 +8,13 @@ import type { FeedItem } from '../types/db'
 
 type Sort = 'smart' | 'importance' | 'time'
 type Tab = 'all' | 'watched'
-type Imp = 'all' | 'high' | 'mid' | 'low'
+// 'low' הוסר — חשיבות נמוכה (רעש טכני) לא מוצגת בפיד כלל, אין מה לסנן אליה
+type Imp = 'all' | 'high' | 'mid'
 
 const IMP_OPTS: { key: Imp; label: string }[] = [
   { key: 'all', label: 'הכל' },
   { key: 'high', label: 'גבוהה' },
   { key: 'mid', label: 'בינונית' },
-  { key: 'low', label: 'נמוכה' },
 ]
 const SORT_OPTS: { key: Sort; label: string }[] = [
   { key: 'smart', label: 'מומלץ' },

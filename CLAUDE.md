@@ -165,7 +165,7 @@ FocusFin (dash.focusfin.co.il) כבר עושה קרולר פיננסי ממוק�
 
 **⚠️ באג פתוח — לא נסגר (להמשיך מכאן):** השעה המוצגת בכרטיסי הפיד נראית מוסטת (~שעה קדימה לפי המשתמש). הייתי באמצע בדיקת ה-`published_at` הגולמי ב-DB מול ההצגה ב-Asia/Jerusalem כשהשיחה נקטעה. צריך: (א) להריץ query שמשווה `published_at` (UTC) להצגה ב-`he-IL`/`Asia/Jerusalem`; (ב) לבדוק את ItemCard (`src/components/ItemCard.tsx`) — אולי הזמן מוצג בלי timezone או עם offset כפול.
 
-**ברירות מחדל בפיד (Feed.tsx):** `min=1` (מציג הכל), `sort='time'` (החדש למעלה). `fetchFeed` ב-`queries.ts` שולף לפי `published_at` בלבד (לא materiality) — אחרת חדשות טריות בציון נמוך לא נשלפות מ-80 הפריטים.
+**ברירות מחדל בפיד (Feed.tsx):** `sort='time'` (החדש למעלה). **07.07.2026 — חשיבות נמוכה מוסתרת:** `fetchFeed` שולף רק ציון 4+ (שאילתה כפולה: טריים לפי זמן + כל ה-7+ מ-72 שעות). ציון ≤3 = רעש (מרשם בעלי מניות, החזקות בעלי עניין, מצבת הון, אופציות/RSU — כולם הורדו לציון 2 בכללים וב-DB) — נשמר במאגר לארכיון/חיפוש/דפי חברה אך לא מוצג בפיד. כפתור סינון "נמוכה" הוסר. ההעשרה (SIGNAL) רצה רק על ציון 5+ (`ENRICH_MIN`).
 
 **מפתחות:** `.env.local` (אתר), `collector/.env` (מנוע: service key + GROQ). ב-GitHub Secrets: SUPABASE_URL / SUPABASE_SERVICE_KEY / GROQ_API_KEY. הכל מחוץ ל-git.
 

@@ -15,6 +15,8 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
   //   1. הטריות ביותר לפי זמן — הפיד הרגיל.
   //   2. החשובות (7+) מ-3 הימים האחרונים — בזרם המלא של מאיה (מאות דיווחים ביום)
   //      ידיעה חשובה מהבוקר נדחקת מחלון הזמן, וסינון "חשיבות גבוהה" נשאר ריק בלעדיה.
+  // חשיבות נמוכה (≤3: מרשם בעלי מניות, החזקות בעלי עניין, שגרה טכנית) לא מוצגת
+  // בפיד בכלל — רעש. נשארת במאגר לארכיון, לחיפוש ולדפי חברה.
   // שולפים יותר מהדרוש ומסננים בצד-לקוח, כי כלל התצוגה הוא "חברה או תגית סקטור/מאקרו"
   // (קשה לבטא OR על משאב מקושר ב-PostgREST).
   const since72h = new Date(Date.now() - 72 * 3600e3).toISOString()
@@ -23,6 +25,7 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
       .from('items')
       .select(SEL)
       .eq('status', 'published')
+      .gte('materiality_score', 4)
       .order('published_at', { ascending: false })
       .limit(limit * 2),
     supabase
