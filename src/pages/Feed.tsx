@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import ItemCard from '../components/ItemCard'
-import { fetchFeed, searchFeed } from '../lib/queries'
+import { fetchFeed, searchFeed, fetchHighImportance } from '../lib/queries'
 import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
 import { track } from '../lib/track'
 import { impLevel, sectorColor, tint, rankScore } from '../lib/feedVisual'
@@ -33,6 +33,9 @@ export default function Feed() {
   // תוצאות חיפוש ארכיון (עד 9 חודשים אחורה) — null כשאין חיפוש פעיל
   const [archive, setArchive] = useState<FeedItem[] | null>(null)
   const [searching, setSearching] = useState(false)
+  // ארכיון "חשיבות גבוהה" (8+ עד 9 חודשים אחורה) — נטען רק כשהסינון פעיל
+  const [highArchive, setHighArchive] = useState<FeedItem[] | null>(null)
+  const [loadingHigh, setLoadingHigh] = useState(false)
   const [sort, setSort] = useState<Sort>('time')
   const [compact, setCompact] = useState(false)
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
@@ -88,6 +91,25 @@ export default function Feed() {
     }
   }, [query])
 
+  // סינון "גבוהה" → שליפת כל הידיעות החשובות מהמאגר (לא רק מה שנטען למסך)
+  useEffect(() => {
+    if (importance !== 'high') {
+      setHighArchive(null)
+      setLoadingHigh(false)
+      return
+    }
+    let alive = true
+    setLoadingHigh(true)
+    fetchHighImportance().then((results) => {
+      if (!alive) return
+      setHighArchive(results)
+      setLoadingHigh(false)
+    })
+    return () => {
+      alive = false
+    }
+  }, [importance])
+
   function toggleWatch(id: string) {
     setWatch((prev) => {
       const adding = !prev.includes(id)
@@ -103,21 +125,23 @@ export default function Feed() {
   const itemSector = (it: FeedItem) =>
     it.company_sector && it.company_sector !== 'אחר' ? it.company_sector : it.headline_tag
 
-  // רשימת הסקטורים הקיימים בפיד (לצ'יפים), לפי שכיחות
+  // הבסיס לתצוגה: חיפוש פעיל → תוצאות הארכיון מהמאגר (עד 9 חודשים אחורה).
+  // סינון "גבוהה" → ארכיון הידיעות החשובות (8+ עד 9 חודשים).
+  // אחרת → 80 הידיעות הטריות כרגיל.
+  const base = archive ?? (importance === 'high' && highArchive ? highArchive : items)
+
+  // רשימת הסקטורים הקיימים בתצוגה הנוכחית (לצ'יפים), לפי שכיחות
   const sectors = useMemo(() => {
     const count = new Map<string, number>()
-    for (const it of items) {
+    for (const it of base) {
       const s = itemSector(it)
       if (s) count.set(s, (count.get(s) ?? 0) + 1)
     }
     return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
-  }, [items])
+  }, [base])
 
   const filtered = useMemo(() => {
     const q = query.trim()
-    // חיפוש פעיל → הבסיס הוא תוצאות הארכיון מהמאגר (עד 9 חודשים אחורה).
-    // בלי חיפוש → 80 הידיעות הטריות כרגיל.
-    const base = archive ?? items
     let r = base.filter((it) => {
       if (importance !== 'all' && impLevel(it.materiality_score) !== importance) return false
       if (sector !== 'all' && itemSector(it) !== sector) return false
@@ -137,7 +161,7 @@ export default function Feed() {
       const diff = sort === 'smart' ? rankScore(b) - rankScore(a) : b.materiality_score - a.materiality_score
       return diff !== 0 ? diff : byTime(a, b)
     })
-  }, [items, archive, importance, sector, query, sort, tab, watchSet])
+  }, [base, importance, sector, query, sort, tab, watchSet, archive])
 
   return (
     <div className="mx-auto max-w-[1200px]">
@@ -254,11 +278,13 @@ export default function Feed() {
           <span>
             {loading
               ? '—'
-              : searching
+              : searching || loadingHigh
                 ? 'מחפש בארכיון...'
                 : archive
                   ? `${filtered.length} תוצאות מ-9 החודשים האחרונים`
-                  : `${filtered.length} דיווחים`}
+                  : importance === 'high' && highArchive
+                    ? `${filtered.length} דיווחים בחשיבות גבוהה מ-9 החודשים האחרונים`
+                    : `${filtered.length} דיווחים`}
           </span>
           <span>מדורג לפי {sort === 'time' ? 'זמן עדכון' : sort === 'smart' ? 'עדיפות מקור וחשיבות' : 'חשיבות'}</span>
         </div>

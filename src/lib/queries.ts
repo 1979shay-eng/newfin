@@ -79,6 +79,32 @@ const ITEM_SELECT = `
   item_tags ( tags ( name_he, type ) )
 `
 
+// ── סינון "חשיבות גבוהה": שליפה מהמאגר, לא מהמסך ──
+// הפיד הרגיל טוען רק את הידיעות הטריות; ידיעות 8+ נדירות, אז סינון צד-לקוח
+// עליהן משאיר 2-3 תוצאות. כאן שולפים את כל ה-8+ עד 9 חודשים אחורה.
+export async function fetchHighImportance(limit = 300): Promise<FeedItem[]> {
+  if (!isSupabaseConfigured) return mockFeed.filter((it) => it.materiality_score >= 8)
+
+  const since = new Date()
+  since.setMonth(since.getMonth() - 9)
+
+  const { data, error } = await supabase
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq('status', 'published')
+    .gte('materiality_score', 8)
+    .gte('published_at', since.toISOString())
+    .order('published_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('fetchHighImportance error:', error.message)
+    return []
+  }
+
+  return mapRows(data ?? []).filter((it: any) => it.company_id || it.headline_tag) as FeedItem[]
+}
+
 // ── חיפוש ארכיון: עד 9 חודשים אחורה, מול המאגר (לא רק מה שנטען למסך) ──
 // מחפש בכותרת + בהסבר, ובנפרד לפי שם חברה (join של PostgREST לא תומך
 // ב-OR על טבלה מקושרת). התוצאות ממוזגות, מדו-דופלקות וממוינות לפי זמן.
