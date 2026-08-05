@@ -26,7 +26,9 @@ const t0 = Date.now()
 try {
   const rssRaw = await fetchAllRss()
   const rssBase = rssRaw
-    .map((it) => ({ it, score: scoreReport(it), bottom_line: null, headlineTag: null }))
+    // source:'news' — כותרת עיתונאית חופשית. ברירת המחדל שלה נשארת 4 (בפיד),
+    // בניגוד לדיווח מאיה שברירת המחדל שלו 3 (טופס שגרתי שטרם מופה → ארכיון).
+    .map((it) => ({ it, score: scoreReport(it, { source: 'news' }), bottom_line: null, headlineTag: null }))
     .filter((r) => {
       // קליקבייט: כותרת-חידה שהתקציר לא חושף את העובדות מאחוריה — נזרקת,
       // גם אם זוהתה חברה. מדיניות: מציגים עובדות, לא פיתיונות.
