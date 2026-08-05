@@ -96,6 +96,60 @@ export function avatarColor(name: string): string {
   return AVATAR[h % AVATAR.length]
 }
 
+// ── קיבוץ לפי יום ─────────────────────────────────────────────────
+// מפריד את הפיד ל"היום / אתמול / יום ג׳, 3.8" — כשגוללים עשרות דיווחים
+// אי אפשר לדעת לאיזה יום הגעת. מפתח היום מחושב בשעון ישראל, לא UTC.
+const IL_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Jerusalem',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+export function dayKey(iso: string): string {
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? '' : IL_DAY.format(d)
+}
+
+export function dayLabel(iso: string): string {
+  const key = dayKey(iso)
+  const now = Date.now()
+  if (key === IL_DAY.format(new Date(now))) return 'היום'
+  if (key === IL_DAY.format(new Date(now - 86400e3))) return 'אתמול'
+  return new Date(iso).toLocaleDateString('he-IL', {
+    timeZone: 'Asia/Jerusalem',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'numeric',
+  })
+}
+
+// ── "חדש מאז הביקור האחרון" ────────────────────────────────────────
+// הקריאה והכתיבה מופרדות בכוונה: כתיבה בתוך אתחול useState נשברת ב-StrictMode,
+// שמריץ את האתחול פעמיים — הקריאה השנייה הייתה מקבלת את החותמת שהרגע נכתבה
+// ולכן שום פריט לא היה "חדש". הקריאה טהורה, החתימה יושבת ב-useEffect.
+const SEEN_KEY = 'nf:lastSeen'
+
+// חותמת הביקור הקודם (ms), או null בביקור ראשון / כשהאחסון חסום
+export function readLastSeen(): number | null {
+  try {
+    const prev = localStorage.getItem(SEEN_KEY)
+    if (!prev) return null // ביקור ראשון — אין "חדש", הכל חדש
+    const t = new Date(prev).getTime()
+    return Number.isFinite(t) ? t : null
+  } catch {
+    return null // מצב פרטי / אחסון חסום
+  }
+}
+
+export function markSeenNow(): void {
+  try {
+    localStorage.setItem(SEEN_KEY, new Date().toISOString())
+  } catch {
+    /* אחסון חסום — הסימון פשוט לא יישמר */
+  }
+}
+
 // "HH:MM" ו-"DD.MM" בשעון ישראל (להצגה: זמן · תאריך)
 export function clockParts(iso: string): { time: string; date: string } {
   const d = new Date(iso)

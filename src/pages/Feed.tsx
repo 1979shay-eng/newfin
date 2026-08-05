@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import ItemCard from '../components/ItemCard'
 import { fetchFeed, searchFeed, fetchHighImportance } from '../lib/queries'
 import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
 import { track } from '../lib/track'
-import { impLevel, sectorColor, tint, rankScore } from '../lib/feedVisual'
+import {
+  impLevel,
+  sectorColor,
+  rankScore,
+  dayKey,
+  dayLabel,
+  readLastSeen,
+  markSeenNow,
+} from '../lib/feedVisual'
 import type { FeedItem } from '../types/db'
 
 type Sort = 'smart' | 'importance' | 'time'
@@ -40,6 +48,9 @@ export default function Feed() {
   const [compact, setCompact] = useState(false)
   const [watch, setWatch] = useState<string[]>(() => loadWatch())
   const watchSet = useMemo(() => new Set(watch), [watch])
+  // חותמת הביקור הקודם — נקראת פעם אחת ונשמרת ב-state, כך שהסימון "חדש"
+  // יציב לאורך הסשן ולא נמחק ברענון האוטומטי כל 2 דקות.
+  const [lastSeen] = useState<number | null>(() => readLastSeen())
 
   // טעינה + רענון שקט כל 2 דקות (פיד חי)
   useEffect(() => {
@@ -60,6 +71,9 @@ export default function Feed() {
   }, [])
 
   useEffect(() => onWatchChanged(() => setWatch(loadWatch())), [])
+
+  // חותמים "נצפה" רק אחרי שהחותמת הקודמת כבר נקראה ל-state
+  useEffect(() => markSeenNow(), [])
 
   useEffect(() => {
     const q = query.trim()
@@ -130,14 +144,15 @@ export default function Feed() {
   // אחרת → 80 הידיעות הטריות כרגיל.
   const base = archive ?? (importance === 'high' && highArchive ? highArchive : items)
 
-  // רשימת הסקטורים הקיימים בתצוגה הנוכחית (לצ'יפים), לפי שכיחות
+  // הסקטורים בתצוגה הנוכחית + כמה דיווחים בכל אחד, לפי שכיחות.
+  // המונה עונה על "איפה קורה משהו עכשיו" עוד לפני שלוחצים.
   const sectors = useMemo(() => {
     const count = new Map<string, number>()
     for (const it of base) {
       const s = itemSector(it)
       if (s) count.set(s, (count.get(s) ?? 0) + 1)
     }
-    return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+    return [...count.entries()].sort((a, b) => b[1] - a[1])
   }, [base])
 
   const filtered = useMemo(() => {
@@ -162,6 +177,9 @@ export default function Feed() {
       return diff !== 0 ? diff : byTime(a, b)
     })
   }, [base, importance, sector, query, sort, tab, watchSet, archive])
+
+  const isNew = (it: FeedItem) => lastSeen !== null && +new Date(it.published_at) > lastSeen
+  const newCount = useMemo(() => filtered.filter(isNew).length, [filtered, lastSeen])
 
   return (
     <div className="mx-auto max-w-[1200px]">
@@ -257,11 +275,17 @@ export default function Feed() {
         {/* שורה 3: צ'יפי סקטור */}
         {sectors.length > 0 && (
           <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
-            <SectorChip active={sector === 'all'} accent onClick={() => setSector('all')}>
+            <SectorChip active={sector === 'all'} color="var(--accent)" onClick={() => setSector('all')}>
               כל הסקטורים
             </SectorChip>
-            {sectors.map((s) => (
-              <SectorChip key={s} active={sector === s} color={sectorColor(s)} onClick={() => setSector(s)}>
+            {sectors.map(([s, n]) => (
+              <SectorChip
+                key={s}
+                active={sector === s}
+                color={sectorColor(s)}
+                count={n}
+                onClick={() => setSector(s)}
+              >
                 {s}
               </SectorChip>
             ))}
@@ -275,7 +299,7 @@ export default function Feed() {
           className="flex items-center justify-between px-2 pb-2.5 text-[12.5px] font-semibold"
           style={{ color: 'var(--muted2)' }}
         >
-          <span>
+          <span className="flex items-center gap-2">
             {loading
               ? '—'
               : searching || loadingHigh
@@ -285,6 +309,14 @@ export default function Feed() {
                   : importance === 'high' && highArchive
                     ? `${filtered.length} דיווחים בחשיבות גבוהה מ-9 החודשים האחרונים`
                     : `${filtered.length} דיווחים`}
+            {!loading && !archive && newCount > 0 && (
+              <span
+                className="nf-sc rounded-full px-2 py-0.5 text-[11.5px] font-bold"
+                style={{ ['--sc' as string]: 'var(--accent)' }}
+              >
+                {newCount} חדשים מאז הביקור האחרון
+              </span>
+            )}
           </span>
           <span>מדורג לפי {sort === 'time' ? 'זמן עדכון' : sort === 'smart' ? 'עדיפות מקור וחשיבות' : 'חשיבות'}</span>
         </div>
@@ -315,16 +347,26 @@ export default function Feed() {
           </ListCard>
         ) : (
           <div className="space-y-4">
-            {filtered.map((item, i) => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                index={i}
-                compact={compact}
-                watched={!!item.company_id && watchSet.has(item.company_id)}
-                onToggleWatch={item.company_id ? () => toggleWatch(item.company_id as string) : undefined}
-              />
-            ))}
+            {filtered.map((item, i) => {
+              // מפריד יום — רק במיון כרונולוגי, אחרת התאריכים מעורבבים
+              // והכותרת "היום" הייתה משקרת.
+              const newDay =
+                sort === 'time' &&
+                (i === 0 || dayKey(item.published_at) !== dayKey(filtered[i - 1].published_at))
+              return (
+                <Fragment key={item.id}>
+                  {newDay && <DayDivider label={dayLabel(item.published_at)} />}
+                  <ItemCard
+                    item={item}
+                    index={i}
+                    compact={compact}
+                    isNew={isNew(item)}
+                    watched={!!item.company_id && watchSet.has(item.company_id)}
+                    onToggleWatch={item.company_id ? () => toggleWatch(item.company_id as string) : undefined}
+                  />
+                </Fragment>
+              )
+            })}
           </div>
         )}
       </div>
@@ -335,6 +377,19 @@ export default function Feed() {
 // ── עזרי תצוגה ──────────────────────────────────────────────────
 function Dot() {
   return <span style={{ color: 'var(--muted2)' }}>·</span>
+}
+
+// מפריד יום — עוגן התמצאות בגלילה ארוכה. קו שיער דק ותווית שקטה:
+// מספיק כדי לעצור את העין, לא מספיק כדי להתחרות בכותרות הדיווחים.
+function DayDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 px-1 pt-2 first:pt-0">
+      <span className="text-[12.5px] font-bold" style={{ color: 'var(--muted2)' }}>
+        {label}
+      </span>
+      <span className="h-px flex-1" style={{ background: 'var(--line2)' }} />
+    </div>
+  )
 }
 
 // מעטפת כרטיס למצבי ריק/הודעה — אותה שפה ויזואלית כמו כרטיסי הדיווחים
@@ -404,30 +459,33 @@ function Seg<T extends string>({
   )
 }
 
+// צ'יפ סקטור — נושא את צבע הסקטור שלו תמיד, לא רק כשהוא פעיל. הצבע הוא
+// זהות (אותו גוון כמו התגית בכרטיס), ולכן הבר עצמו הופך למקרא של הפיד.
+// הגזירה לרקע/טקסט/טבעת יושבת ב-CSS (`.nf-sc`) כדי לתקן ניגודיות בשתי התמות.
 function SectorChip({
   active,
-  accent = false,
   color,
+  count,
   onClick,
   children,
 }: {
   active: boolean
-  accent?: boolean
-  color?: string
+  color: string
+  count?: number
   onClick: () => void
   children: ReactNode
 }) {
-  let style: React.CSSProperties
-  if (active && accent) style = { background: 'var(--accent)', color: '#fff' }
-  else if (active && color) style = { background: tint(color), color }
-  else style = { background: 'var(--chip)', color: 'var(--chip-ink)', border: '1px solid var(--line2)' }
   return (
     <button
       onClick={onClick}
-      className="shrink-0 whitespace-nowrap rounded-[20px] px-3.5 py-1.5 text-[12.5px] font-bold transition-colors"
-      style={style}
+      aria-pressed={active}
+      className="nf-sc nf-chip flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[20px] px-3.5 py-1.5 text-[12.5px]"
+      style={{ ['--sc' as string]: color, fontWeight: active ? 800 : 600 }}
     >
       {children}
+      {count !== undefined && (
+        <span className="tabular-nums text-[11px] opacity-65">{count}</span>
+      )}
     </button>
   )
 }

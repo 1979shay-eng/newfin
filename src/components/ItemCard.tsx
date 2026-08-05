@@ -6,7 +6,6 @@ import {
   impDots,
   sentiment,
   sectorColor,
-  tint,
   avatarColor,
   clockParts,
 } from '../lib/feedVisual'
@@ -17,6 +16,7 @@ type Props = {
   watched?: boolean
   onToggleWatch?: () => void
   index?: number
+  isNew?: boolean
 }
 
 function delayStyle(index = 0) {
@@ -30,6 +30,7 @@ export default function ItemCard({
   watched = false,
   onToggleWatch,
   index = 0,
+  isNew = false,
 }: Props) {
   const canWatch = Boolean(item.company_id && onToggleWatch)
   const lvl = impLevel(item.materiality_score)
@@ -74,18 +75,30 @@ export default function ItemCard({
           )}
           {sectorName && (
             <span
-              className="shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold"
-              style={{ color: sColor, background: tint(sColor) }}
+              className="nf-sc shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold"
+              style={{ ['--sc' as string]: sColor }}
             >
               {sectorName}
             </span>
           )}
-          <span
-            className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold"
-            style={{ color: sent.color, background: sent.bg }}
-          >
-            {sent.symbol} {sent.label}
-          </span>
+          {/* כיוון מוצג רק כשיש בו מידע. "ניטרלי" הופיע על רוב הכרטיסים
+              ולכן שחק את המשמעות של ▲/▼ — היעדר התג הוא עצמו הניטרלי. */}
+          {item.direction !== 'neutral' && (
+            <span
+              className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+              style={{ color: sent.color, background: sent.bg }}
+            >
+              {sent.symbol} {sent.label}
+            </span>
+          )}
+          {isNew && (
+            <span
+              className="nf-sc shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-bold"
+              style={{ ['--sc' as string]: 'var(--accent)' }}
+            >
+              חדש
+            </span>
+          )}
         </div>
 
         {/* שמאל: חשיבות (5 נקודות + תווית) + כוכב מעקב */}

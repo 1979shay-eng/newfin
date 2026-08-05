@@ -81,6 +81,42 @@
 }
 
 @layer utilities {
+  /* ── זהות סקטור בצבע — צ'יפי סינון ותגיות כרטיס ────────────────────
+     כל אלמנט מקבל `--sc` (גוון הסקטור) ב-style, וה-CSS גוזר ממנו רקע וטקסט.
+     למה color-mix ולא הצבע הגולמי: גוונים בהירים (ענבר #f59e0b, טורקיז
+     #14b8a6) על רקע לבן נותנים ניגודיות ~2:1 — נכשל ב-WCAG AA. הערבוב
+     מכהה אותם בבהיר ומבהיר אותם בכהה, כך שאותו גוון קריא בשתי התמות. */
+  .nf-sc {
+    --sc-bg: color-mix(in oklab, var(--sc) 11%, transparent);
+    --sc-ink: color-mix(in oklab, var(--sc) 62%, #0a1220);
+    --sc-ring: color-mix(in oklab, var(--sc) 42%, transparent);
+    background: var(--sc-bg);
+    color: var(--sc-ink);
+  }
+  :root[data-theme='dark'] .nf-sc {
+    --sc-bg: color-mix(in oklab, var(--sc) 16%, transparent);
+    --sc-ink: color-mix(in oklab, var(--sc) 70%, #ffffff);
+    --sc-ring: color-mix(in oklab, var(--sc) 52%, transparent);
+  }
+
+  /* צ'יפ סינון: כבוי = הגוון ברמז; דלוק = מילוי חזק + טבעת פנימית.
+     ההבחנה נשענת על שלושה ערוצים (מילוי, טבעת, משקל) ולא על צבע בלבד. */
+  .nf-chip {
+    transition:
+      background-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .nf-chip:hover {
+    background: color-mix(in oklab, var(--sc) 18%, transparent);
+  }
+  .nf-chip[aria-pressed='true'] {
+    background: color-mix(in oklab, var(--sc) 22%, transparent);
+    box-shadow: inset 0 0 0 1.5px var(--sc-ring);
+  }
+  :root[data-theme='dark'] .nf-chip[aria-pressed='true'] {
+    background: color-mix(in oklab, var(--sc) 30%, transparent);
+  }
+
   /* ── בר חיפוש: מצב פוקוס עם טבעת accent — משוב ברור בלי לשנות פרופורציות ── */
   .nf-search {
     transition:
