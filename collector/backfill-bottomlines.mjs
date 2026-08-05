@@ -49,21 +49,36 @@ if (!APPLY) {
   process.exit(0)
 }
 
+// מגבלת Groq היא לדקה (TPM), לא ליום — היא מתמלאת מחדש כל דקה. לכן כישלון
+// אינו סיבה לעצור אלא להמתין: האספן החי רץ במקביל ומרוקן את החלון בפרצים,
+// והסקריפט פשוט צריך להיכנס בין הפרצים. השהיה עולה 20 → 40 → 60 שניות.
+async function enrichWithBackoff(item) {
+  const waits = [0, 20000, 40000, 60000]
+  for (let attempt = 0; attempt < waits.length; attempt++) {
+    if (waits[attempt]) {
+      console.log(`     ⏳ ממתין ${waits[attempt] / 1000}ש' (חלון המכסה מתמלא כל דקה)...`)
+      await sleep(waits[attempt])
+    }
+    const e = await enrich(item)
+    if (e?.bottom_line) return e
+  }
+  return null
+}
+
 let done = 0
 let misses = 0
 for (const r of rows) {
-  const e = await enrich({
+  const e = await enrichWithBackoff({
     title: r.title,
     body: r.body,
     company_name: r.companies?.name_he ?? null,
   })
   if (!e?.bottom_line) {
-    // כישלון רצוף לרוב = מכסת Groq אזלה. עוצרים במקום לשרוף ניסיונות.
+    // גם אחרי 2 דקות של המתנה אין מענה — כנראה תקלה אמיתית ולא עומס.
     if (++misses >= 3) {
-      console.warn('\n⚠️  3 כישלונות רצופים (כנראה מכסה אזלה) — עוצר. הרץ שוב מאוחר יותר.')
+      console.warn('\n⚠️  3 פריטים נכשלו גם אחרי המתנות — עוצר.')
       break
     }
-    await sleep(2500)
     continue
   }
   misses = 0

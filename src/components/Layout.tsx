@@ -4,10 +4,12 @@ import { useAuth } from '../lib/useAuth'
 import { useTheme } from '../lib/theme'
 import AuthModal from './AuthModal'
 
-const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean }[] = [
+// desktopOnly — קישור בתדירות נמוכה שנושר מהבר במסך צר כדי לפנות מקום
+// ליעדים האמיתיים (פיד, חברות). "אודות" מופיע בפוטר בכל הרזולוציות.
+const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean; desktopOnly?: boolean }[] = [
   { to: '/', label: 'פיד', end: true },
   { to: '/companies', label: 'חברות' },
-  { to: '/about', label: 'אודות' },
+  { to: '/about', label: 'אודות', desktopOnly: true },
   { to: '/admin', label: 'ניהול', adminOnly: true },
 ]
 
@@ -60,7 +62,11 @@ export default function Layout() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
             <Logo />
-            <span className="text-[19px] font-extrabold tracking-tight" style={{ color: 'var(--ink)' }}>
+            {/* מילת הלוגו נושרת במסך צר — האייקון לבדו מקשר לבית */}
+            <span
+              className="hidden text-[19px] font-extrabold tracking-tight sm:inline"
+              style={{ color: 'var(--ink)' }}
+            >
               NewFin
             </span>
           </Link>
@@ -70,7 +76,11 @@ export default function Layout() {
                 key={n.to}
                 to={n.to}
                 end={n.end}
-                className="rounded-[9px] px-3.5 py-[7px] text-sm font-bold transition-colors"
+                // py גבוה יותר במסך צר בלבד — מביא את שטח הנגיעה ל-44px
+                // מבלי לגזול רוחב, שאין ממנו עודף בבר.
+                className={`inline-flex items-center rounded-[9px] px-3.5 py-[13px] text-sm font-bold transition-colors sm:py-[7px]${
+                  n.desktopOnly ? ' hidden sm:inline-flex' : ''
+                }`}
                 style={({ isActive }) =>
                   isActive
                     ? { color: 'var(--accent)', background: 'var(--chip)' }
@@ -87,10 +97,13 @@ export default function Layout() {
             <button
               onClick={toggle}
               title="החלף ערכת נושא"
-              className="rounded-[9px] px-3 py-[7px] text-sm font-bold transition-colors"
+              aria-label="החלף ערכת נושא"
+              className="inline-flex min-w-[44px] items-center justify-center rounded-[9px] px-3 py-[13px] text-sm font-bold transition-colors sm:min-w-0 sm:py-[7px]"
               style={{ color: 'var(--muted)' }}
             >
-              {theme === 'dark' ? '☀ בהיר' : '🌙 כהה'}
+              {theme === 'dark' ? '☀' : '🌙'}
+              {/* התווית מיותרת לצד האייקון במסך צר — aria-label נושא את המשמעות */}
+              <span className="hidden sm:inline"> {theme === 'dark' ? 'בהיר' : 'כהה'}</span>
             </button>
 
             {user ? (
@@ -117,7 +130,7 @@ export default function Layout() {
             ) : (
               <button
                 onClick={() => setAuthOpen(true)}
-                className="mr-1.5 rounded-full px-4 py-1.5 text-sm font-semibold text-white"
+                className="mr-1.5 inline-flex items-center rounded-full px-4 py-[12px] text-sm font-semibold text-white sm:py-1.5"
                 style={{ background: 'var(--accent)' }}
               >
                 כניסה
@@ -133,8 +146,15 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      <footer className="relative z-10 mt-12 border-t py-6 text-center text-xs" style={{ borderColor: 'var(--line2)', color: 'var(--muted2)' }}>
-        NewFinIL · המקום שלך בשוק ההון
+      <footer
+        className="relative z-10 mt-12 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t py-6 text-center text-xs"
+        style={{ borderColor: 'var(--line2)', color: 'var(--muted2)' }}
+      >
+        <span>NewFinIL · המקום שלך בשוק ההון</span>
+        <span aria-hidden>·</span>
+        <Link to="/about" className="font-semibold hover:underline" style={{ color: 'var(--muted)' }}>
+          אודות
+        </Link>
       </footer>
     </div>
   )
