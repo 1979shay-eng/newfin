@@ -17,6 +17,7 @@ const arg = (name, fallback) => {
 const LIMIT = arg('limit', 40)
 const MIN_SCORE = arg('min', 7)
 const APPLY = process.argv.includes('--apply')
+const QUICK = process.argv.includes('--quick')
 const MONTHS_BACK = 3
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -53,7 +54,9 @@ if (!APPLY) {
 // אינו סיבה לעצור אלא להמתין: האספן החי רץ במקביל ומרוקן את החלון בפרצים,
 // והסקריפט פשוט צריך להיכנס בין הפרצים. השהיה עולה 20 → 40 → 60 שניות.
 async function enrichWithBackoff(item) {
-  const waits = [0, 20000, 40000, 60000]
+  // --quick: בלי המתנות. משמש בלולאת האספן, שם עיכוב של דקות היה דוחה את
+  // סבב האיסוף הבא; ממילא תהיה הזדמנות נוספת בעוד 10 דקות.
+  const waits = QUICK ? [0] : [0, 20000, 40000, 60000]
   for (let attempt = 0; attempt < waits.length; attempt++) {
     if (waits[attempt]) {
       console.log(`     ⏳ ממתין ${waits[attempt] / 1000}ש' (חלון המכסה מתמלא כל דקה)...`)

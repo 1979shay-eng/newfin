@@ -60,6 +60,10 @@ jobs:
             echo "════════ סבב איסוף #$CYCLE ════════"
             node collector/run.mjs || echo "⚠️ סבב מאיה #$CYCLE נכשל — ממשיכים"
             node collector/run-news.mjs || echo "⚠️ סבב חדשות #$CYCLE נכשל — ממשיכים"
+            # השלמת שורות תחתונות לפריטים ישנים. האספן שולף רק ~יום אחורה ולכן
+            # לעולם לא יחזור אליהם לבד. רץ אחרון בכוונה: הידיעות הטריות מקבלות
+            # את מכסת Groq קודם, וההשלמה לוקחת רק את מה שנשאר ועוצרת מיד כשאין.
+            node collector/backfill-bottomlines.mjs --limit 8 --quick --apply || echo "⚠️ השלמת שורות תחתונות #$CYCLE נכשלה — ממשיכים"
             # אם נשאר פחות מ-10 דקות לסוף — לא שווה לישון, מסיימים
             REMAIN=$((END - SECONDS))
             if [ $REMAIN -lt 600 ]; then break; fi
