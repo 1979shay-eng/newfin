@@ -112,6 +112,14 @@ export async function gateThematic(item) {
 // מודל שהוסר מהשירות מחזיר 404 — ואז *כל* ההעשרה נכשלת בשקט (קרה ב-17.08.2026:
 // חודשיים בלי שורה תחתונה אחת). קוד יציאה 3 מסמן ללולאה ב-collect.yml להכשיל את
 // הריצה בסופה, כך ש-GitHub שולח מייל התראה במקום שהתקלה תעבור בשקט.
+// ציון סופי = ציון הכללים, וה-AI רשאי להזיז אותו ב-2 לכל היותר לכל כיוון.
+// הכללים כווננו מול נתוני אמת; ה-AI לבדו גם ניפח טפסים טכניים (8 ל"עושה שוק")
+// וגם קבר אירועים מהותיים (1 להצעת רכש, 3 למזכר מיזוג — qwen, 14.10.2026).
+export function blendScore(ruleScore, aiScore) {
+  if (!Number.isFinite(aiScore)) return ruleScore
+  return Math.max(ruleScore - 2, Math.min(ruleScore + 2, aiScore))
+}
+
 export function flagDeadModel(status) {
   if (status !== 404) return
   console.error(`⛔ המודל ${MODEL} לא קיים יותר בשירות Groq — ההעשרה מושבתת. יש להחליף מודל ב-signal.mjs`)

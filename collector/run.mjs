@@ -3,7 +3,7 @@
 // שרצה בתדירות גבוהה יותר בלי דפדפן. הפיצול מכפיל את קצב רענון הפיד.
 import { openMaya, fetchRecentReports, normalizeReport, fetchUpcomingCorporateActions } from './maya.mjs'
 import { scoreReport } from './materiality.mjs'
-import { enrich, signalEnabled } from './signal.mjs'
+import { enrich, blendScore, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap } from './db.mjs'
 import { classifyCompanySectors } from './sectors.mjs'
 
@@ -68,7 +68,7 @@ try {
       if (base[i].bottom_line) continue // כבר מועשר — דילוג, לא שורפים טוקנים
       const e = await enrich(base[i].norm)
       if (e) {
-        base[i].score.materiality_score = e.materiality_score
+        base[i].score.materiality_score = blendScore(base[i].score.materiality_score, e.materiality_score)
         base[i].score.direction = e.direction
         base[i].bottom_line = e.bottom_line
         enriched++

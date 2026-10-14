@@ -3,7 +3,7 @@
 // של הפיד בלי עלות: אין דפדפן להתקין, הריצה מסתיימת תוך ~דקה.
 // דה-דופ ההעשרה (getEnrichedMap) מונע שריפת מכסת Groq על פריטים שכבר הועשרו.
 import { scoreReport } from './materiality.mjs'
-import { enrich, signalEnabled } from './signal.mjs'
+import { enrich, blendScore, signalEnabled } from './signal.mjs'
 import { upsertItems, getEnrichedMap, linkHeadlineTags } from './db.mjs'
 import { fetchAllRss, isClickbait, bodyReveals } from './rss.mjs'
 import { collectThematic } from './thematic.mjs'
@@ -64,7 +64,7 @@ try {
       if (rssBase[i].bottom_line) continue
       const e = await enrich(rssBase[i].it)
       if (e) {
-        rssBase[i].score.materiality_score = e.materiality_score
+        rssBase[i].score.materiality_score = blendScore(rssBase[i].score.materiality_score, e.materiality_score)
         rssBase[i].score.direction = e.direction
         rssBase[i].bottom_line = e.bottom_line
         rssEnriched++
