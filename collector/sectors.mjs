@@ -5,7 +5,7 @@ import { db } from './db.mjs'
 import { getEnv } from './env.mjs'
 
 const GROQ_KEY = getEnv('GROQ_API_KEY')
-const MODEL = getEnv('GROQ_GATE_MODEL') || 'llama-3.1-8b-instant'
+const MODEL = getEnv('GROQ_GATE_MODEL') || 'qwen/qwen3.8-27b'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // טקסונומיית סקטורים — מיושרת לרשימת הענפים של הבורסה בת"א (אושר ע"י המשתמש)

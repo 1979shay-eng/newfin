@@ -71,11 +71,12 @@ jobs:
         run: |
           END=$((SECONDS + 19800))  # 5.5 שעות
           CYCLE=0
+          MODEL_DEAD=0 # קוד יציאה 3 = מודל ה-AI הוסר מהשירות (ראה flagDeadModel)
           while [ $SECONDS -lt $END ]; do
             CYCLE=$((CYCLE + 1))
             echo "════════ סבב איסוף #$CYCLE ════════"
-            node collector/run.mjs || echo "⚠️ סבב מאיה #$CYCLE נכשל — ממשיכים"
-            node collector/run-news.mjs || echo "⚠️ סבב חדשות #$CYCLE נכשל — ממשיכים"
+            node collector/run.mjs || { [ $? -eq 3 ] && MODEL_DEAD=1; echo "⚠️ סבב מאיה #$CYCLE נכשל — ממשיכים"; }
+            node collector/run-news.mjs || { [ $? -eq 3 ] && MODEL_DEAD=1; echo "⚠️ סבב חדשות #$CYCLE נכשל — ממשיכים"; }
             # השלמת שורות תחתונות לפריטים ישנים. האספן שולף רק ~יום אחורה ולכן
             # לעולם לא יחזור אליהם לבד. רץ אחרון בכוונה: הידיעות הטריות מקבלות
             # את מכסת Groq קודם, וההשלמה לוקחת רק את מה שנשאר ועוצרת מיד כשאין.
@@ -90,3 +91,5 @@ jobs:
             sleep 600
           done
           echo "✅ הריצה המתמשכת הסתיימה אחרי $CYCLE סבבים"
+          # האיסוף עצמו עבד, אבל בלי AI אין שורות תחתונות — מכשילים כדי שתישלח התראה
+          if [ $MODEL_DEAD -eq 1 ]; then echo "⛔ מודל ה-AI לא קיים — יש להחליף ב-signal.mjs"; exit 1; fi

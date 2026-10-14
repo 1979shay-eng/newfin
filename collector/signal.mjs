@@ -3,10 +3,10 @@
 import { getEnv } from './env.mjs'
 
 const GROQ_KEY = getEnv('GROQ_API_KEY')
-const MODEL = getEnv('GROQ_MODEL') || 'llama-3.3-70b-versatile'
+const MODEL = getEnv('GROQ_MODEL') || 'qwen/qwen3.8-27b'
 // השער הנושאי = סיווג זול. מנותב למודל קטן עם מכסה יומית נפרדת וגדולה,
 // כדי לא לשרוף את תקציב המודל הגדול (100K טוקנים/יום) שמשמש להעשרה.
-const GATE_MODEL = getEnv('GROQ_GATE_MODEL') || 'llama-3.1-8b-instant'
+const GATE_MODEL = getEnv('GROQ_GATE_MODEL') || 'qwen/qwen3.8-27b'
 
 export const signalEnabled = Boolean(GROQ_KEY)
 
@@ -83,6 +83,7 @@ export async function gateThematic(item) {
         console.warn('Groq rate limit — מדלג (גם אחרי retry)')
         return { rateLimited: true }
       }
+      flagDeadModel(res.status)
       console.warn('Groq error', res.status, (await res.text()).slice(0, 200))
       return null
     }
@@ -108,6 +109,15 @@ export async function gateThematic(item) {
   }
 }
 
+// מודל שהוסר מהשירות מחזיר 404 — ואז *כל* ההעשרה נכשלת בשקט (קרה ב-17.08.2026:
+// חודשיים בלי שורה תחתונה אחת). קוד יציאה 3 מסמן ללולאה ב-collect.yml להכשיל את
+// הריצה בסופה, כך ש-GitHub שולח מייל התראה במקום שהתקלה תעבור בשקט.
+export function flagDeadModel(status) {
+  if (status !== 404) return
+  console.error(`⛔ המודל ${MODEL} לא קיים יותר בשירות Groq — ההעשרה מושבתת. יש להחליף מודל ב-signal.mjs`)
+  process.exitCode = 3
+}
+
 export async function enrich(item) {
   if (!GROQ_KEY) return null
   const desc = (item.body || item.description || '').slice(0, 500)
@@ -128,7 +138,10 @@ export async function enrich(item) {
     })
     if (!res.ok) {
       if (res.status === 429) console.warn('Groq rate limit — מדלג')
-      else console.warn('Groq error', res.status)
+      else {
+        flagDeadModel(res.status)
+        console.warn('Groq error', res.status)
+      }
       return null
     }
     const data = await res.json()
