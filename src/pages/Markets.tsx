@@ -15,6 +15,7 @@ interface Day {
 }
 interface IndexRow {
   name: string
+  source?: string // שם מלא במקור — לאימות
   date: string
   last: number
   d1: number | null
@@ -29,6 +30,7 @@ interface Stock {
 }
 interface SectorRow {
   sector: string
+  source?: string
   weight?: number
   d1: number | null
   d7: number | null
@@ -38,7 +40,7 @@ interface Summary {
   updated_at: string
   il: {
     indices: IndexRow[]
-    sectorIndices: { name: string; last: number; d1: number | null; d7: number | null }[]
+    sectorIndices: { name: string; source?: string; last: number; d1: number | null; d7: number | null }[]
     breakdown: Record<string, SectorRow[]>
     notes: { d1: string | null; d7: string | null }
   }
@@ -188,7 +190,7 @@ export default function Markets() {
 
               <Section title="מדדי הענף של הבורסה" hint="מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב.">
                 <SectorBars
-                  rows={data.il.sectorIndices.map((s) => ({ sector: s.name, d1: s.d1, d7: s.d7 }))}
+                  rows={data.il.sectorIndices.map((s) => ({ sector: s.name, source: s.source, d1: s.d1, d7: s.d7 }))}
                   period={period}
                 />
               </Section>
@@ -225,6 +227,11 @@ function IndexCard({ ix, period }: { ix: IndexRow; period: Period }) {
           {fmtNum(ix.last)}
         </span>
       </div>
+      {ix.source && (
+        <div className="mt-0.5 text-[12px]" dir="auto" style={{ color: 'var(--muted2)' }}>
+          {ix.source}
+        </div>
+      )}
       <div className="mt-2 flex items-end justify-between gap-3">
         <span className="text-[28px] font-extrabold leading-none tracking-[-0.02em] tabular-nums" style={{ color: tone(v) }} dir="ltr">
           <span className="ml-1 text-[15px]" aria-hidden>
@@ -301,6 +308,11 @@ function SectorBars({ rows, period, showWeight }: { rows: SectorRow[]; period: P
                 <span className="block truncate text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
                   {r.sector}
                 </span>
+                {r.source && (
+                  <span className="block truncate text-[12px]" dir="auto" title={r.source} style={{ color: 'var(--muted2)' }}>
+                    {r.source}
+                  </span>
+                )}
                 {showWeight && r.weight != null && (
                   <span className="text-[12.5px]" style={{ color: 'var(--muted2)' }}>
                     {r.weight}% מהמדד{expandable ? ` · ${r.stocks!.length === 1 ? 'מניה אחת' : `${r.stocks!.length} מניות`}` : ''}

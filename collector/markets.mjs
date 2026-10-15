@@ -30,23 +30,23 @@ const IL_INDICES = [
 const IL_BREAKDOWN = ['142', '137']
 
 const US_INDICES = [
-  { symbol: '^GSPC', name: 'S&P 500' },
-  { symbol: '^IXIC', name: 'נאסד"ק' },
-  { symbol: '^DJI', name: 'דאו ג\'ונס' },
+  { symbol: '^GSPC', name: 'S&P 500', full: 'S&P 500 Index' },
+  { symbol: '^IXIC', name: 'נאסד"ק', full: 'NASDAQ Composite Index' },
+  { symbol: '^DJI', name: 'דאו ג\'ונס', full: 'Dow Jones Industrial Average' },
 ]
 // 11 הסקטורים של S&P 500 — קרן הסל הרשמית של כל סקטור משקפת את תשואתו
 const US_SECTORS = [
-  { symbol: 'XLK', name: 'טכנולוגיה' },
-  { symbol: 'XLF', name: 'פיננסים' },
-  { symbol: 'XLV', name: 'בריאות' },
-  { symbol: 'XLY', name: 'צריכה מחזורית' },
-  { symbol: 'XLC', name: 'תקשורת' },
-  { symbol: 'XLI', name: 'תעשייה' },
-  { symbol: 'XLP', name: 'צריכה בסיסית' },
-  { symbol: 'XLE', name: 'אנרגיה' },
-  { symbol: 'XLU', name: 'תשתיות' },
-  { symbol: 'XLRE', name: 'נדל"ן' },
-  { symbol: 'XLB', name: 'חומרים' },
+  { symbol: 'XLK', name: 'טכנולוגיה', full: 'Technology Select Sector SPDR Fund' },
+  { symbol: 'XLF', name: 'פיננסים', full: 'Financial Select Sector SPDR Fund' },
+  { symbol: 'XLV', name: 'בריאות', full: 'Health Care Select Sector SPDR Fund' },
+  { symbol: 'XLY', name: 'צריכה מחזורית', full: 'Consumer Discretionary Select Sector SPDR Fund' },
+  { symbol: 'XLC', name: 'תקשורת', full: 'Communication Services Select Sector SPDR Fund' },
+  { symbol: 'XLI', name: 'תעשייה', full: 'Industrial Select Sector SPDR Fund' },
+  { symbol: 'XLP', name: 'צריכה בסיסית', full: 'Consumer Staples Select Sector SPDR Fund' },
+  { symbol: 'XLE', name: 'אנרגיה', full: 'Energy Select Sector SPDR Fund' },
+  { symbol: 'XLU', name: 'תשתיות', full: 'Utilities Select Sector SPDR Fund' },
+  { symbol: 'XLRE', name: 'נדל"ן', full: 'Real Estate Select Sector SPDR Fund' },
+  { symbol: 'XLB', name: 'חומרים', full: 'Materials Select Sector SPDR Fund' },
 ]
 
 // ענף הבורסה (FullBranch, "ענף-תת ענף-תת תת ענף", למשל "פיננסי-בנקים-בנקים") →
@@ -69,6 +69,10 @@ const SECTOR_MAP = [
 ]
 function sectorOf(fullBranch) {
   if (!fullBranch) return 'לא מסווג'
+  // קודם תת-הענף הספציפי (החלק האחרון), ורק אחריו השם המלא. אחרת "ריאלי-אנרגיה
+  // וחיפושי נפט וגז-אנרגיה" (חברות חשמל) נספר כנפט וגז בגלל שם הענף העליון.
+  const leaf = fullBranch.split('-').at(-1)
+  for (const [re, name] of SECTOR_MAP) if (re.test(leaf)) return name
   for (const [re, name] of SECTOR_MAP) if (re.test(fullBranch)) return name
   return fullBranch.split('-')[1] || fullBranch // ענף חדש שלא מופה — מוצג בשמו הרשמי
 }
@@ -187,7 +191,7 @@ async function collectIsrael() {
     const indices = []
     for (const ix of IL_INDICES) {
       try {
-        indices.push({ id: ix.id, name: ix.name, ...(await taseIndexHistory(api, ix.id)) })
+        indices.push({ id: ix.id, name: ix.name, source: `מדד ${ix.name} · מספר מדד ${ix.id} באתר הבורסה`, ...(await taseIndexHistory(api, ix.id)) })
       } catch (e) {
         errors.push(`מדד ${ix.name}: ${e.message}`)
       }
@@ -201,7 +205,7 @@ async function collectIsrael() {
       for (const ix of cat) {
         try {
           const h = await taseIndexHistory(api, ix.IndexId)
-          sectorIndices.push({ id: ix.IndexId, name: ix.Text, last: h.last, d1: h.d1, d7: h.d7 })
+          sectorIndices.push({ id: ix.IndexId, name: ix.Text, source: `מספר מדד ${ix.IndexId} באתר הבורסה`, last: h.last, d1: h.d1, d7: h.d7 })
         } catch (e) {
           errors.push(`מדד ענף ${ix.Text}: ${e.message}`)
         }
@@ -249,7 +253,8 @@ async function collectIsrael() {
         const ch = changesBySec.get(sec)
         if (!ch.length) continue
         const sector = sectorOf(branchCache[sec])
-        const g = groups.get(sector) ?? { sector, weight: 0, w1: 0, w7: 0, stocks: [] }
+        const g = groups.get(sector) ?? { sector, weight: 0, w1: 0, w7: 0, stocks: [], branches: new Set() }
+        if (branchCache[sec]) g.branches.add(branchCache[sec])
         const d1 = ch[0].change
         const d7 = compound(ch.map((x) => x.change))
         g.weight += c.Weight
@@ -261,6 +266,8 @@ async function collectIsrael() {
       breakdown[name] = [...groups.values()]
         .map((g) => ({
           sector: g.sector,
+          // שם הענף הרשמי בבורסה — כדי שאפשר יהיה לאמת את השיוך באתר הבורסה
+          source: `ענף בבורסה: ${[...g.branches].join(' | ') || 'לא מסווג'}`,
           weight: round(g.weight, 1),
           d1: round(g.w1 / g.weight),
           d7: round(g.w7 / g.weight),
@@ -312,7 +319,7 @@ async function collectUS() {
   const indices = []
   for (const ix of US_INDICES) {
     try {
-      indices.push({ symbol: ix.symbol, name: ix.name, ...(await yahooHistory(ix.symbol)) })
+      indices.push({ symbol: ix.symbol, name: ix.name, source: `${ix.full} (${ix.symbol})`, ...(await yahooHistory(ix.symbol)) })
     } catch (e) {
       errors.push(e.message)
     }
@@ -321,7 +328,7 @@ async function collectUS() {
   for (const s of US_SECTORS) {
     try {
       const h = await yahooHistory(s.symbol)
-      sectors.push({ symbol: s.symbol, sector: s.name, d1: h.d1, d7: h.d7 })
+      sectors.push({ symbol: s.symbol, sector: s.name, source: `${s.full} (${s.symbol})`, d1: h.d1, d7: h.d7 })
     } catch (e) {
       errors.push(e.message)
     }
@@ -343,8 +350,8 @@ function writeNote(lead, sectors, key) {
   if (ranked.length >= 2) {
     const top = ranked[0]
     const bottom = ranked[ranked.length - 1]
-    if (top[key] > 0) text += `. הבולט לטובה: ${top.sector} (${fmt(top[key])})`
-    if (bottom[key] < 0) text += `${top[key] > 0 ? ';' : '.'} הבולט לרעה: ${bottom.sector} (${fmt(bottom[key])})`
+    if (top[key] > 0) text += `. הסקטור שהוביל את העליות: ${top.sector} (${fmt(top[key])})`
+    if (bottom[key] < 0) text += `${top[key] > 0 ? ';' : '.'} הסקטור שהוביל את הירידות: ${bottom.sector} (${fmt(bottom[key])})`
   }
   return text + '.'
 }
