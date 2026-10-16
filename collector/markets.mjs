@@ -12,6 +12,7 @@
 //
 // הרצה: node collector/markets.mjs
 import { chromium } from 'playwright'
+import AdmZip from 'adm-zip'
 import { db } from './db.mjs'
 
 const TASE = 'https://api.tase.co.il/api'
@@ -469,7 +470,167 @@ async function collectUS() {
       errors.push(e.message)
     }
   }
-  return { indices, sectors, bases, errors }
+  // פילוח S&P 500 לפי סקטורים מתוך 500 המניות (כמו ת"א-35/125)
+  let breakdown = null
+  let holdingsAsOf = null
+  if (bases) {
+    try {
+      const r = await collectSpxBreakdown(bases)
+      breakdown = r.breakdown
+      holdingsAsOf = r.asOf
+      errors.push(...r.errors)
+    } catch (e) {
+      errors.push(e.message)
+    }
+  }
+  return { indices, sectors, breakdown, holdingsAsOf, bases, errors }
+}
+
+// ── פילוח S&P 500 לפי סקטורים — אותה שיטה כמו ת"א-35/125 ─────────────
+// הרכב ומשקלים: קובץ האחזקות היומי הרשמי של קרן SPY (State Street).
+// סקטור לכל מניה: קבצי האחזקות של 11 קרנות ה-Select Sector SPDR של אותו מנהל —
+// כל אחת מחזיקה בדיוק את מניות S&P 500 בסקטור שלה (סיווג GICS רשמי).
+// מחירים: Yahoo spark, 20 מניות לבקשה (~25 בקשות לשנה מלאה של 500 מניות).
+// תשואות לפי מחיר (כמו המדד עצמו, שאינו כולל דיבידנדים), שקלול לפי משקל
+// תחילת התקופה. ההרכב/סקטורים נשמרים במטמון יומי (market/spx-holdings.json).
+const SSGA = 'https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-'
+
+// קורא גיליון ראשון של xlsx לשורות של מחרוזות (בלי ספרייה — xlsx הוא zip של XML)
+function readXlsxRows(buf) {
+  const zip = new AdmZip(buf)
+  const xml = (name) => zip.getEntry(name)?.getData().toString('utf8') ?? ''
+  const decode = (t) => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+  const strings = [...xml('xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => decode(m[1].replace(/<[^>]+>/g, '')))
+  return [...xml('xl/worksheets/sheet1.xml').matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)].map((row) =>
+    [...row[1].matchAll(/<c r="[A-Z]+\d+"([^>]*?)(?:\/>|>(?:<v>([^<]*)<\/v>)?)/g)].map(([, attrs, v]) =>
+      v == null ? null : /t="s"/.test(attrs) ? strings[Number(v)] : decode(v),
+    ),
+  )
+}
+
+async function ssgaHoldings(fund) {
+  const r = await fetch(`${SSGA}${fund.toLowerCase()}.xlsx`, { headers: { 'User-Agent': UA } })
+  if (!r.ok) throw new Error(`אחזקות ${fund} -> ${r.status}`)
+  const rows = readXlsxRows(Buffer.from(await r.arrayBuffer()))
+  const head = rows.findIndex((x) => x[0] === 'Name' && x[1] === 'Ticker')
+  if (head < 0) throw new Error(`אחזקות ${fund}: מבנה קובץ לא מוכר`)
+  const asOf = rows.find((x) => /^Holdings:/.test(x[0] ?? ''))?.[1] ?? ''
+  const holdings = rows
+    .slice(head + 1)
+    .filter((x) => x[1] && x[1] !== '-' && Number.isFinite(Number(x[4])) && x[7] === 'USD')
+    .map((x) => ({ name: x[0], ticker: x[1], weight: Number(x[4]) }))
+  return { asOf, holdings }
+}
+
+// הרכב + סקטורים, פעם ביום (הקבצים מתעדכנים פעם ביום ממילא)
+async function spxHoldings() {
+  const today = new Date().toISOString().slice(0, 10)
+  const cached = await loadJson('market/spx-holdings.json')
+  if (cached?.fetched === today && cached.holdings?.length > 400) return cached
+  const spy = await ssgaHoldings('SPY')
+  const sectorOf = {}
+  for (const s of US_SECTORS) {
+    const { holdings } = await ssgaHoldings(s.symbol)
+    for (const h of holdings) sectorOf[h.ticker] = s.symbol
+  }
+  const out = {
+    fetched: today,
+    asOf: spy.asOf,
+    holdings: spy.holdings.map((h) => ({ ...h, sector: sectorOf[h.ticker] ?? null })),
+  }
+  await db.storage.from(BUCKET).upload('market/spx-holdings.json', JSON.stringify(out), { upsert: true, contentType: 'application/json' })
+  return out
+}
+
+// מחירי שנה לקבוצה של עד 20 טיקרים (Yahoo כותב BRK-B במקום BRK.B)
+async function yahooSpark(tickers) {
+  const symbols = tickers.map((t) => t.replace(/\./g, '-'))
+  const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${encodeURIComponent(symbols.join(','))}&range=1y&interval=1d`
+  for (let attempt = 1; ; attempt++) {
+    const r = await fetch(url, { headers: { 'User-Agent': UA } })
+    if (r.ok) {
+      const d = await r.json()
+      const out = {}
+      tickers.forEach((t, i) => {
+        const s = d[symbols[i]]
+        if (!s?.timestamp) return
+        out[t] = {}
+        s.timestamp.forEach((ts, j) => {
+          const c = s.close[j]
+          if (Number.isFinite(c)) out[t][new Date(ts * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })] = c
+        })
+      })
+      return out
+    }
+    if (attempt >= 3) throw new Error(`Yahoo spark -> ${r.status}`)
+    await sleep(2000 * attempt)
+  }
+}
+
+async function collectSpxBreakdown(bases) {
+  const errors = []
+  const { asOf, holdings } = await spxHoldings()
+  const unsectored = holdings.filter((h) => !h.sector)
+  if (unsectored.length) errors.push(`S&P 500: ${unsectored.length} מניות בלי סקטור (${unsectored.slice(0, 5).map((h) => h.ticker).join(', ')})`)
+
+  const prices = {}
+  for (let i = 0; i < holdings.length; i += 20) {
+    try {
+      Object.assign(prices, await yahooSpark(holdings.slice(i, i + 20).map((h) => h.ticker)))
+    } catch (e) {
+      errors.push(e.message)
+    }
+    await sleep(300)
+  }
+
+  const groups = new Map()
+  let missing = 0
+  for (const h of holdings) {
+    const p = prices[h.ticker]
+    if (!h.sector || !p || p[bases.latest] == null) {
+      missing += h.weight
+      continue
+    }
+    // מחיר ביום הבסיס = הסגירה האחרונה עד אותו יום (עד 5 ימים אחורה) — ל-Yahoo
+    // חסרות לפעמים סגירות בודדות, ובלי זה סקטור שלם נעלם בגלל יום אחד חסר
+    const dates = Object.keys(p).sort()
+    const at = (iso) => {
+      for (let i = dates.length - 1; i >= 0; i--) if (dates[i] <= iso) return (Date.parse(iso) - Date.parse(dates[i])) / 864e5 <= 5 ? p[dates[i]] : null
+      return null
+    }
+    const r = Object.fromEntries(RANGES.map((k) => [k, bases[k] && at(bases[k]) != null ? pct(p[bases.latest], at(bases[k])) : null]))
+    const meta = US_SECTORS.find((s) => s.symbol === h.sector)
+    const g = groups.get(h.sector) ?? { sector: meta.name, symbol: h.sector, weight: 0, start: {}, now: {}, gap: {}, stocks: [] }
+    g.weight += h.weight
+    // מניה בלי מחיר ביום הבסיס (נרשמה אחריו / חסר אצל Yahoo) — נשמטת מאותו טווח
+    // בלבד, ונספרת כפער. אם הפער מהותי — הטווח של הסקטור מוצג "—".
+    for (const k of RANGES) {
+      if (r[k] == null) g.gap[k] = (g.gap[k] ?? 0) + h.weight
+      else {
+        g.now[k] = (g.now[k] ?? 0) + h.weight
+        g.start[k] = (g.start[k] ?? 0) + h.weight / (1 + r[k] / 100)
+      }
+    }
+    g.stocks.push({ name: h.ticker, full: h.name, weight: round(h.weight), ...Object.fromEntries(RANGES.map((k) => [k, round(r[k])])) })
+    groups.set(h.sector, g)
+  }
+  // מעל 1% מהמדד בלי מחיר — לא מציגים פילוח חלקי שמתחזה למלא
+  if (missing > 1) throw new Error(`S&P 500: חסרים מחירים ל-${missing.toFixed(1)}% ממשקל המדד`)
+
+  const breakdown = [...groups.values()]
+    .map((g) => ({
+      sector: g.sector,
+      source: `${US_SECTORS.find((s) => s.symbol === g.symbol).full} (${g.symbol})`,
+      weight: round(g.weight, 1),
+      ...Object.fromEntries(
+        // סף לפי משקל במדד כולו: מניות שנפרדו מחברת-אם (HONA, FDXF) לא היו קיימות ביום
+        // הבסיס — ערכן היה בתוך החברה-האם, ולכן השמטה שלהן נכונה כל עוד היא זניחה
+        RANGES.map((k) => [k, !g.now[k] || (g.gap[k] ?? 0) > 0.5 ? null : round((g.now[k] / g.start[k] - 1) * 100)]),
+      ),
+      stocks: g.stocks.sort((a, b) => b.weight - a.weight),
+    }))
+    .sort((a, b) => b.weight - a.weight)
+  return { breakdown, asOf, errors }
 }
 
 // ── שורה כתובה — נגזרת מהמספרים בלבד, בלי AI (אפס סיכון להזיה) ─────
@@ -551,7 +712,7 @@ const { error } = await db.storage.from(BUCKET).upload('market/summary.json', JS
 if (error) throw error
 
 console.log(`✅ ישראל: ${il.indices.length} מדדים, ${il.sectorIndices.length} מדדי ענף, פילוח: ${Object.keys(il.breakdown).join(', ')}`)
-console.log(`✅ ארה"ב: ${us.indices.length} מדדים, ${us.sectors.length} סקטורים`)
+console.log(`✅ ארה"ב: ${us.indices.length} מדדים, ${us.sectors.length} סקטורים, פילוח S&P 500: ${us.breakdown ? `${us.breakdown.reduce((a, g) => a + g.stocks.length, 0)} מניות ב-${us.breakdown.length} סקטורים` : 'לא זמין'}`)
 if (summary.errors.length) console.warn(`⚠️ ${summary.errors.length} שגיאות:`, summary.errors.slice(0, 5))
 console.log('📝', summary.il.notes.d1)
 console.log('📝', summary.us.notes.d1)

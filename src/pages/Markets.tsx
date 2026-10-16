@@ -34,6 +34,7 @@ interface IndexRow {
 }
 interface Stock {
   name: string
+  full?: string // שם החברה המלא (ארה"ב — name הוא הסימול)
   weight: number
   d1: number | null
   d7: number | null
@@ -65,6 +66,8 @@ interface Summary {
     stale_since?: string
     indices: IndexRow[]
     sectors: SectorRow[]
+    breakdown?: SectorRow[] | null
+    holdingsAsOf?: string | null
     notes: { d1: string | null; d7: string | null }
   }
 }
@@ -224,14 +227,27 @@ export default function Markets() {
               </Section>
             </>
           ) : (
-            <Section title="סקטורים ב-S&P 500" hint="כל סקטור נמדד לפי קרן הסל הרשמית שלו (Select Sector SPDR).">
-              <Sectors rows={data.us.sectors} view={view} />
-            </Section>
+            <>
+              {data.us.breakdown && (
+                <Section
+                  title="סקטורים בתוך S&P 500"
+                  hint="כל 500 המניות במדד, מחולקות לפי סקטור. התשואה של כל סקטור משוקללת לפי משקל המניות שלו במדד. לחיצה על סקטור מציגה את המניות."
+                >
+                  <Sectors rows={data.us.breakdown} view={view} weighted />
+                </Section>
+              )}
+              <Section title="קרנות הסקטורים של S&P 500" hint="קרן הסל הרשמית של כל סקטור (Select Sector SPDR).">
+                <Sectors rows={data.us.sectors} view={view} />
+              </Section>
+            </>
           )}
 
           <p className="mt-6 text-[13px]" style={{ color: 'var(--muted)' }}>
-            מקור: {market === 'il' ? 'הבורסה לניירות ערך בתל אביב' : 'Yahoo Finance'}. הנתונים מוצגים לצורכי מידע בלבד
-            ואינם מהווים ייעוץ השקעות.
+            מקור:{' '}
+            {market === 'il'
+              ? 'הבורסה לניירות ערך בתל אביב'
+              : `מחירים — Yahoo Finance; הרכב המדד, משקלים וסקטורים — קבצי האחזקות הרשמיים של קרנות SPDR (State Street)${data.us.holdingsAsOf ? `, ${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')}` : ''}`}
+            . פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד. הנתונים מוצגים לצורכי מידע בלבד ואינם מהווים ייעוץ השקעות.
           </p>
         </>
       )}
@@ -554,8 +570,13 @@ function StockList({ stocks, period, cols }: { stocks: Stock[]; period: Period; 
     <div className="mx-3 rounded-[11px] py-1" style={{ background: 'var(--field)' }}>
       {stocks.map((s) => (
         <div key={s.name} className={`grid ${cols} items-center gap-2 px-2 py-1.5 text-[14px] sm:gap-4 sm:px-3`}>
-          <span className="truncate" style={{ color: 'var(--ink2)' }} title={s.name}>
-            {s.name}
+          <span className="min-w-0 truncate" style={{ color: 'var(--ink2)' }} title={s.full ?? s.name}>
+            <span className="font-semibold">{s.name}</span>
+            {s.full && (
+              <span className="mr-1.5 text-[12px]" dir="ltr" style={{ color: 'var(--muted)' }}>
+                {s.full}
+              </span>
+            )}
           </span>
           <span className="text-left font-semibold tabular-nums" dir="ltr" style={{ color: 'var(--muted)' }}>
             {s.weight}%
