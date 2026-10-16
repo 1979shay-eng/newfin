@@ -34,12 +34,12 @@ export const FEEDS = [
   // ── וואלה — עד ספטמבר 2026 הצהיר GMT אבל שידר שעון ישראל; מאז שולח GMT
   //    אמיתי (אומת 16.10.2026 מול article:published_time). tz='detect' מזהה
   //    לבד בכל ריצה איזה מהשניים הפיד שולח — ראה detectIsraelTz. ──
+  // 16.10.2026: וואלה החליף מבנה פידים בספטמבר — 2686/2689 קפאו ב-22.09 ו-22 הפך
+  //   לחדשות כלליות. הכתובות החדשות מתוך www.walla.co.il/rss (מדור "וואלה כסף").
   { key: 'walla', source_name: 'וואלה', section: 'כסף', tz: 'detect',
-    url: 'https://rss.walla.co.il/feed/2686' },
-  { key: 'walla', source_name: 'וואלה', section: 'עסקים', tz: 'detect',
-    url: 'https://rss.walla.co.il/feed/22' },
-  { key: 'walla', source_name: 'וואלה', section: 'נדל"ן', tz: 'detect',
-    url: 'https://rss.walla.co.il/feed/2689' },
+    url: 'https://rss.walla.co.il/feed/2?type=main' },
+  { key: 'walla', source_name: 'וואלה', section: 'חדשות כסף', tz: 'detect',
+    url: 'https://rss.walla.co.il/feed/557' },
   // ── מעריב כלכלה ─────────────────────────────────────────────────────
   { key: 'maariv', source_name: 'מעריב', section: 'כלכלה',
     url: 'https://www.maariv.co.il/rss/business' },
