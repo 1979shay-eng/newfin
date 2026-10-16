@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 // הנתונים מגיעים מקובץ JSON שהאספן (collector/markets.mjs) מעדכן בכל סבב.
 // אין כאן אף מספר שלא הגיע מהמקור: נתון חסר מוצג כ"—", לא מנוחש.
 
-type Period = 'd1' | 'd7'
+type Period = 'd1' | 'd7' | 'mtd' | 'm1' | 'ytd'
 type Market = 'il' | 'us'
 type View = 'bars' | 'heat'
 type SortKey = Period | 'weight'
@@ -27,6 +27,9 @@ interface IndexRow {
   last: number
   d1: number | null
   d7: number | null
+  mtd: number | null
+  m1: number | null
+  ytd: number | null
   days: Day[]
 }
 interface Stock {
@@ -34,6 +37,9 @@ interface Stock {
   weight: number
   d1: number | null
   d7: number | null
+  mtd: number | null
+  m1: number | null
+  ytd: number | null
 }
 interface SectorRow {
   sector: string
@@ -41,17 +47,22 @@ interface SectorRow {
   weight?: number
   d1: number | null
   d7: number | null
+  mtd: number | null
+  m1: number | null
+  ytd: number | null
   stocks?: Stock[]
 }
 interface Summary {
   updated_at: string
   il: {
+    stale_since?: string
     indices: IndexRow[]
-    sectorIndices: { name: string; source?: string; last: number; d1: number | null; d7: number | null }[]
+    sectorIndices: ({ name: string; source?: string; last: number } & Record<Period, number | null>)[]
     breakdown: Record<string, SectorRow[]>
     notes: { d1: string | null; d7: string | null }
   }
   us: {
+    stale_since?: string
     indices: IndexRow[]
     sectors: SectorRow[]
     notes: { d1: string | null; d7: string | null }
@@ -61,7 +72,14 @@ interface Summary {
 const UP = '#16a34a'
 const DOWN = '#dc2626'
 const REFRESH_MS = 2 * 60 * 1000
-const PERIOD_LABEL: Record<Period, string> = { d1: 'יום אחרון', d7: '7 ימים מצטבר' }
+const PERIODS: Period[] = ['d1', 'd7', 'mtd', 'm1', 'ytd']
+const PERIOD_LABEL: Record<Period, string> = {
+  d1: 'יום אחרון',
+  d7: '7 ימים',
+  mtd: 'מתחילת החודש',
+  m1: 'חודש אחרון',
+  ytd: 'מתחילת השנה',
+}
 
 const summaryUrl = supabase.storage.from('public-data').getPublicUrl('market/summary.json').data.publicUrl
 
@@ -120,7 +138,7 @@ export default function Markets() {
         סיכום מסחר
       </h1>
       <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px]" style={{ color: 'var(--muted)' }}>
-        <span>מדדים וסקטורים בישראל ובארה"ב — יום המסחר האחרון ותשואה מצטברת של 7 ימי המסחר האחרונים</span>
+        <span>מדדים וסקטורים בישראל ובארה"ב — יום המסחר האחרון, 7 ימים, מתחילת החודש, חודש אחרון ומתחילת השנה</span>
         {updated && (
           <>
             <Dot />
@@ -162,6 +180,13 @@ export default function Markets() {
 
       {m && (
         <>
+          {m.stale_since && (
+            <p className="mt-4 rounded-[11px] px-4 py-2.5 text-[14px] font-semibold" style={{ background: 'var(--chip)', color: 'var(--ink2)' }}>
+              העדכון האחרון נכשל — מוצגים הנתונים מ-
+              {new Date(m.stale_since).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+
           {/* שתי השורות התחתונות — המוקד של הדף, תמיד שתיהן */}
           <Card className="mt-4 divide-y" style={{ borderColor: 'var(--line2)' }}>
             <Note label={`יום המסחר האחרון · ${lead ? shortDate(lead.date) : ''}`} text={m.notes.d1} />
@@ -193,7 +218,7 @@ export default function Markets() {
 
               <Section title="מדדי הענף של הבורסה" hint="מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב.">
                 <Sectors
-                  rows={data.il.sectorIndices.map((s) => ({ sector: s.name, source: s.source, d1: s.d1, d7: s.d7 }))}
+                  rows={data.il.sectorIndices.map(({ name, ...s }) => ({ sector: name, ...s }))}
                   view={view}
                 />
               </Section>
@@ -228,7 +253,7 @@ function Note({ label, text }: { label: string; text: string | null }) {
   )
 }
 
-// ── כרטיס מדד: שתי התקופות זו לצד זו + מגמת 7 הימים ──────────────────
+// ── כרטיס מדד: יום ו-7 ימים בגדול + מגמה, והטווחים הארוכים מתחת ─────
 function IndexCard({ ix }: { ix: IndexRow }) {
   return (
     <Card className="px-5 py-4">
@@ -262,6 +287,18 @@ function IndexCard({ ix }: { ix: IndexRow }) {
           ))}
         </div>
         <Sparkline days={ix.days} />
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3" style={{ borderColor: 'var(--line2)' }}>
+        {(['mtd', 'm1', 'ytd'] as Period[]).map((p) => (
+          <div key={p}>
+            <div className="text-[12px] font-bold" style={{ color: 'var(--muted)' }}>
+              {PERIOD_LABEL[p]}
+            </div>
+            <div className="text-[16px] font-extrabold tabular-nums" dir="ltr" style={{ color: tone(ix[p]), textAlign: 'right' }}>
+              {fmtPct(ix[p])}
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   )
@@ -326,8 +363,9 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
         <div className="mb-2 flex flex-wrap items-center gap-1 px-1 text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
           <span className="ml-1">מיון וצבע לפי</span>
           {weighted && <SortHead k="weight" sort={sort} onSort={onSort} label="משקל" />}
-          <SortHead k="d1" sort={sort} onSort={onSort} label="יום אחרון" />
-          <SortHead k="d7" sort={sort} onSort={onSort} label="7 ימים" />
+          {PERIODS.map((p) => (
+            <SortHead key={p} k={p} sort={sort} onSort={onSort} label={PERIOD_LABEL[p]} />
+          ))}
         </div>
         <div className="flex flex-wrap gap-2">
           {sorted.map((r) => (
@@ -339,20 +377,23 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
             <div className="mb-1 px-1 text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
               {opened.sector}
             </div>
-            <StockList stocks={opened.stocks} period={period} />
+            <div className="overflow-x-auto">
+              <StockList stocks={opened.stocks} period={period} cols={STOCK_COLS} />
+            </div>
           </div>
         )}
       </div>
     )
   }
 
-  // עמודות: שורת כותרות + שורה לכל סקטור. בטלפון העמודה הגרפית נושרת —
-  // המספרים הם העיקר, ומפת החום זמינה כתצוגה חלופית.
+  // עמודות: שורת כותרות + שורה לכל סקטור, חמישה טווחים. בטלפון העמודה הגרפית
+  // נושרת והטבלה נגללת לרוחב בתוך הכרטיס (הדף עצמו לא זז).
   const cols = weighted
-    ? 'grid-cols-[1fr_44px_60px_60px] sm:grid-cols-[minmax(180px,1.3fr)_72px_2fr_88px_88px]'
-    : 'grid-cols-[1fr_60px_60px] sm:grid-cols-[minmax(180px,1.3fr)_2fr_88px_88px]'
+    ? 'grid-cols-[132px_52px_repeat(5,68px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_minmax(80px,1fr)_repeat(5,84px)]'
+    : 'grid-cols-[150px_repeat(5,68px)] sm:grid-cols-[minmax(200px,1.5fr)_minmax(80px,1fr)_repeat(5,84px)]'
   return (
-    <div>
+    <div className="overflow-x-auto">
+      <div className={weighted ? 'min-w-[560px] sm:min-w-0' : 'min-w-[520px] sm:min-w-0'}>
       <div
         className={`grid ${cols} items-center gap-2 px-4 py-2.5 text-[13px] font-bold sm:gap-4 sm:px-5`}
         style={{ color: 'var(--muted)', borderBottom: '1px solid var(--line2)' }}
@@ -360,8 +401,9 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
         <span>{weighted ? 'סקטור' : 'מדד'}</span>
         {weighted && <SortHead k="weight" sort={sort} onSort={onSort} label="משקל" end />}
         <span className="hidden sm:block" />
-        <SortHead k="d1" sort={sort} onSort={onSort} label="יום אחרון" end />
-        <SortHead k="d7" sort={sort} onSort={onSort} label="7 ימים" end />
+        {PERIODS.map((p) => (
+          <SortHead key={p} k={p} sort={sort} onSort={onSort} label={PERIOD_LABEL[p]} end />
+        ))}
       </div>
       <ul>
         {sorted.map((r, i) => {
@@ -401,7 +443,7 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
                     style={{ background: tone(v), width: `${pct}%`, ...(v >= 0 ? { left: '50%' } : { right: '50%' }) }}
                   />
                 </span>
-                {(['d1', 'd7'] as Period[]).map((p) => (
+                {PERIODS.map((p) => (
                   <span
                     key={p}
                     className={`text-left tabular-nums ${p === period ? 'text-[16px] font-extrabold' : 'text-[15px] font-semibold'}`}
@@ -413,17 +455,21 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
                 ))}
               </button>
               {isOpen && r.stocks && (
-                <div className="px-5 pb-3">
-                  <StockList stocks={r.stocks} period={period} />
+                <div className="pb-3">
+                  <StockList stocks={r.stocks} period={period} cols={cols} />
                 </div>
               )}
             </li>
           )
         })}
       </ul>
+      </div>
     </div>
   )
 }
+
+// מפת החום: רשימת המניות של אריח פתוח — בלי עמודה גרפית
+const STOCK_COLS = 'grid-cols-[132px_52px_repeat(5,68px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_repeat(5,84px)]'
 
 // אריח במפת החום: צבע מתפצל (ירוק/אדום, אפור בנקודת האפס), עוצמה לפי גודל
 // התשואה ביחס לגדול ביותר בתצוגה. כשיש משקלים — רוחב האריח גדל עם המשקל.
@@ -455,7 +501,7 @@ function HeatTile({
       disabled={!expandable}
       onClick={onClick}
       aria-expanded={expandable ? open : undefined}
-      title={`${r.source ?? r.sector} · יום אחרון ${fmtPct(r.d1)} · 7 ימים ${fmtPct(r.d7)}`}
+      title={[r.source ?? r.sector, ...PERIODS.map((p) => `${PERIOD_LABEL[p]} ${fmtPct(r[p])}`)].join(' · ')}
       className="min-h-[96px] rounded-[11px] px-3 py-2.5 text-right transition-opacity enabled:hover:opacity-90"
       style={{
         flex: weighted ? `${w} 1 ${Math.max(116, w * 9)}px` : '1 1 150px',
@@ -470,8 +516,8 @@ function HeatTile({
       <div className="mt-1 text-[22px] font-extrabold leading-tight tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
         {fmtPct(v)}
       </div>
-      <div className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--ink2)' }}>
-        {period === 'd7' ? 'יום אחרון' : '7 ימים'} <span dir="ltr">{fmtPct(r[period === 'd7' ? 'd1' : 'd7'])}</span>
+      <div className="text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
+        {PERIOD_LABEL[period]}
       </div>
       {weighted && r.weight != null && (
         <div className="mt-0.5 text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
@@ -502,24 +548,24 @@ function SortHead({ k, sort, onSort, label, end }: { k: SortKey; sort: Sort; onS
   )
 }
 
-function StockList({ stocks, period }: { stocks: Stock[]; period: Period }) {
+function StockList({ stocks, period, cols }: { stocks: Stock[]; period: Period; cols: string }) {
+  const withBar = cols.includes('minmax(80px,1fr)')
   return (
-    <div className="rounded-[11px] px-4 py-2" style={{ background: 'var(--field)' }}>
+    <div className="mx-3 rounded-[11px] py-1" style={{ background: 'var(--field)' }}>
       {stocks.map((s) => (
-        <div key={s.name} className="flex items-center justify-between gap-3 py-1.5 text-[15px]">
-          <span style={{ color: 'var(--ink2)' }}>
+        <div key={s.name} className={`grid ${cols} items-center gap-2 px-2 py-1.5 text-[14px] sm:gap-4 sm:px-3`}>
+          <span className="truncate" style={{ color: 'var(--ink2)' }} title={s.name}>
             {s.name}
-            <span className="mr-2 text-[14px] font-semibold" style={{ color: 'var(--muted)' }}>
-              משקל {s.weight}%
+          </span>
+          <span className="text-left font-semibold tabular-nums" dir="ltr" style={{ color: 'var(--muted)' }}>
+            {s.weight}%
+          </span>
+          {withBar && <span className="hidden sm:block" />}
+          {PERIODS.map((p) => (
+            <span key={p} className={`text-left tabular-nums ${p === period ? 'font-extrabold' : 'font-semibold'}`} dir="ltr" style={{ color: tone(s[p]) }}>
+              {fmtPct(s[p])}
             </span>
-          </span>
-          <span className="flex gap-4 tabular-nums" dir="ltr">
-            {(['d1', 'd7'] as Period[]).map((p) => (
-              <span key={p} className={p === period ? 'font-extrabold' : 'font-semibold'} style={{ color: tone(s[p]) }} title={PERIOD_LABEL[p]}>
-                {fmtPct(s[p])}
-              </span>
-            ))}
-          </span>
+          ))}
         </div>
       ))}
     </div>

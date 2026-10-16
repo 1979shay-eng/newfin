@@ -114,7 +114,7 @@ function taseClient(ctx) {
   // קצב מתון + עד 3 ניסיונות: Incapsula מנתק מדי פעם חיבור בודד
   const withRetry = async (path, call) => {
     for (let attempt = 1; ; attempt++) {
-      await sleep(150)
+      await sleep(250)
       try {
         return await parse(await call(), path)
       } catch (e) {
@@ -136,42 +136,136 @@ function taseClient(ctx) {
   }
 }
 
-// היסטוריית מדד → { last, d1, d7, days[] } לפי ימי מסחר בפועל
-async function taseIndexHistory(api, id) {
-  const h = await api.post('/index/historyeod', { pType: 1, TotalRec: 1, pageNum: 1, oId: id, lang: '0' })
-  const rows = (h.Items || []).filter((r) => Number.isFinite(r.CloseRate))
-  if (rows.length < 2) throw new Error(`אין היסטוריה למדד ${id}`)
-  const days = rows.slice(0, DAYS).map((r) => ({
-    date: isoDate(r.TradeDate),
-    close: r.CloseRate,
-    change: round(pct(r.CloseRate, r.BaseRate)),
-  }))
+// ── טווחי זמן ─────────────────────────────────────────────────────
+// כל התשואות נמדדות מ"יום בסיס" (סגירה) ועד יום המסחר האחרון:
+//   d1  — היום שלפני האחרון        d7  — 7 ימי מסחר אחורה
+//   mtd — יום המסחר האחרון של החודש הקודם (מתחילת החודש)
+//   m1  — יום המסחר האחרון שלפני "אותו תאריך בחודש הקודם" (חודש אחרון)
+//   ytd — יום המסחר האחרון של השנה הקודמת (מתחילת השנה)
+const RANGES = ['d1', 'd7', 'mtd', 'm1', 'ytd']
+
+// ימי בסיס מתוך לוח ימי מסחר ממוין (ISO, מהישן לחדש)
+function baseDates(dates) {
+  const latest = dates[dates.length - 1]
+  const lastBefore = (iso) => [...dates].reverse().find((d) => d < iso) ?? null
+  const lastOnOrBefore = (iso) => [...dates].reverse().find((d) => d <= iso) ?? null
+  const [y, m, d] = latest.split('-').map(Number)
+  const monthAgo = new Date(Date.UTC(y, m - 2, Math.min(d, 28))).toISOString().slice(0, 10)
+  const i = dates.length - 1
   return {
-    date: days[0].date,
-    last: rows[0].CloseRate,
-    d1: round(pct(rows[0].CloseRate, rows[0].BaseRate)),
-    // שער הבסיס של היום הוותיק בחלון = הסגירה שלפני תחילת החלון
-    d7: round(pct(rows[0].CloseRate, rows[Math.min(DAYS, rows.length) - 1].BaseRate)),
-    days: days.reverse(),
+    latest,
+    d1: dates[i - 1] ?? null,
+    d7: dates[i - DAYS] ?? null,
+    mtd: lastBefore(`${latest.slice(0, 7)}-01`),
+    m1: lastOnOrBefore(monthAgo),
+    ytd: lastBefore(`${latest.slice(0, 4)}-01-01`),
   }
 }
 
-// היסטוריית מניה → שינויים יומיים (מותאמים לדיבידנד — שדה Change של הבורסה)
-async function taseSecurityChanges(api, securityNumber) {
-  const h = await api.post('/security/historyeod', {
-    pType: 1,
-    TotalRec: 1,
-    pageNum: 1,
-    oId: String(securityNumber).padStart(8, '0'),
-    lang: '0',
-  })
-  return (h.Items || [])
-    .filter((r) => r.IfTraded !== false && Number.isFinite(r.Change))
-    .slice(0, DAYS)
-    .map((r) => ({ date: isoDate(r.TradeDate), change: r.Change }))
+// ── מטמון היסטוריה (market/history.json) ─────────────────────────
+// שליפת שנה של היסטוריה ל-126 מניות = כ-1,000 בקשות. במקום להציף את אתר
+// הבורסה, ההיסטוריה נשמרת ומושלמת בהדרגה (תקציב עמודים לכל ריצה); אחר כך כל
+// ריצה מוסיפה רק את העמוד האחרון. עד שסדרה מכוסה עד יום הבסיס — הטווח שלה
+// מוצג "—", לעולם לא מספר חלקי.
+//   series = { rows: { 'YYYY-MM-DD': value }, from: 'YYYY-MM-DD' }
+//   from — התאריך המוקדם שממנו הסדרה רציפה ושלמה (או '0000' כשאין עוד היסטוריה)
+const PAGE = 30 // שורות לעמוד בהיסטוריית הבורסה
+const BOOTSTRAP_BUDGET = 100 // עמודי השלמה לכל ריצה (מעבר לעמוד הראשון) — 220 גרם לחסימה (403)
+
+function mergeSeries(entry, freshRows) {
+  const dates = Object.keys(freshRows).sort()
+  if (!dates.length) return entry
+  const cached = entry ? Object.keys(entry.rows).sort() : []
+  // פער: המטמון נגמר לפני תחילת העמוד הטרי (האיסוף עמד יותר מחודש) — מתחילים מחדש
+  if (!entry || !cached.length || cached[cached.length - 1] < dates[0]) {
+    return { rows: { ...freshRows }, from: dates[0] }
+  }
+  return { rows: { ...entry.rows, ...freshRows }, from: entry.from < dates[0] ? entry.from : dates[0] }
 }
 
-// מטמון ענפים — הענף של חברה כמעט לא משתנה, אז לא שולפים אותו בכל ריצה
+// מביא עמוד ראשון + משלים אחורה עד needFrom, בכפוף לתקציב המשותף
+async function syncSeries(fetchPage, entry, needFrom, budget) {
+  entry = mergeSeries(entry, await fetchPage(1))
+  let page = Math.floor(Object.keys(entry.rows).filter((d) => d >= entry.from).length / PAGE) + 1
+  while (needFrom && entry.from > needFrom && entry.from !== '0000' && budget.left > 0 && page <= 15) {
+    budget.left--
+    const rows = await fetchPage(page)
+    const dates = Object.keys(rows).sort()
+    if (!dates.length) {
+      entry.from = '0000' // אין היסטוריה מוקדמת יותר (נייר שנרשם השנה)
+      break
+    }
+    entry.rows = { ...entry.rows, ...rows }
+    if (dates[0] < entry.from) entry.from = dates[0]
+    page++
+  }
+  return entry
+}
+
+const covered = (entry, base) => Boolean(entry && base && (entry.from === '0000' || entry.from <= base))
+
+// ── ישראל ─────────────────────────────────────────────────────────
+// היסטוריית מדד: סגירות לפי תאריך (pType 4 = שנה, בעמודים של 30)
+function taseIndexPager(api, id) {
+  return async (pageNum) => {
+    const h = await api.post('/index/historyeod', { pType: 4, TotalRec: 1, pageNum, oId: id, lang: '0' })
+    const out = {}
+    for (const r of h.Items || []) if (Number.isFinite(r.CloseRate)) out[isoDate(r.TradeDate)] = r.CloseRate
+    return out
+  }
+}
+
+// היסטוריית מניה: [שינוי יומי %, סגירה, יום אקס-דיבידנד?]. השינוי של הבורסה (Change)
+// מותאם לדיבידנד — כלומר תשואה כוללת. מדדי הבורסה הם מדדי מחיר (לא מתואמים
+// לדיבידנד), ולכן ביום "בלי דיבידנד" התשואה מחושבת מהמחיר בפועל — אחרת סכום
+// הסקטורים ברח מהמדד ב-~2% מתחילת השנה (בדיקה מול ת"א-35, 16.10.2026).
+function taseSecurityPager(api, securityNumber) {
+  return async (pageNum) => {
+    const h = await api.post('/security/historyeod', {
+      pType: 4,
+      TotalRec: 1,
+      pageNum,
+      oId: String(securityNumber).padStart(8, '0'),
+      lang: '0',
+    })
+    const out = {}
+    for (const r of h.Items || [])
+      if (r.IfTraded !== false && Number.isFinite(r.Change))
+        out[isoDate(r.TradeDate)] = [r.Change, r.CloseRate, /דיבידנד/.test(r.ExeDesc || '') ? 1 : 0]
+    return out
+  }
+}
+
+// תשואה של מדד מסגירות: סגירה אחרונה מול סגירת יום הבסיס
+function indexReturns(entry, b) {
+  const out = {}
+  const last = entry?.rows[b.latest]
+  for (const k of RANGES) out[k] = covered(entry, b[k]) && entry.rows[b[k]] != null ? round(pct(last, entry.rows[b[k]])) : null
+  return out
+}
+
+// תשואה של מניה: מכפלת השינויים היומיים מאחרי יום הבסיס ועד היום האחרון
+function stockReturns(entry, b) {
+  const out = {}
+  const dates = entry ? Object.keys(entry.rows).sort() : []
+  for (const k of RANGES) {
+    if (!covered(entry, b[k])) {
+      out[k] = null
+      continue
+    }
+    const daily = []
+    for (let i = 0; i < dates.length; i++) {
+      const d = dates[i]
+      if (d <= b[k] || d > b.latest) continue
+      const [change, close, div] = entry.rows[d]
+      const prev = i > 0 ? entry.rows[dates[i - 1]] : null
+      daily.push(div && prev && prev[1] ? (close / prev[1] - 1) * 100 : change)
+    }
+    out[k] = daily.length ? compound(daily) : 0
+  }
+  return out
+}
+
 async function loadJson(path) {
   const { data } = await db.storage.from(BUCKET).download(path)
   if (!data) return null
@@ -186,12 +280,35 @@ async function collectIsrael() {
   const { browser, ctx } = await openTase()
   const api = taseClient(ctx)
   const errors = []
+  const hist = (await loadJson('market/history.json')) ?? { idx: {}, sec: {} }
+  // מבנה ישן (מספר בודד ליום) — נבנה מחדש
+  for (const [k, e] of Object.entries(hist.sec)) if (!Array.isArray(Object.values(e.rows)[0])) delete hist.sec[k]
+  const budget = { left: BOOTSTRAP_BUDGET }
   try {
+    // לוח ימי המסחר נגזר מת"א-35, ואיתו ימי הבסיס של כל הטווחים
+    hist.idx['142'] = await syncSeries(taseIndexPager(api, '142'), hist.idx['142'], null, budget)
+    let b = baseDates(Object.keys(hist.idx['142'].rows).sort())
+    hist.idx['142'] = await syncSeries(taseIndexPager(api, '142'), hist.idx['142'], b.ytd ?? '0000', budget)
+    b = baseDates(Object.keys(hist.idx['142'].rows).sort())
+    const need = b.ytd
+
+    const indexRow = async (id) => {
+      hist.idx[id] = await syncSeries(taseIndexPager(api, id), hist.idx[id], need, budget)
+      const e = hist.idx[id]
+      const dates = Object.keys(e.rows).sort().filter((d) => d <= b.latest).slice(-DAYS)
+      return {
+        date: b.latest,
+        last: e.rows[b.latest],
+        ...indexReturns(e, b),
+        days: dates.map((d) => ({ date: d, close: e.rows[d] })),
+      }
+    }
+
     // מדדי דגל
     const indices = []
     for (const ix of IL_INDICES) {
       try {
-        indices.push({ id: ix.id, name: ix.name, source: `מדד ${ix.name} · מספר מדד ${ix.id} באתר הבורסה`, ...(await taseIndexHistory(api, ix.id)) })
+        indices.push({ id: ix.id, name: ix.name, source: `מדד ${ix.name} · מספר מדד ${ix.id} באתר הבורסה`, ...(await indexRow(ix.id)) })
       } catch (e) {
         errors.push(`מדד ${ix.name}: ${e.message}`)
       }
@@ -204,8 +321,8 @@ async function collectIsrael() {
       const cat = list.find((c) => c.CategoryId === '03')?.Items ?? []
       for (const ix of cat) {
         try {
-          const h = await taseIndexHistory(api, ix.IndexId)
-          sectorIndices.push({ id: ix.IndexId, name: ix.Text, source: `מספר מדד ${ix.IndexId} באתר הבורסה`, last: h.last, d1: h.d1, d7: h.d7, days: h.days.map((d) => ({ date: d.date, change: d.change })) })
+          const { days, date, ...r } = await indexRow(ix.IndexId)
+          sectorIndices.push({ id: ix.IndexId, name: ix.Text, source: `מספר מדד ${ix.IndexId} באתר הבורסה`, ...r })
         } catch (e) {
           errors.push(`מדד ענף ${ix.Text}: ${e.message}`)
         }
@@ -214,10 +331,12 @@ async function collectIsrael() {
       errors.push(`רשימת מדדי ענף: ${e.message}`)
     }
 
-    // פילוח סקטוריאלי בתוך ת"א-35 ות"א-125: ממוצע משוקלל של המניות בכל ענף
+    // פילוח סקטוריאלי בתוך ת"א-35 ות"א-125: ממוצע משוקלל של המניות בכל ענף.
+    // טווח של ענף מוצג רק כשלכל מניותיו יש היסטוריה מלאה לאותו טווח.
     const branchCache = (await loadJson('market/branches.json')) ?? {}
-    const changesBySec = new Map()
+    const retBySec = new Map()
     const breakdown = {}
+    let pending = 0
     for (const id of IL_BREAKDOWN) {
       const name = IL_INDICES.find((i) => i.id === id).name
       // הרכב המדד מגיע בעמודים של 30 — ת"א-125 = 5 עמודים
@@ -242,32 +361,30 @@ async function collectIsrael() {
             branchCache[sec] = ''
           }
         }
-        if (!changesBySec.has(sec)) {
+        if (!retBySec.has(sec)) {
           try {
-            changesBySec.set(sec, await taseSecurityChanges(api, sec))
+            hist.sec[sec] = await syncSeries(taseSecurityPager(api, sec), hist.sec[sec], need, budget)
+            if (!covered(hist.sec[sec], need)) pending++
+            retBySec.set(sec, stockReturns(hist.sec[sec], b))
           } catch (e) {
-            changesBySec.set(sec, [])
+            retBySec.set(sec, null)
             errors.push(`היסטוריית ${c.ShortName}: ${e.message}`)
           }
         }
-        const ch = changesBySec.get(sec)
-        if (!ch.length) continue
+        const r = retBySec.get(sec)
+        if (!r || r.d1 == null) continue
         const sector = sectorOf(branchCache[sec])
-        const g = groups.get(sector) ?? { sector, weight: 0, w1: 0, w7: 0, stocks: [], branches: new Set(), byDay: new Map() }
+        const g = groups.get(sector) ?? { sector, weight: 0, start: {}, missing: {}, stocks: [], branches: new Set() }
         if (branchCache[sec]) g.branches.add(branchCache[sec])
-        const d1 = ch[0].change
-        const d7 = compound(ch.map((x) => x.change))
         g.weight += c.Weight
-        // תשואה יומית משוקללת לכל יום מסחר — בסיס למפת החום (סקטור × יום)
-        for (const x of ch) {
-          const d = g.byDay.get(x.date) ?? { w: 0, s: 0 }
-          d.w += c.Weight
-          d.s += c.Weight * x.change
-          g.byDay.set(x.date, d)
+        for (const k of RANGES) {
+          if (r[k] == null) g.missing[k] = true
+          // שווי תחילת התקופה של המניה (משקל היום ÷ (1+תשואה)) — שקלול לפי
+          // המשקל בתחילת התקופה. שקלול לפי משקל היום מנפח את המנצחות (שמשקלן
+          // גדל בדרך): ת"א-35 יצא +21.7% מתחילת השנה מול 14.5% במדד.
+          else g.start[k] = (g.start[k] ?? 0) + c.Weight / (1 + r[k] / 100)
         }
-        g.w1 += c.Weight * d1
-        g.w7 += c.Weight * d7
-        g.stocks.push({ name: c.ShortName, weight: round(c.Weight), d1: round(d1), d7: round(d7) })
+        g.stocks.push({ name: c.ShortName, weight: round(c.Weight), ...Object.fromEntries(RANGES.map((k) => [k, round(r[k])])) })
         groups.set(sector, g)
       }
       breakdown[name] = [...groups.values()]
@@ -275,61 +392,70 @@ async function collectIsrael() {
           sector: g.sector,
           // שם הענף הרשמי בבורסה — כדי שאפשר יהיה לאמת את השיוך באתר הבורסה
           source: [...g.branches].join(' | ') || 'לא מסווג',
-          days: [...g.byDay.entries()]
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([date, d]) => ({ date, change: round(d.s / d.w) })),
           weight: round(g.weight, 1),
-          d1: round(g.w1 / g.weight),
-          d7: round(g.w7 / g.weight),
+          ...Object.fromEntries(RANGES.map((k) => [k, g.missing[k] ? null : round((g.weight / g.start[k] - 1) * 100)])),
           stocks: g.stocks.sort((a, b) => b.weight - a.weight),
         }))
         .sort((a, b) => b.weight - a.weight)
     }
+    if (pending) errors.push(`היסטוריה בהשלמה: ${pending} מניות — הטווחים הארוכים יושלמו בריצות הבאות`)
+
     await db.storage.from(BUCKET).upload('market/branches.json', JSON.stringify(branchCache), {
       upsert: true,
       contentType: 'application/json',
     })
+    await db.storage.from(BUCKET).upload('market/history.json', JSON.stringify(hist), {
+      upsert: true,
+      contentType: 'application/json',
+    })
 
-    return { indices, sectorIndices, breakdown, errors }
+    return { indices, sectorIndices, breakdown, bases: b, errors }
   } finally {
     await browser.close()
   }
 }
 
 // ── ארה"ב ─────────────────────────────────────────────────────────
+// שנה של סגירות מתואמות (adjclose — כולל דיבידנדים של קרנות הסל)
 async function yahooHistory(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1mo&interval=1d`
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`
   const r = await fetch(url, { headers: { 'User-Agent': UA } })
   if (!r.ok) throw new Error(`Yahoo ${symbol} -> ${r.status}`)
   const res = (await r.json()).chart?.result?.[0]
   if (!res) throw new Error(`Yahoo ${symbol}: אין נתונים`)
   const ts = res.timestamp ?? []
-  const closes = res.indicators?.quote?.[0]?.close ?? []
+  const closes = res.indicators?.adjclose?.[0]?.adjclose ?? res.indicators?.quote?.[0]?.close ?? []
+  const raw = res.indicators?.quote?.[0]?.close ?? []
   // ימים עם סגירה בלבד; התאריך לפי שעון ניו יורק
   const rows = ts
     .map((t, i) => ({
       date: new Date(t * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
       close: closes[i],
+      raw: raw[i],
     }))
     .filter((r) => Number.isFinite(r.close))
   if (rows.length < DAYS + 1) throw new Error(`Yahoo ${symbol}: היסטוריה קצרה מדי`)
-  const last = rows.length - 1
-  const window = rows.slice(-(DAYS + 1)) // 8 סגירות → 7 שינויים
+  const b = baseDates(rows.map((r) => r.date))
+  const byDate = Object.fromEntries(rows.map((r) => [r.date, r.close]))
+  const last = rows[rows.length - 1]
   return {
-    date: rows[last].date,
-    last: round(rows[last].close),
-    d1: round(pct(rows[last].close, rows[last - 1].close)),
-    d7: round(pct(rows[last].close, window[0].close)),
-    days: window.slice(1).map((r, i) => ({ date: r.date, close: round(r.close), change: round(pct(r.close, window[i].close)) })),
+    date: last.date,
+    last: round(last.raw ?? last.close),
+    ...Object.fromEntries(RANGES.map((k) => [k, b[k] && byDate[b[k]] != null ? round(pct(last.close, byDate[b[k]])) : null])),
+    days: rows.slice(-DAYS).map((r) => ({ date: r.date, close: round(r.close) })),
+    bases: b,
   }
 }
 
 async function collectUS() {
   const errors = []
   const indices = []
+  let bases = null
   for (const ix of US_INDICES) {
     try {
-      indices.push({ symbol: ix.symbol, name: ix.name, source: `${ix.full} (${ix.symbol})`, ...(await yahooHistory(ix.symbol)) })
+      const { bases: b, ...h } = await yahooHistory(ix.symbol)
+      bases ??= b
+      indices.push({ symbol: ix.symbol, name: ix.name, source: `${ix.full} (${ix.symbol})`, ...h })
     } catch (e) {
       errors.push(e.message)
     }
@@ -337,13 +463,13 @@ async function collectUS() {
   const sectors = []
   for (const s of US_SECTORS) {
     try {
-      const h = await yahooHistory(s.symbol)
-      sectors.push({ symbol: s.symbol, sector: s.name, source: `${s.full} (${s.symbol})`, d1: h.d1, d7: h.d7, days: h.days.map((d) => ({ date: d.date, change: d.change })) })
+      const { days, date, last, bases: _b, ...h } = await yahooHistory(s.symbol)
+      sectors.push({ symbol: s.symbol, sector: s.name, source: `${s.full} (${s.symbol})`, ...h })
     } catch (e) {
       errors.push(e.message)
     }
   }
-  return { indices, sectors, errors }
+  return { indices, sectors, bases, errors }
 }
 
 // ── שורה כתובה — נגזרת מהמספרים בלבד, בלי AI (אפס סיכון להזיה) ─────
@@ -402,11 +528,19 @@ const summary = {
   errors: [...il.errors, ...us.errors],
 }
 
-// אם שני השווקים נכשלו לגמרי — לא דורסים סיכום תקין קודם בקובץ ריק
+// שוק שנכשל לגמרי (למשל חסימה זמנית של אתר הבורסה) — לא מוחקים אותו מהדף:
+// נשאר הנתון הקודם, מסומן בתאריך העדכון שלו. רק אם שניהם נכשלו — לא כותבים כלל.
 if (!il.indices.length && !us.indices.length) {
   console.error('⛔ לא התקבל אף נתון — הקובץ הקיים נשאר ללא שינוי')
   for (const e of summary.errors) console.error('  ', e)
   process.exit(1)
+}
+const prev = await loadJson('market/summary.json')
+for (const m of ['il', 'us']) {
+  if (!summary[m].indices.length && prev?.[m]?.indices?.length) {
+    summary[m] = { ...prev[m], stale_since: prev[m].stale_since ?? prev.updated_at }
+    console.warn(`⚠️ ${m === 'il' ? 'ישראל' : 'ארה"ב'}: נכשל — נשאר הנתון מ-${summary[m].stale_since}`)
+  }
 }
 
 const { error } = await db.storage.from(BUCKET).upload('market/summary.json', JSON.stringify(summary), {
