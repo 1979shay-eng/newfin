@@ -9,6 +9,11 @@ import { supabase } from '../lib/supabase'
 type Period = 'd1' | 'd7'
 type Market = 'il' | 'us'
 type View = 'bars' | 'heat'
+type SortKey = Period | 'weight'
+interface Sort {
+  key: SortKey
+  dir: 'desc' | 'asc'
+}
 
 interface Day {
   date: string
@@ -100,7 +105,6 @@ const shortDate = (iso: string) => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}`
 export default function Markets() {
   const { data, error } = useSummary()
   const [market, setMarket] = useState<Market>('il')
-  const [period, setPeriod] = useState<Period>('d7')
   const [view, setView] = useState<View>('bars')
   const [ilIndex, setIlIndex] = useState('ת"א-35')
 
@@ -127,14 +131,24 @@ export default function Markets() {
         )}
       </p>
 
-      {/* בחירת שוק */}
-      <div className="mt-5 flex gap-2">
-        <Tab active={market === 'il'} onClick={() => setMarket('il')}>
-          ישראל
-        </Tab>
-        <Tab active={market === 'us'} onClick={() => setMarket('us')}>
-          ארה"ב
-        </Tab>
+      {/* שוק מימין, תצוגה משמאל */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          <Tab active={market === 'il'} onClick={() => setMarket('il')}>
+            ישראל
+          </Tab>
+          <Tab active={market === 'us'} onClick={() => setMarket('us')}>
+            ארה"ב
+          </Tab>
+        </div>
+        <Seg
+          opts={[
+            { key: 'bars', label: 'עמודות' },
+            { key: 'heat', label: 'מפת חום' },
+          ]}
+          value={view}
+          onChange={setView}
+        />
       </div>
 
       {!data && !error && <Loading />}
@@ -161,28 +175,6 @@ export default function Markets() {
             ))}
           </div>
 
-          {/* תצוגת הסקטורים: תקופה + עמודות/מפת חום */}
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-            <Seg
-              label="תקופה"
-              opts={[
-                { key: 'd1', label: 'יום אחרון' },
-                { key: 'd7', label: '7 ימי מסחר מצטבר' },
-              ]}
-              value={period}
-              onChange={setPeriod}
-            />
-            <Seg
-              label="תצוגה"
-              opts={[
-                { key: 'bars', label: 'עמודות' },
-                { key: 'heat', label: 'מפת חום' },
-              ]}
-              value={view}
-              onChange={setView}
-            />
-          </div>
-
           {market === 'il' ? (
             <>
               <Section
@@ -196,20 +188,19 @@ export default function Markets() {
                   />
                 }
               >
-                <Sectors rows={data.il.breakdown[ilIndex] ?? []} period={period} view={view} weighted />
+                <Sectors rows={data.il.breakdown[ilIndex] ?? []} view={view} weighted />
               </Section>
 
               <Section title="מדדי הענף של הבורסה" hint="מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב.">
                 <Sectors
                   rows={data.il.sectorIndices.map((s) => ({ sector: s.name, source: s.source, d1: s.d1, d7: s.d7 }))}
-                  period={period}
                   view={view}
                 />
               </Section>
             </>
           ) : (
             <Section title="סקטורים ב-S&P 500" hint="כל סקטור נמדד לפי קרן הסל הרשמית שלו (Select Sector SPDR).">
-              <Sectors rows={data.us.sectors} period={period} view={view} />
+              <Sectors rows={data.us.sectors} view={view} />
             </Section>
           )}
 
@@ -303,12 +294,20 @@ function Sparkline({ days }: { days: Day[] }) {
 }
 
 // ── סקטורים: עמודות או מפת חום, אותה מיון ואותה פתיחת מניות ─────────
-function Sectors({ rows, period, view, weighted }: { rows: SectorRow[]; period: Period; view: View; weighted?: boolean }) {
+function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weighted?: boolean }) {
   const [open, setOpen] = useState<string | null>(null)
-  const sorted = useMemo(
-    () => rows.filter((r) => r[period] != null).sort((a, b) => (b[period] ?? 0) - (a[period] ?? 0)),
-    [rows, period],
-  )
+  // מיון בלחיצה על כותרת: לחיצה ראשונה — מהגבוה לנמוך, שנייה — הפוך.
+  // התקופה של העמודה הממוינת קובעת גם את העמודה הגרפית ואת צבעי מפת החום.
+  const [sort, setSort] = useState<Sort>({ key: 'd7', dir: 'desc' })
+  const period: Period = sort.key === 'weight' ? 'd7' : sort.key
+  const onSort = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))
+  const sorted = useMemo(() => {
+    const val = (r: SectorRow) => (sort.key === 'weight' ? r.weight : r[sort.key]) ?? -Infinity
+    return rows
+      .filter((r) => r[period] != null)
+      .sort((a, b) => (sort.dir === 'desc' ? val(b) - val(a) : val(a) - val(b)))
+  }, [rows, sort, period])
   const scale = Math.max(...sorted.map((r) => Math.abs(r[period] ?? 0)), 0.01)
 
   if (!sorted.length) {
@@ -324,9 +323,14 @@ function Sectors({ rows, period, view, weighted }: { rows: SectorRow[]; period: 
   if (view === 'heat') {
     return (
       <div className="p-3">
+        <div className="mb-2 flex flex-wrap items-center gap-1 px-1 text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
+          <span className="ml-1">מיון וצבע לפי</span>
+          {weighted && <SortHead k="weight" sort={sort} onSort={onSort} label="משקל" />}
+          <SortHead k="d1" sort={sort} onSort={onSort} label="יום אחרון" />
+          <SortHead k="d7" sort={sort} onSort={onSort} label="7 ימים" />
+        </div>
         <div className="flex flex-wrap gap-2">
-          {/* עם משקלים — מהגדול לקטן, כמו מפות שוק מקובלות; בלי — לפי תשואה */}
-          {(weighted ? [...sorted].sort((x, y) => (y.weight ?? 0) - (x.weight ?? 0)) : sorted).map((r) => (
+          {sorted.map((r) => (
             <HeatTile key={r.sector} r={r} period={period} scale={scale} weighted={weighted} open={open === r.sector} onClick={() => toggle(r.sector)} />
           ))}
         </div>
@@ -354,14 +358,10 @@ function Sectors({ rows, period, view, weighted }: { rows: SectorRow[]; period: 
         style={{ color: 'var(--muted)', borderBottom: '1px solid var(--line2)' }}
       >
         <span>{weighted ? 'סקטור' : 'מדד'}</span>
-        {weighted && <span className="text-left">משקל</span>}
+        {weighted && <SortHead k="weight" sort={sort} onSort={onSort} label="משקל" end />}
         <span className="hidden sm:block" />
-        <span className="text-left" style={period === 'd1' ? { color: 'var(--ink)' } : undefined}>
-          יום אחרון
-        </span>
-        <span className="text-left" style={period === 'd7' ? { color: 'var(--ink)' } : undefined}>
-          7 ימים
-        </span>
+        <SortHead k="d1" sort={sort} onSort={onSort} label="יום אחרון" end />
+        <SortHead k="d7" sort={sort} onSort={onSort} label="7 ימים" end />
       </div>
       <ul>
         {sorted.map((r, i) => {
@@ -470,11 +470,34 @@ function HeatTile({
       <div className="mt-1 text-[22px] font-extrabold leading-tight tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
         {fmtPct(v)}
       </div>
+      <div className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--ink2)' }}>
+        {period === 'd7' ? 'יום אחרון' : '7 ימים'} <span dir="ltr">{fmtPct(r[period === 'd7' ? 'd1' : 'd7'])}</span>
+      </div>
       {weighted && r.weight != null && (
         <div className="mt-0.5 text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
           משקל {r.weight}%
         </div>
       )}
+    </button>
+  )
+}
+
+// כותרת עמודה ממיינת — החץ מראה את כיוון המיון הנוכחי
+function SortHead({ k, sort, onSort, label, end }: { k: SortKey; sort: Sort; onSort: (k: SortKey) => void; label: string; end?: boolean }) {
+  const active = sort.key === k
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(k)}
+      aria-sort={active ? (sort.dir === 'desc' ? 'descending' : 'ascending') : 'none'}
+      title={active ? (sort.dir === 'desc' ? 'מהגבוה לנמוך — לחיצה להיפוך' : 'מהנמוך לגבוה — לחיצה להיפוך') : 'לחיצה למיון'}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-bold transition-colors hover:bg-[var(--hover)] ${end ? 'justify-self-end' : ''}`}
+      style={active ? { color: 'var(--accent)', background: 'var(--chip)' } : { color: 'var(--muted)' }}
+    >
+      {label}
+      <span aria-hidden className="text-[10px]">
+        {active ? (sort.dir === 'desc' ? '▼' : '▲') : '↕'}
+      </span>
     </button>
   )
 }
@@ -506,7 +529,7 @@ function StockList({ stocks, period }: { stocks: Stock[]; period: Period }) {
 // ── מעטפות — אותה שפה ויזואלית כמו הפיד ─────────────────────────────
 function Section({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="mt-6">
+    <section className="mt-8">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-[20px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
