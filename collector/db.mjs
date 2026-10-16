@@ -108,6 +108,23 @@ export async function getEnrichedMap(reportIds) {
 // מכניס/מעדכן פריטים במסד לפי maya_report_id (מאפשר העשרה חוזרת)
 export async function upsertItems(items) {
   if (!items.length) return { count: 0 }
+  // זמן הפרסום של פריט קיים לא זז קדימה. כתבות "לייב" (עדכוני וול סטריט של
+  // TheMarker וגלובס) מעדכנות את pubDate בכל רענון, והפריט הוצג בשעת העדכון
+  // האחרון — שעות אחרי שהגיע לפיד (נראה כ"שעה מוסטת קדימה"). שומרים את המוקדם.
+  const firstSeen = new Map()
+  const ids = [...new Set(items.map((i) => i.maya_report_id).filter(Boolean))]
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: rows, error: e } = await db
+      .from('items')
+      .select('maya_report_id, published_at')
+      .in('maya_report_id', ids.slice(i, i + 200))
+    if (e) throw e
+    for (const r of rows || []) firstSeen.set(r.maya_report_id, r.published_at)
+  }
+  items = items.map((it) => {
+    const prev = firstSeen.get(it.maya_report_id)
+    return prev && new Date(prev) < new Date(it.published_at) ? { ...it, published_at: prev } : it
+  })
   const { data, error } = await db
     .from('items')
     .upsert(items, { onConflict: 'maya_report_id' })

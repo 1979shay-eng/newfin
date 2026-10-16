@@ -31,13 +31,14 @@ export const FEEDS = [
   // ── ynet כלכלה ──────────────────────────────────────────────────────
   { key: 'ynet', source_name: 'ynet כלכלה', section: 'כלכלה',
     url: 'https://www.ynet.co.il/Integration/StoryRss6.xml' },
-  // ── וואלה — מצהיר GMT אבל השעה בפועל היא שעון ישראל (אומת מול דפי
-  //    הכתבות: article:published_time = אותה שעה עם +03:00). tz מתקן. ──
-  { key: 'walla', source_name: 'וואלה', section: 'כסף', tz: 'israel',
+  // ── וואלה — עד ספטמבר 2026 הצהיר GMT אבל שידר שעון ישראל; מאז שולח GMT
+  //    אמיתי (אומת 16.10.2026 מול article:published_time). tz='detect' מזהה
+  //    לבד בכל ריצה איזה מהשניים הפיד שולח — ראה detectIsraelTz. ──
+  { key: 'walla', source_name: 'וואלה', section: 'כסף', tz: 'detect',
     url: 'https://rss.walla.co.il/feed/2686' },
-  { key: 'walla', source_name: 'וואלה', section: 'עסקים', tz: 'israel',
+  { key: 'walla', source_name: 'וואלה', section: 'עסקים', tz: 'detect',
     url: 'https://rss.walla.co.il/feed/22' },
-  { key: 'walla', source_name: 'וואלה', section: 'נדל"ן', tz: 'israel',
+  { key: 'walla', source_name: 'וואלה', section: 'נדל"ן', tz: 'detect',
     url: 'https://rss.walla.co.il/feed/2689' },
   // ── מעריב כלכלה ─────────────────────────────────────────────────────
   { key: 'maariv', source_name: 'מעריב', section: 'כלכלה',
@@ -267,6 +268,16 @@ async function getSourceId(name) {
 }
 
 // שואב פיד יחיד ומחזיר פריטים מנורמלים (כולל זיהוי חברה)
+// פיד שמסמן אזור זמן לא אמין: אם הידיעה החדשה ביותר, כשקוראים את השעה כפשוטה,
+// יוצאת "בעתיד" — הפיד בעצם משדר שעון ישראל עם סימון שגוי, ומתקנים. אחרת השעה
+// אמינה כמות שהיא. מחושב מחדש בכל ריצה, כך שמקור שמשנה התנהגות מתוקן מעצמו
+// (וואלה עבר משעון ישראל ל-GMT אמיתי בספטמבר 2026 והידיעות הוצגו 3 שעות אחורה).
+function detectIsraelTz(items) {
+  const newest = items.map((it) => new Date((it.pubDate || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim()).getTime()).filter(Number.isFinite)
+  if (!newest.length) return undefined
+  return Math.max(...newest) > Date.now() + 2 * 60000 ? 'israel' : undefined
+}
+
 async function fetchFeed(feed, companies) {
   const r = await fetch(feed.url, {
     headers: { 'User-Agent': UA, Accept: 'application/rss+xml,application/xml,text/xml' },
@@ -278,6 +289,7 @@ async function fetchFeed(feed, companies) {
   const xml = await r.text()
   const sourceId = await getSourceId(feed.source_name)
   const raw = parseFeed(xml).slice(0, PER_FEED) // RSS מגיע מהחדש לישן — לוקחים את הראש
+  const tz = feed.tz === 'detect' ? detectIsraelTz(raw) : feed.tz
   return raw
     .filter((it) => it.title && it.link)
     .map((it) => {
@@ -296,7 +308,7 @@ async function fetchFeed(feed, companies) {
           .trim()
           .slice(0, 1000),
         original_url: it.link,
-        published_at: publishedAtFrom(it.pubDate, feed.tz),
+        published_at: publishedAtFrom(it.pubDate, tz),
         source_type: 'osint',
         reliability: 'reported',
         lang: 'he',
