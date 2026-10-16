@@ -179,7 +179,7 @@ export default function Markets() {
             <>
               <Section
                 title="סקטורים בתוך המדד"
-                hint="תשואה משוקללת של המניות בכל ענף, לפי משקלן במדד. לחיצה על ענף מציגה את המניות."
+                hint={`רק המניות שבתוך ${ilIndex}, מחולקות לפי ענף. התשואה של כל ענף משוקללת לפי משקל המניות שלו במדד. לחיצה על ענף מציגה את המניות.`}
                 action={
                   <Seg
                     opts={Object.keys(data.il.breakdown).map((k) => ({ key: k, label: k }))}
