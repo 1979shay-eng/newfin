@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 
-// סיכום מסחר — ישראל וארה"ב, יומי ו-7 ימי מסחר, עם פילוח סקטוריאלי.
+// סיכום מסחר — ישראל וארה"ב: יום המסחר האחרון ותשואה מצטברת של 7 ימי מסחר,
+// עם פילוח סקטוריאלי (עמודות או מפת חום).
 // הנתונים מגיעים מקובץ JSON שהאספן (collector/markets.mjs) מעדכן בכל סבב.
 // אין כאן אף מספר שלא הגיע מהמקור: נתון חסר מוצג כ"—", לא מנוחש.
 
 type Period = 'd1' | 'd7'
 type Market = 'il' | 'us'
+type View = 'bars' | 'heat'
 
 interface Day {
   date: string
@@ -54,6 +56,7 @@ interface Summary {
 const UP = '#16a34a'
 const DOWN = '#dc2626'
 const REFRESH_MS = 2 * 60 * 1000
+const PERIOD_LABEL: Record<Period, string> = { d1: 'יום אחרון', d7: '7 ימים מצטבר' }
 
 const summaryUrl = supabase.storage.from('public-data').getPublicUrl('market/summary.json').data.publicUrl
 
@@ -97,13 +100,15 @@ const shortDate = (iso: string) => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}`
 export default function Markets() {
   const { data, error } = useSummary()
   const [market, setMarket] = useState<Market>('il')
-  const [period, setPeriod] = useState<Period>('d1')
+  const [period, setPeriod] = useState<Period>('d7')
+  const [view, setView] = useState<View>('bars')
   const [ilIndex, setIlIndex] = useState('ת"א-35')
 
   const updated = data ? new Date(data.updated_at) : null
   const m = data?.[market]
   const lead = m?.indices[0]
-  const tradeDate = lead?.date
+  const windowLabel =
+    lead && lead.days.length > 1 ? `${shortDate(lead.days[0].date)}–${shortDate(lead.days[lead.days.length - 1].date)}` : ''
 
   return (
     <div className="mx-auto max-w-[1200px]">
@@ -111,7 +116,7 @@ export default function Markets() {
         סיכום מסחר
       </h1>
       <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px]" style={{ color: 'var(--muted)' }}>
-        <span>מדדים וסקטורים בישראל ובארה"ב — יום המסחר האחרון ו-7 ימי המסחר האחרונים</span>
+        <span>מדדים וסקטורים בישראל ובארה"ב — יום המסחר האחרון ותשואה מצטברת של 7 ימי המסחר האחרונים</span>
         {updated && (
           <>
             <Dot />
@@ -122,24 +127,14 @@ export default function Markets() {
         )}
       </p>
 
-      {/* בחירת שוק + תקופה */}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          <Tab active={market === 'il'} onClick={() => setMarket('il')}>
-            ישראל
-          </Tab>
-          <Tab active={market === 'us'} onClick={() => setMarket('us')}>
-            ארה"ב
-          </Tab>
-        </div>
-        <Seg
-          opts={[
-            { key: 'd1', label: 'יום אחרון' },
-            { key: 'd7', label: '7 ימי מסחר' },
-          ]}
-          value={period}
-          onChange={setPeriod}
-        />
+      {/* בחירת שוק */}
+      <div className="mt-5 flex gap-2">
+        <Tab active={market === 'il'} onClick={() => setMarket('il')}>
+          ישראל
+        </Tab>
+        <Tab active={market === 'us'} onClick={() => setMarket('us')}>
+          ארה"ב
+        </Tab>
       </div>
 
       {!data && !error && <Loading />}
@@ -153,23 +148,39 @@ export default function Markets() {
 
       {m && (
         <>
-          {/* השורה התחתונה — המוקד של הדף */}
-          {m.notes[period] && (
-            <Card className="mt-4 px-6 py-5">
-              <div className="text-[12.5px] font-bold" style={{ color: 'var(--muted2)' }}>
-                {period === 'd1' ? `שורה תחתונה · ${tradeDate ? shortDate(tradeDate) : ''}` : 'שורה תחתונה · 7 ימי מסחר'}
-              </div>
-              <p className="mt-1.5 font-display text-[19px] font-semibold leading-[1.45]" style={{ color: 'var(--ink)' }}>
-                {m.notes[period]}
-              </p>
-            </Card>
-          )}
+          {/* שתי השורות התחתונות — המוקד של הדף, תמיד שתיהן */}
+          <Card className="mt-4 divide-y" style={{ borderColor: 'var(--line2)' }}>
+            <Note label={`יום המסחר האחרון · ${lead ? shortDate(lead.date) : ''}`} text={m.notes.d1} />
+            <Note label={`7 ימי מסחר, מצטבר · ${windowLabel}`} text={m.notes.d7} />
+          </Card>
 
           {/* מדדי הדגל */}
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {m.indices.map((ix) => (
-              <IndexCard key={ix.name} ix={ix} period={period} />
+              <IndexCard key={ix.name} ix={ix} />
             ))}
+          </div>
+
+          {/* תצוגת הסקטורים: תקופה + עמודות/מפת חום */}
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Seg
+              label="תקופה"
+              opts={[
+                { key: 'd1', label: 'יום אחרון' },
+                { key: 'd7', label: '7 ימי מסחר מצטבר' },
+              ]}
+              value={period}
+              onChange={setPeriod}
+            />
+            <Seg
+              label="תצוגה"
+              opts={[
+                { key: 'bars', label: 'עמודות' },
+                { key: 'heat', label: 'מפת חום' },
+              ]}
+              value={view}
+              onChange={setView}
+            />
           </div>
 
           {market === 'il' ? (
@@ -185,26 +196,24 @@ export default function Markets() {
                   />
                 }
               >
-                <SectorBars rows={data.il.breakdown[ilIndex] ?? []} period={period} showWeight />
+                <Sectors rows={data.il.breakdown[ilIndex] ?? []} period={period} view={view} weighted />
               </Section>
 
               <Section title="מדדי הענף של הבורסה" hint="מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב.">
-                <SectorBars
+                <Sectors
                   rows={data.il.sectorIndices.map((s) => ({ sector: s.name, source: s.source, d1: s.d1, d7: s.d7 }))}
                   period={period}
+                  view={view}
                 />
               </Section>
             </>
           ) : (
-            <Section
-              title="סקטורים ב-S&P 500"
-              hint="כל סקטור נמדד לפי קרן הסל הרשמית שלו (Select Sector SPDR)."
-            >
-              <SectorBars rows={data.us.sectors} period={period} />
+            <Section title="סקטורים ב-S&P 500" hint="כל סקטור נמדד לפי קרן הסל הרשמית שלו (Select Sector SPDR).">
+              <Sectors rows={data.us.sectors} period={period} view={view} />
             </Section>
           )}
 
-          <p className="mt-6 text-[12.5px]" style={{ color: 'var(--muted2)' }}>
+          <p className="mt-6 text-[13px]" style={{ color: 'var(--muted)' }}>
             מקור: {market === 'il' ? 'הבורסה לניירות ערך בתל אביב' : 'Yahoo Finance'}. הנתונים מוצגים לצורכי מידע בלבד
             ואינם מהווים ייעוץ השקעות.
           </p>
@@ -214,31 +223,53 @@ export default function Markets() {
   )
 }
 
-// ── כרטיס מדד: ערך, שינוי ומגמת 7 הימים ─────────────────────────────
-function IndexCard({ ix, period }: { ix: IndexRow; period: Period }) {
-  const v = ix[period]
+function Note({ label, text }: { label: string; text: string | null }) {
+  if (!text) return null
+  return (
+    <div className="px-6 py-4" style={{ borderColor: 'var(--line2)' }}>
+      <div className="text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
+        {label}
+      </div>
+      <p className="mt-1 font-display text-[19px] font-semibold leading-[1.45]" style={{ color: 'var(--ink)' }}>
+        {text}
+      </p>
+    </div>
+  )
+}
+
+// ── כרטיס מדד: שתי התקופות זו לצד זו + מגמת 7 הימים ──────────────────
+function IndexCard({ ix }: { ix: IndexRow }) {
   return (
     <Card className="px-5 py-4">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+        <span className="text-[17px] font-extrabold" style={{ color: 'var(--ink)' }}>
           {ix.name}
         </span>
-        <span className="text-[12.5px] tabular-nums" style={{ color: 'var(--muted2)' }}>
+        <span className="text-[14px] tabular-nums" style={{ color: 'var(--muted)' }}>
           {fmtNum(ix.last)}
         </span>
       </div>
       {ix.source && (
-        <div className="mt-0.5 text-[12px]" dir="auto" style={{ color: 'var(--muted2)' }}>
+        <div className="mt-0.5 text-[13px]" dir="auto" style={{ color: 'var(--muted)' }}>
           {ix.source}
         </div>
       )}
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <span className="text-[28px] font-extrabold leading-none tracking-[-0.02em] tabular-nums" style={{ color: tone(v) }} dir="ltr">
-          <span className="ml-1 text-[15px]" aria-hidden>
-            {arrow(v)}
-          </span>
-          {fmtPct(v)}
-        </span>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="flex gap-5">
+          {(['d1', 'd7'] as Period[]).map((p) => (
+            <div key={p}>
+              <div className="text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
+                {PERIOD_LABEL[p]}
+              </div>
+              <div className="text-[22px] font-extrabold leading-tight tracking-[-0.01em] tabular-nums" dir="ltr" style={{ color: tone(ix[p]) }}>
+                <span className="ml-1 text-[13px]" aria-hidden>
+                  {arrow(ix[p])}
+                </span>
+                {fmtPct(ix[p])}
+              </div>
+            </div>
+          ))}
+        </div>
         <Sparkline days={ix.days} />
       </div>
     </Card>
@@ -247,7 +278,7 @@ function IndexCard({ ix, period }: { ix: IndexRow; period: Period }) {
 
 // קו מגמה של 7 הסגירות האחרונות — צבע לפי כיוון החלון כולו
 function Sparkline({ days }: { days: Day[] }) {
-  const W = 96
+  const W = 88
   const H = 32
   if (days.length < 2) return null
   const closes = days.map((d) => d.close)
@@ -271,8 +302,8 @@ function Sparkline({ days }: { days: Day[] }) {
   )
 }
 
-// ── עמודות מתפצלות: עלייה לצד אחד, ירידה לצד השני, מציר אחד ──────────
-function SectorBars({ rows, period, showWeight }: { rows: SectorRow[]; period: Period; showWeight?: boolean }) {
+// ── סקטורים: עמודות או מפת חום, אותה מיון ואותה פתיחת מניות ─────────
+function Sectors({ rows, period, view, weighted }: { rows: SectorRow[]; period: Period; view: View; weighted?: boolean }) {
   const [open, setOpen] = useState<string | null>(null)
   const sorted = useMemo(
     () => rows.filter((r) => r[period] != null).sort((a, b) => (b[period] ?? 0) - (a[period] ?? 0)),
@@ -287,83 +318,187 @@ function SectorBars({ rows, period, showWeight }: { rows: SectorRow[]; period: P
       </p>
     )
   }
+  const toggle = (s: string) => setOpen((o) => (o === s ? null : s))
+  const opened = sorted.find((r) => r.sector === open)
 
+  if (view === 'heat') {
+    return (
+      <div className="p-3">
+        <div className="flex flex-wrap gap-2">
+          {/* עם משקלים — מהגדול לקטן, כמו מפות שוק מקובלות; בלי — לפי תשואה */}
+          {(weighted ? [...sorted].sort((x, y) => (y.weight ?? 0) - (x.weight ?? 0)) : sorted).map((r) => (
+            <HeatTile key={r.sector} r={r} period={period} scale={scale} weighted={weighted} open={open === r.sector} onClick={() => toggle(r.sector)} />
+          ))}
+        </div>
+        {opened?.stocks && (
+          <div className="mt-3">
+            <div className="mb-1 px-1 text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+              {opened.sector}
+            </div>
+            <StockList stocks={opened.stocks} period={period} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // עמודות: שורת כותרות + שורה לכל סקטור. בטלפון העמודה הגרפית נושרת —
+  // המספרים הם העיקר, ומפת החום זמינה כתצוגה חלופית.
+  const cols = weighted
+    ? 'grid-cols-[1fr_44px_60px_60px] sm:grid-cols-[minmax(180px,1.3fr)_72px_2fr_88px_88px]'
+    : 'grid-cols-[1fr_60px_60px] sm:grid-cols-[minmax(180px,1.3fr)_2fr_88px_88px]'
   return (
-    <ul>
-      {sorted.map((r, i) => {
-        const v = r[period] ?? 0
-        const pct = (Math.abs(v) / scale) * 50
-        const expandable = Boolean(r.stocks?.length)
-        const isOpen = open === r.sector
-        return (
-          <li key={r.sector} style={{ borderTop: i ? '1px solid var(--line)' : undefined }}>
-            <button
-              type="button"
-              disabled={!expandable}
-              onClick={() => setOpen(isOpen ? null : r.sector)}
-              aria-expanded={expandable ? isOpen : undefined}
-              className="grid w-full grid-cols-[minmax(96px,1.1fr)_2fr_72px] items-center gap-4 px-5 py-3 text-right transition-colors enabled:hover:bg-[var(--hover)] sm:grid-cols-[minmax(140px,1fr)_3fr_88px]"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
-                  {r.sector}
+    <div>
+      <div
+        className={`grid ${cols} items-center gap-2 px-4 py-2.5 text-[13px] font-bold sm:gap-4 sm:px-5`}
+        style={{ color: 'var(--muted)', borderBottom: '1px solid var(--line2)' }}
+      >
+        <span>{weighted ? 'סקטור' : 'מדד'}</span>
+        {weighted && <span className="text-left">משקל</span>}
+        <span className="hidden sm:block" />
+        <span className="text-left" style={period === 'd1' ? { color: 'var(--ink)' } : undefined}>
+          יום אחרון
+        </span>
+        <span className="text-left" style={period === 'd7' ? { color: 'var(--ink)' } : undefined}>
+          7 ימים
+        </span>
+      </div>
+      <ul>
+        {sorted.map((r, i) => {
+          const v = r[period] ?? 0
+          const pct = (Math.abs(v) / scale) * 50
+          const expandable = Boolean(r.stocks?.length)
+          const isOpen = open === r.sector
+          return (
+            <li key={r.sector} style={{ borderTop: i ? '1px solid var(--line)' : undefined }}>
+              <button
+                type="button"
+                disabled={!expandable}
+                onClick={() => toggle(r.sector)}
+                aria-expanded={expandable ? isOpen : undefined}
+                className={`grid w-full ${cols} items-center gap-2 px-4 py-3 text-right transition-colors sm:px-5 enabled:hover:bg-[var(--hover)] sm:gap-4`}
+              >
+                <span className="min-w-0">
+                  <span className="block text-[16px] font-bold leading-snug sm:truncate" style={{ color: 'var(--ink)' }}>
+                    {r.sector}
+                  </span>
+                  {r.source && (
+                    <span className="block truncate text-[13px]" dir="auto" title={r.source} style={{ color: 'var(--muted)' }}>
+                      {r.source}
+                    </span>
+                  )}
                 </span>
-                {r.source && (
-                  <span className="block truncate text-[12px]" dir="auto" title={r.source} style={{ color: 'var(--muted2)' }}>
-                    {r.source}
+                {weighted && (
+                  <span className="text-left text-[16px] font-bold tabular-nums" dir="ltr" style={{ color: 'var(--ink)' }}>
+                    {r.weight != null ? `${r.weight}%` : '—'}
                   </span>
                 )}
-                {showWeight && r.weight != null && (
-                  <span className="text-[12.5px]" style={{ color: 'var(--muted2)' }}>
-                    {r.weight}% מהמדד{expandable ? ` · ${r.stocks!.length === 1 ? 'מניה אחת' : `${r.stocks!.length} מניות`}` : ''}
-                  </span>
-                )}
-              </span>
-              {/* מסלול הפוך ל-LTR כדי שעלייה תימשך ימינה מהציר, כמקובל בגרפים */}
-              <span className="relative h-2.5 rounded-full" dir="ltr" style={{ background: 'var(--chip)' }}>
-                <span className="absolute inset-y-[-3px] left-1/2 w-px" style={{ background: 'var(--line2)' }} />
-                <span
-                  className="absolute inset-y-0 rounded-full"
-                  style={{
-                    background: tone(v),
-                    width: `${pct}%`,
-                    ...(v >= 0 ? { left: '50%' } : { right: '50%' }),
-                  }}
-                />
-              </span>
-              <span className="text-left text-[15px] font-bold tabular-nums" dir="ltr" style={{ color: tone(v) }}>
-                {fmtPct(v)}
-                <span className="mr-1 text-[11px]" aria-hidden>
-                  {arrow(v)}
+                {/* מסלול LTR כדי שעלייה תימשך ימינה מהציר, כמקובל בגרפים */}
+                <span className="relative hidden h-2.5 rounded-full sm:block" dir="ltr" style={{ background: 'var(--chip)' }}>
+                  <span className="absolute inset-y-[-3px] left-1/2 w-px" style={{ background: 'var(--line2)' }} />
+                  <span
+                    className="absolute inset-y-0 rounded-full"
+                    style={{ background: tone(v), width: `${pct}%`, ...(v >= 0 ? { left: '50%' } : { right: '50%' }) }}
+                  />
                 </span>
-              </span>
-            </button>
-            {isOpen && r.stocks && <StockList stocks={r.stocks} period={period} />}
-          </li>
-        )
-      })}
-    </ul>
+                {(['d1', 'd7'] as Period[]).map((p) => (
+                  <span
+                    key={p}
+                    className={`text-left tabular-nums ${p === period ? 'text-[16px] font-extrabold' : 'text-[15px] font-semibold'}`}
+                    dir="ltr"
+                    style={{ color: tone(r[p]) }}
+                  >
+                    {fmtPct(r[p])}
+                  </span>
+                ))}
+              </button>
+              {isOpen && r.stocks && (
+                <div className="px-5 pb-3">
+                  <StockList stocks={r.stocks} period={period} />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+// אריח במפת החום: צבע מתפצל (ירוק/אדום, אפור בנקודת האפס), עוצמה לפי גודל
+// התשואה ביחס לגדול ביותר בתצוגה. כשיש משקלים — רוחב האריח גדל עם המשקל.
+// המספר כתוב באריח תמיד, כך שהצבע לעולם אינו הנשא היחיד של המידע.
+function HeatTile({
+  r,
+  period,
+  scale,
+  weighted,
+  open,
+  onClick,
+}: {
+  r: SectorRow
+  period: Period
+  scale: number
+  weighted?: boolean
+  open: boolean
+  onClick: () => void
+}) {
+  const v = r[period] ?? 0
+  const t = Math.min(1, Math.abs(v) / scale)
+  const flat = Math.abs(v) < 0.05
+  const bg = flat ? 'var(--chip)' : `color-mix(in oklab, ${v > 0 ? UP : DOWN} ${Math.round(14 + t * 46)}%, var(--surface))`
+  const w = weighted && r.weight ? r.weight : 1
+  const expandable = Boolean(r.stocks?.length)
+  return (
+    <button
+      type="button"
+      disabled={!expandable}
+      onClick={onClick}
+      aria-expanded={expandable ? open : undefined}
+      title={`${r.source ?? r.sector} · יום אחרון ${fmtPct(r.d1)} · 7 ימים ${fmtPct(r.d7)}`}
+      className="min-h-[96px] rounded-[11px] px-3 py-2.5 text-right transition-opacity enabled:hover:opacity-90"
+      style={{
+        flex: weighted ? `${w} 1 ${Math.max(116, w * 9)}px` : '1 1 150px',
+        background: bg,
+        outline: open ? '2px solid var(--ink)' : undefined,
+        outlineOffset: open ? '-2px' : undefined,
+      }}
+    >
+      <div className="truncate text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+        {r.sector}
+      </div>
+      <div className="mt-1 text-[22px] font-extrabold leading-tight tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
+        {fmtPct(v)}
+      </div>
+      {weighted && r.weight != null && (
+        <div className="mt-0.5 text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
+          משקל {r.weight}%
+        </div>
+      )}
+    </button>
   )
 }
 
 function StockList({ stocks, period }: { stocks: Stock[]; period: Period }) {
   return (
-    <div className="px-5 pb-3">
-      <div className="rounded-[11px] px-4 py-2" style={{ background: 'var(--field)' }}>
-        {stocks.map((s) => (
-          <div key={s.name} className="flex items-center justify-between gap-3 py-1.5 text-[14px]">
-            <span style={{ color: 'var(--ink2)' }}>
-              {s.name}
-              <span className="mr-2 text-[12.5px]" style={{ color: 'var(--muted2)' }}>
-                {s.weight}%
+    <div className="rounded-[11px] px-4 py-2" style={{ background: 'var(--field)' }}>
+      {stocks.map((s) => (
+        <div key={s.name} className="flex items-center justify-between gap-3 py-1.5 text-[15px]">
+          <span style={{ color: 'var(--ink2)' }}>
+            {s.name}
+            <span className="mr-2 text-[14px] font-semibold" style={{ color: 'var(--muted)' }}>
+              משקל {s.weight}%
+            </span>
+          </span>
+          <span className="flex gap-4 tabular-nums" dir="ltr">
+            {(['d1', 'd7'] as Period[]).map((p) => (
+              <span key={p} className={p === period ? 'font-extrabold' : 'font-semibold'} style={{ color: tone(s[p]) }} title={PERIOD_LABEL[p]}>
+                {fmtPct(s[p])}
               </span>
-            </span>
-            <span className="font-bold tabular-nums" dir="ltr" style={{ color: tone(s[period]) }}>
-              {fmtPct(s[period])}
-            </span>
-          </div>
-        ))}
-      </div>
+            ))}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -371,14 +506,14 @@ function StockList({ stocks, period }: { stocks: Stock[]; period: Period }) {
 // ── מעטפות — אותה שפה ויזואלית כמו הפיד ─────────────────────────────
 function Section({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="mt-8">
+    <section className="mt-6">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-[19px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+          <h2 className="text-[20px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
             {title}
           </h2>
           {hint && (
-            <p className="mt-0.5 text-[13px]" style={{ color: 'var(--muted)' }}>
+            <p className="mt-0.5 text-[14px]" style={{ color: 'var(--muted)' }}>
               {hint}
             </p>
           )}
@@ -390,11 +525,11 @@ function Section({ title, hint, action, children }: { title: string; hint?: stri
   )
 }
 
-function Card({ className = '', children }: { className?: string; children: ReactNode }) {
+function Card({ className = '', style, children }: { className?: string; style?: CSSProperties; children: ReactNode }) {
   return (
     <div
       className={`rounded-[18px] border ${className}`}
-      style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
+      style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)', ...style }}
     >
       {children}
     </div>
@@ -405,7 +540,7 @@ function Loading() {
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-3" aria-busy="true" aria-label="טוען נתוני מסחר">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-[104px] animate-pulse rounded-[18px]" style={{ background: 'var(--chip)' }} />
+        <div key={i} className="h-[120px] animate-pulse rounded-[18px]" style={{ background: 'var(--chip)' }} />
       ))}
     </div>
   )
@@ -432,23 +567,40 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   )
 }
 
-function Seg<T extends string>({ opts, value, onChange }: { opts: { key: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+function Seg<T extends string>({
+  label,
+  opts,
+  value,
+  onChange,
+}: {
+  label?: string
+  opts: { key: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+}) {
   return (
-    <div className="inline-flex gap-0.5 rounded-[11px] p-[3px]" style={{ background: 'var(--seg)' }}>
-      {opts.map((o) => {
-        const on = value === o.key
-        return (
-          <button
-            key={o.key}
-            onClick={() => onChange(o.key)}
-            aria-pressed={on}
-            className="rounded-lg px-3 py-1.5 text-[12.5px] font-bold transition-colors"
-            style={on ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' } : { color: 'var(--muted)' }}
-          >
-            {o.label}
-          </button>
-        )
-      })}
+    <div className="flex items-center gap-2">
+      {label && (
+        <span className="text-[14px] font-bold" style={{ color: 'var(--muted)' }}>
+          {label}
+        </span>
+      )}
+      <div className="inline-flex gap-0.5 rounded-[11px] p-[3px]" style={{ background: 'var(--seg)' }}>
+        {opts.map((o) => {
+          const on = value === o.key
+          return (
+            <button
+              key={o.key}
+              onClick={() => onChange(o.key)}
+              aria-pressed={on}
+              className="rounded-lg px-3 py-2 text-[14px] font-bold transition-colors"
+              style={on ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' } : { color: 'var(--muted)' }}
+            >
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

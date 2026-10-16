@@ -205,7 +205,7 @@ async function collectIsrael() {
       for (const ix of cat) {
         try {
           const h = await taseIndexHistory(api, ix.IndexId)
-          sectorIndices.push({ id: ix.IndexId, name: ix.Text, source: `מספר מדד ${ix.IndexId} באתר הבורסה`, last: h.last, d1: h.d1, d7: h.d7 })
+          sectorIndices.push({ id: ix.IndexId, name: ix.Text, source: `מספר מדד ${ix.IndexId} באתר הבורסה`, last: h.last, d1: h.d1, d7: h.d7, days: h.days.map((d) => ({ date: d.date, change: d.change })) })
         } catch (e) {
           errors.push(`מדד ענף ${ix.Text}: ${e.message}`)
         }
@@ -253,11 +253,18 @@ async function collectIsrael() {
         const ch = changesBySec.get(sec)
         if (!ch.length) continue
         const sector = sectorOf(branchCache[sec])
-        const g = groups.get(sector) ?? { sector, weight: 0, w1: 0, w7: 0, stocks: [], branches: new Set() }
+        const g = groups.get(sector) ?? { sector, weight: 0, w1: 0, w7: 0, stocks: [], branches: new Set(), byDay: new Map() }
         if (branchCache[sec]) g.branches.add(branchCache[sec])
         const d1 = ch[0].change
         const d7 = compound(ch.map((x) => x.change))
         g.weight += c.Weight
+        // תשואה יומית משוקללת לכל יום מסחר — בסיס למפת החום (סקטור × יום)
+        for (const x of ch) {
+          const d = g.byDay.get(x.date) ?? { w: 0, s: 0 }
+          d.w += c.Weight
+          d.s += c.Weight * x.change
+          g.byDay.set(x.date, d)
+        }
         g.w1 += c.Weight * d1
         g.w7 += c.Weight * d7
         g.stocks.push({ name: c.ShortName, weight: round(c.Weight), d1: round(d1), d7: round(d7) })
@@ -267,7 +274,10 @@ async function collectIsrael() {
         .map((g) => ({
           sector: g.sector,
           // שם הענף הרשמי בבורסה — כדי שאפשר יהיה לאמת את השיוך באתר הבורסה
-          source: `ענף בבורסה: ${[...g.branches].join(' | ') || 'לא מסווג'}`,
+          source: [...g.branches].join(' | ') || 'לא מסווג',
+          days: [...g.byDay.entries()]
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([date, d]) => ({ date, change: round(d.s / d.w) })),
           weight: round(g.weight, 1),
           d1: round(g.w1 / g.weight),
           d7: round(g.w7 / g.weight),
@@ -328,7 +338,7 @@ async function collectUS() {
   for (const s of US_SECTORS) {
     try {
       const h = await yahooHistory(s.symbol)
-      sectors.push({ symbol: s.symbol, sector: s.name, source: `${s.full} (${s.symbol})`, d1: h.d1, d7: h.d7 })
+      sectors.push({ symbol: s.symbol, sector: s.name, source: `${s.full} (${s.symbol})`, d1: h.d1, d7: h.d7, days: h.days.map((d) => ({ date: d.date, change: d.change })) })
     } catch (e) {
       errors.push(e.message)
     }
