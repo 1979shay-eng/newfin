@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase'
 type Period = 'd1' | 'd7' | 'mtd' | 'm1' | 'ytd'
 type Market = 'il' | 'us'
 type View = 'bars' | 'heat'
-type SortKey = Period | 'weight'
+type SortKey = Period | 'weight' | 'pe' | 'fpe'
 interface Sort {
   key: SortKey
   dir: 'desc' | 'asc'
@@ -22,6 +22,8 @@ interface Day {
 }
 interface IndexRow {
   name: string
+  pe?: number | null
+  fpe?: number | null
   source?: string // שם מלא במקור — לאימות
   date: string
   last: number
@@ -34,6 +36,8 @@ interface IndexRow {
 }
 interface Stock {
   name: string
+  pe?: number | null // מכפיל רווח נוכחי (12 חודשים אחרונים)
+  fpe?: number | null // מכפיל רווח עתידי (תחזית אנליסטים לשנה הבאה)
   full?: string // שם החברה המלא (ארה"ב — name הוא הסימול)
   weight: number
   d1: number | null
@@ -44,6 +48,8 @@ interface Stock {
 }
 interface SectorRow {
   sector: string
+  pe?: number | null
+  fpe?: number | null
   source?: string
   weight?: number
   d1: number | null
@@ -117,6 +123,7 @@ function useSummary() {
 
 const fmtPct = (x: number | null | undefined) =>
   x == null ? '—' : `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(2)}%`
+const fmtPE = (x: number | null | undefined) => (x == null ? '—' : x.toFixed(1))
 const fmtNum = (x: number) => x.toLocaleString('he-IL', { maximumFractionDigits: 2 })
 const tone = (x: number | null | undefined) => (x == null || x === 0 ? 'var(--sent-flat)' : x > 0 ? UP : DOWN)
 const arrow = (x: number | null | undefined) => (x == null || x === 0 ? '' : x > 0 ? '▲' : '▼')
@@ -231,9 +238,9 @@ export default function Markets() {
               {data.us.breakdown && (
                 <Section
                   title="סקטורים בתוך S&P 500"
-                  hint="כל 500 המניות במדד, מחולקות לפי סקטור. התשואה של כל סקטור משוקללת לפי משקל המניות שלו במדד. לחיצה על סקטור מציגה את המניות."
+                  hint="כל 500 המניות במדד, מחולקות לפי סקטור. התשואה של כל סקטור משוקללת לפי משקל המניות שלו במדד. מכפיל נוכחי — לפי הרווח ב-12 החודשים האחרונים; עתידי — לפי תחזית האנליסטים לשנה הבאה. לחיצה על סקטור מציגה את המניות."
                 >
-                  <Sectors rows={data.us.breakdown} view={view} weighted />
+                  <Sectors rows={data.us.breakdown} view={view} weighted valuation />
                 </Section>
               )}
               <Section title="קרנות הסקטורים של S&P 500" hint="קרן הסל הרשמית של כל סקטור (Select Sector SPDR).">
@@ -247,7 +254,7 @@ export default function Markets() {
             {market === 'il'
               ? 'הבורסה לניירות ערך בתל אביב'
               : `מחירים — Yahoo Finance; הרכב המדד, משקלים וסקטורים — קבצי האחזקות הרשמיים של קרנות SPDR (State Street)${data.us.holdingsAsOf ? `, ${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')}` : ''}`}
-            . פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד. הנתונים מוצגים לצורכי מידע בלבד ואינם מהווים ייעוץ השקעות.
+            . פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד.{market === 'us' ? ' מכפילי רווח — ממוצע הרמוני משוקלל לפי משקל במדד, כולל חברות מפסידות (Yahoo Finance; עתידי = תחזית האנליסטים לשנה הבאה).' : ''} הנתונים מוצגים לצורכי מידע בלבד ואינם מהווים ייעוץ השקעות.
           </p>
         </>
       )}
@@ -304,6 +311,16 @@ function IndexCard({ ix }: { ix: IndexRow }) {
         </div>
         <Sparkline days={ix.days} />
       </div>
+      {(ix.pe != null || ix.fpe != null) && (
+        <div className="mt-3 flex gap-5 text-[14px] font-bold" style={{ color: 'var(--ink2)' }}>
+          <span>
+            מכפיל נוכחי <span className="tabular-nums">{fmtPE(ix.pe)}</span>
+          </span>
+          <span>
+            מכפיל עתידי <span className="tabular-nums">{fmtPE(ix.fpe)}</span>
+          </span>
+        </div>
+      )}
       <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3" style={{ borderColor: 'var(--line2)' }}>
         {(['mtd', 'm1', 'ytd'] as Period[]).map((p) => (
           <div key={p}>
@@ -347,16 +364,16 @@ function Sparkline({ days }: { days: Day[] }) {
 }
 
 // ── סקטורים: עמודות או מפת חום, אותה מיון ואותה פתיחת מניות ─────────
-function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weighted?: boolean }) {
+function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view: View; weighted?: boolean; valuation?: boolean }) {
   const [open, setOpen] = useState<string | null>(null)
   // מיון בלחיצה על כותרת: לחיצה ראשונה — מהגבוה לנמוך, שנייה — הפוך.
   // התקופה של העמודה הממוינת קובעת גם את העמודה הגרפית ואת צבעי מפת החום.
   const [sort, setSort] = useState<Sort>({ key: 'd7', dir: 'desc' })
-  const period: Period = sort.key === 'weight' ? 'd7' : sort.key
+  const period: Period = sort.key === 'weight' || sort.key === 'pe' || sort.key === 'fpe' ? 'd7' : sort.key
   const onSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))
   const sorted = useMemo(() => {
-    const val = (r: SectorRow) => (sort.key === 'weight' ? r.weight : r[sort.key]) ?? -Infinity
+    const val = (r: SectorRow) => r[sort.key] ?? -Infinity
     return rows
       .filter((r) => r[period] != null)
       .sort((a, b) => (sort.dir === 'desc' ? val(b) - val(a) : val(a) - val(b)))
@@ -394,7 +411,9 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
               {opened.sector}
             </div>
             <div className="overflow-x-auto">
-              <StockList stocks={opened.stocks} period={period} cols={STOCK_COLS} />
+              <div className={valuation ? 'min-w-[680px]' : 'min-w-[560px] sm:min-w-0'}>
+              <StockList stocks={opened.stocks} period={period} cols={valuation ? STOCK_COLS_PE : STOCK_COLS} valuation={valuation} />
+              </div>
             </div>
           </div>
         )}
@@ -404,12 +423,14 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
 
   // עמודות: שורת כותרות + שורה לכל סקטור, חמישה טווחים. בטלפון העמודה הגרפית
   // נושרת והטבלה נגללת לרוחב בתוך הכרטיס (הדף עצמו לא זז).
-  const cols = weighted
-    ? 'grid-cols-[132px_52px_repeat(5,68px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_minmax(80px,1fr)_repeat(5,84px)]'
-    : 'grid-cols-[150px_repeat(5,68px)] sm:grid-cols-[minmax(200px,1.5fr)_minmax(80px,1fr)_repeat(5,84px)]'
+  const cols = valuation
+    ? 'grid-cols-[132px_52px_repeat(5,68px)_repeat(2,60px)] sm:grid-cols-[minmax(150px,1.2fr)_60px_minmax(56px,0.6fr)_repeat(5,80px)_repeat(2,72px)]'
+    : weighted
+      ? 'grid-cols-[132px_52px_repeat(5,68px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_minmax(80px,1fr)_repeat(5,84px)]'
+      : 'grid-cols-[150px_repeat(5,68px)] sm:grid-cols-[minmax(200px,1.5fr)_minmax(80px,1fr)_repeat(5,84px)]'
   return (
     <div className="overflow-x-auto">
-      <div className={weighted ? 'min-w-[560px] sm:min-w-0' : 'min-w-[520px] sm:min-w-0'}>
+      <div className={valuation ? 'min-w-[680px] sm:min-w-[960px]' : weighted ? 'min-w-[560px] sm:min-w-0' : 'min-w-[520px] sm:min-w-0'}>
       <div
         className={`grid ${cols} items-center gap-2 px-4 py-2.5 text-[13px] font-bold sm:gap-4 sm:px-5`}
         style={{ color: 'var(--muted)', borderBottom: '1px solid var(--line2)' }}
@@ -420,6 +441,12 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
         {PERIODS.map((p) => (
           <SortHead key={p} k={p} sort={sort} onSort={onSort} label={PERIOD_LABEL[p]} end />
         ))}
+        {valuation && (
+          <>
+            <SortHead k="pe" sort={sort} onSort={onSort} label="מכפיל נוכחי" end />
+            <SortHead k="fpe" sort={sort} onSort={onSort} label="מכפיל עתידי" end />
+          </>
+        )}
       </div>
       <ul>
         {sorted.map((r, i) => {
@@ -469,10 +496,16 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
                     {fmtPct(r[p])}
                   </span>
                 ))}
+                {valuation &&
+                  (['pe', 'fpe'] as const).map((k) => (
+                    <span key={k} className={`text-left tabular-nums ${sort.key === k ? 'text-[16px] font-extrabold' : 'text-[15px] font-semibold'}`} dir="ltr" style={{ color: 'var(--ink)' }}>
+                      {fmtPE(r[k])}
+                    </span>
+                  ))}
               </button>
               {isOpen && r.stocks && (
                 <div className="pb-3">
-                  <StockList stocks={r.stocks} period={period} cols={cols} />
+                  <StockList stocks={r.stocks} period={period} cols={cols} valuation={valuation} />
                 </div>
               )}
             </li>
@@ -486,6 +519,7 @@ function Sectors({ rows, view, weighted }: { rows: SectorRow[]; view: View; weig
 
 // מפת החום: רשימת המניות של אריח פתוח — בלי עמודה גרפית
 const STOCK_COLS = 'grid-cols-[132px_52px_repeat(5,68px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_repeat(5,84px)]'
+const STOCK_COLS_PE = 'grid-cols-[132px_52px_repeat(5,68px)_repeat(2,60px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_repeat(5,80px)_repeat(2,72px)]'
 
 // אריח במפת החום: צבע מתפצל (ירוק/אדום, אפור בנקודת האפס), עוצמה לפי גודל
 // התשואה ביחס לגדול ביותר בתצוגה. כשיש משקלים — רוחב האריח גדל עם המשקל.
@@ -564,8 +598,8 @@ function SortHead({ k, sort, onSort, label, end }: { k: SortKey; sort: Sort; onS
   )
 }
 
-function StockList({ stocks, period, cols }: { stocks: Stock[]; period: Period; cols: string }) {
-  const withBar = cols.includes('minmax(80px,1fr)')
+function StockList({ stocks, period, cols, valuation }: { stocks: Stock[]; period: Period; cols: string; valuation?: boolean }) {
+  const withBar = cols.includes('minmax(80px,1fr)') || cols.includes('minmax(56px,0.6fr)')
   return (
     <div className="mx-3 rounded-[11px] py-1" style={{ background: 'var(--field)' }}>
       {stocks.map((s) => (
@@ -587,6 +621,12 @@ function StockList({ stocks, period, cols }: { stocks: Stock[]; period: Period; 
               {fmtPct(s[p])}
             </span>
           ))}
+          {valuation &&
+            (['pe', 'fpe'] as const).map((k) => (
+              <span key={k} className="text-left font-semibold tabular-nums" dir="ltr" style={{ color: 'var(--ink2)' }}>
+                {fmtPE(s[k])}
+              </span>
+            ))}
         </div>
       ))}
     </div>

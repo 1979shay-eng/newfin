@@ -479,6 +479,8 @@ async function collectUS() {
       breakdown = r.breakdown
       holdingsAsOf = r.asOf
       errors.push(...r.errors)
+      const spx = indices.find((i) => i.symbol === '^GSPC')
+      if (spx) Object.assign(spx, { pe: r.pe, fpe: r.fpe })
     } catch (e) {
       errors.push(e.message)
     }
@@ -567,6 +569,64 @@ async function yahooSpark(tickers) {
   }
 }
 
+// ── מכפילי רווח (ארה"ב) ───────────────────────────────────────────
+// Yahoo quote: רווח למניה ב-12 החודשים האחרונים (epsTrailingTwelveMonths) ותחזית
+// האנליסטים לשנה הבאה (epsForward). דורש עוגייה + crumb (מנגנון ההגנה של Yahoo).
+async function yahooSession() {
+  const r0 = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': UA }, redirect: 'manual' })
+  const cookie = (r0.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ')
+  const crumb = await (await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', { headers: { 'User-Agent': UA, Cookie: cookie } })).text()
+  if (!cookie || !crumb || crumb.length > 40) throw new Error('Yahoo: לא התקבל crumb')
+  return { cookie, crumb }
+}
+
+async function yahooQuotes(tickers) {
+  const { cookie, crumb } = await yahooSession()
+  const out = {}
+  for (let i = 0; i < tickers.length; i += 50) {
+    const batch = tickers.slice(i, i + 50)
+    const symbols = batch.map((t) => t.replace(/\./g, '-'))
+    const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}&crumb=${encodeURIComponent(crumb)}`
+    const r = await fetch(url, { headers: { 'User-Agent': UA, Cookie: cookie } })
+    if (!r.ok) throw new Error(`Yahoo quote -> ${r.status}`)
+    const rows = (await r.json()).quoteResponse?.result ?? []
+    const bySym = Object.fromEntries(rows.map((x) => [x.symbol, x]))
+    batch.forEach((t, j) => {
+      const q = bySym[symbols[j]]
+      if (!q || !Number.isFinite(q.regularMarketPrice) || q.regularMarketPrice <= 0) return
+      // מניה שמדווחת במטבע אחר מהמחיר — לא מערבבים (כמו הבעיה שנמצאה במניות ישראליות)
+      if (q.financialCurrency && q.currency && q.financialCurrency !== q.currency) return
+      out[t] = {
+        price: q.regularMarketPrice,
+        eps: Number.isFinite(q.epsTrailingTwelveMonths) ? q.epsTrailingTwelveMonths : null,
+        epsF: Number.isFinite(q.epsForward) ? q.epsForward : null,
+      }
+    })
+    await sleep(300)
+  }
+  return out
+}
+
+// מכפיל של קבוצה = סכום המשקלים ÷ סכום (משקל × תשואת רווח), כמו בשיטת S&P.
+// חברה מפסידה נכנסת עם רווח שלילי — השמטה שלה הייתה מציגה מכפיל נמוך מדי.
+// אם ליותר מ-5% ממשקל הקבוצה אין נתון רווח — "—", לא מספר חלקי.
+function groupPE(items, key) {
+  let w = 0
+  let ey = 0
+  let gap = 0
+  for (const it of items) {
+    const q = it.q
+    if (!q || q[key] == null) gap += it.weight
+    else {
+      w += it.weight
+      ey += (it.weight * q[key]) / q.price
+    }
+  }
+  const total = w + gap
+  if (!total || gap / total > 0.05 || ey <= 0) return null
+  return round(w / ey, 1)
+}
+
 async function collectSpxBreakdown(bases) {
   const errors = []
   const { asOf, holdings } = await spxHoldings()
@@ -581,6 +641,13 @@ async function collectSpxBreakdown(bases) {
       errors.push(e.message)
     }
     await sleep(300)
+  }
+
+  let quotes = {}
+  try {
+    quotes = await yahooQuotes(holdings.map((h) => h.ticker))
+  } catch (e) {
+    errors.push(`מכפילים: ${e.message}`)
   }
 
   const groups = new Map()
@@ -600,8 +667,9 @@ async function collectSpxBreakdown(bases) {
     }
     const r = Object.fromEntries(RANGES.map((k) => [k, bases[k] && at(bases[k]) != null ? pct(p[bases.latest], at(bases[k])) : null]))
     const meta = US_SECTORS.find((s) => s.symbol === h.sector)
-    const g = groups.get(h.sector) ?? { sector: meta.name, symbol: h.sector, weight: 0, start: {}, now: {}, gap: {}, stocks: [] }
+    const g = groups.get(h.sector) ?? { sector: meta.name, symbol: h.sector, weight: 0, start: {}, now: {}, gap: {}, stocks: [], pe: [] }
     g.weight += h.weight
+    g.pe.push({ weight: h.weight, q: quotes[h.ticker] })
     // מניה בלי מחיר ביום הבסיס (נרשמה אחריו / חסר אצל Yahoo) — נשמטת מאותו טווח
     // בלבד, ונספרת כפער. אם הפער מהותי — הטווח של הסקטור מוצג "—".
     for (const k of RANGES) {
@@ -611,7 +679,16 @@ async function collectSpxBreakdown(bases) {
         g.start[k] = (g.start[k] ?? 0) + h.weight / (1 + r[k] / 100)
       }
     }
-    g.stocks.push({ name: h.ticker, full: h.name, weight: round(h.weight), ...Object.fromEntries(RANGES.map((k) => [k, round(r[k])])) })
+    const q = quotes[h.ticker]
+    g.stocks.push({
+      name: h.ticker,
+      full: h.name,
+      weight: round(h.weight),
+      ...Object.fromEntries(RANGES.map((k) => [k, round(r[k])])),
+      // מכפיל של מניה בודדת — רק כשהרווח חיובי (מכפיל שלילי חסר משמעות)
+      pe: q?.eps > 0 ? round(q.price / q.eps, 1) : null,
+      fpe: q?.epsF > 0 ? round(q.price / q.epsF, 1) : null,
+    })
     groups.set(h.sector, g)
   }
   // מעל 1% מהמדד בלי מחיר — לא מציגים פילוח חלקי שמתחזה למלא
@@ -627,10 +704,13 @@ async function collectSpxBreakdown(bases) {
         // הבסיס — ערכן היה בתוך החברה-האם, ולכן השמטה שלהן נכונה כל עוד היא זניחה
         RANGES.map((k) => [k, !g.now[k] || (g.gap[k] ?? 0) > 0.5 ? null : round((g.now[k] / g.start[k] - 1) * 100)]),
       ),
+      pe: groupPE(g.pe, 'eps'),
+      fpe: groupPE(g.pe, 'epsF'),
       stocks: g.stocks.sort((a, b) => b.weight - a.weight),
     }))
     .sort((a, b) => b.weight - a.weight)
-  return { breakdown, asOf, errors }
+  const all = [...groups.values()].flatMap((g) => g.pe)
+  return { breakdown, asOf, errors, pe: groupPE(all, 'eps'), fpe: groupPE(all, 'epsF') }
 }
 
 // ── שורה כתובה — נגזרת מהמספרים בלבד, בלי AI (אפס סיכון להזיה) ─────
@@ -704,7 +784,9 @@ for (const m of ['il', 'us']) {
   }
 }
 
-const { error } = await db.storage.from(BUCKET).upload('market/summary.json', JSON.stringify(summary), {
+// --test: כתיבה לקובץ נפרד, כדי שבדיקה ידנית לא תתנגש בריצת הענן
+const OUT = process.argv.includes('--test') ? 'market/summary-test.json' : 'market/summary.json'
+const { error } = await db.storage.from(BUCKET).upload(OUT, JSON.stringify(summary), {
   upsert: true,
   contentType: 'application/json',
   cacheControl: '60',
