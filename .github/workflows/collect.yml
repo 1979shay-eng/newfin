@@ -55,13 +55,21 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}
 
+      # עד 3 ניסיונות: התקלה הנפוצה כאן היא הורדה חולפת ממאגר החבילות של אובונטו
+      # (קרה ב-21.10.2026, ריצה #12465) — לא באג. המתנה הולכת וגדלה בין ניסיונות.
       - name: התקנת דפדפן Playwright
         run: |
           if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
+            CMD="npx playwright install-deps chromium"
           else
-            npx playwright install --with-deps chromium
+            CMD="npx playwright install --with-deps chromium"
           fi
+          for i in 1 2 3; do
+            $CMD && exit 0
+            echo "⚠️ ניסיון $i להתקנת הדפדפן נכשל"
+            [ $i -lt 3 ] && sleep $((i * 30)) && sudo apt-get update -qq || true
+          done
+          echo "⛔ התקנת הדפדפן נכשלה 3 פעמים"; exit 1
 
       - name: לולאת איסוף (כל 10 דקות, עד ~5.5 שעות)
         env:
