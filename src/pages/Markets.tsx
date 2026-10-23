@@ -58,6 +58,7 @@ interface SectorRow {
   m1: number | null
   ytd: number | null
   stocks?: Stock[]
+  bench?: boolean // שורת המדד עצמו — נקודת ההשוואה לתשואה עודפת
 }
 interface Summary {
   updated_at: string
@@ -129,6 +130,11 @@ const tone = (x: number | null | undefined) => (x == null || x === 0 ? 'var(--se
 const arrow = (x: number | null | undefined) => (x == null || x === 0 ? '' : x > 0 ? '▲' : '▼')
 // "2026-10-14" → "14.10"
 const shortDate = (iso: string) => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}`
+// מדד דגל → שורת השוואה בטבלת הסקטורים
+const benchOf = (indices: IndexRow[], name: string): SectorRow | undefined => {
+  const ix = indices.find((i) => i.name === name)
+  return ix && { sector: ix.name, pe: ix.pe, fpe: ix.fpe, weight: 100, d1: ix.d1, d7: ix.d7, mtd: ix.mtd, m1: ix.m1, ytd: ix.ytd, bench: true }
+}
 
 export default function Markets() {
   const { data, error } = useSummary()
@@ -214,7 +220,7 @@ export default function Markets() {
             <>
               <Section
                 title="סקטורים בתוך המדד"
-                hint={`רק המניות שבתוך ${ilIndex}, מחולקות לפי ענף. התשואה של כל ענף משוקללת לפי משקל המניות שלו במדד. לחיצה על ענף מציגה את המניות.`}
+                hint={`רק המניות שבתוך ${ilIndex}, מחולקות לפי ענף. התשואה של כל ענף משוקללת לפי משקל המניות שלו במדד. המדד עצמו ממוין יחד עם הענפים — מה שמעליו הניב תשואה עודפת. לחיצה על ענף מציגה את המניות.`}
                 action={
                   <Seg
                     opts={Object.keys(data.il.breakdown).map((k) => ({ key: k, label: k }))}
@@ -223,12 +229,13 @@ export default function Markets() {
                   />
                 }
               >
-                <Sectors rows={data.il.breakdown[ilIndex] ?? []} view={view} weighted />
+                <Sectors rows={data.il.breakdown[ilIndex] ?? []} bench={benchOf(data.il.indices, ilIndex)} view={view} weighted />
               </Section>
 
-              <Section title="מדדי הענף של הבורסה" hint="מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב.">
+              <Section title="מדדי הענף של הבורסה" hint='מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב, מול ת"א-125 — המדד הרחב.'>
                 <Sectors
                   rows={data.il.sectorIndices.map(({ name, ...s }) => ({ sector: name, ...s }))}
+                  bench={benchOf(data.il.indices, 'ת"א-125')}
                   view={view}
                 />
               </Section>
@@ -238,13 +245,13 @@ export default function Markets() {
               {data.us.breakdown && (
                 <Section
                   title="סקטורים בתוך S&P 500"
-                  hint="כל 500 המניות במדד, מחולקות לפי סקטור. התשואה של כל סקטור משוקללת לפי משקל המניות שלו במדד. מכפיל נוכחי — לפי הרווח ב-12 החודשים האחרונים; עתידי — לפי תחזית האנליסטים לשנה הבאה. לחיצה על סקטור מציגה את המניות."
+                  hint="כל 500 המניות במדד, מחולקות לפי סקטור. התשואה של כל סקטור משוקללת לפי משקל המניות שלו במדד. המדד עצמו ממוין יחד עם הסקטורים — מה שמעליו הניב תשואה עודפת. מכפיל נוכחי — לפי הרווח ב-12 החודשים האחרונים; עתידי — לפי תחזית האנליסטים לשנה הבאה. לחיצה על סקטור מציגה את המניות."
                 >
-                  <Sectors rows={data.us.breakdown} view={view} weighted valuation />
+                  <Sectors rows={data.us.breakdown} bench={benchOf(data.us.indices, 'S&P 500')} view={view} weighted valuation />
                 </Section>
               )}
-              <Section title="קרנות הסקטורים של S&P 500" hint="קרן הסל הרשמית של כל סקטור (Select Sector SPDR).">
-                <Sectors rows={data.us.sectors} view={view} />
+              <Section title="קרנות הסקטורים של S&P 500" hint="קרן הסל הרשמית של כל סקטור (Select Sector SPDR), מול המדד עצמו.">
+                <Sectors rows={data.us.sectors} bench={benchOf(data.us.indices, 'S&P 500')} view={view} />
               </Section>
             </>
           )}
@@ -364,7 +371,19 @@ function Sparkline({ days }: { days: Day[] }) {
 }
 
 // ── סקטורים: עמודות או מפת חום, אותה מיון ואותה פתיחת מניות ─────────
-function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view: View; weighted?: boolean; valuation?: boolean }) {
+function Sectors({
+  rows,
+  bench,
+  view,
+  weighted,
+  valuation,
+}: {
+  rows: SectorRow[]
+  bench?: SectorRow
+  view: View
+  weighted?: boolean
+  valuation?: boolean
+}) {
   const [open, setOpen] = useState<string | null>(null)
   // מיון בלחיצה על כותרת: לחיצה ראשונה — מהגבוה לנמוך, שנייה — הפוך.
   // התקופה של העמודה הממוינת קובעת גם את העמודה הגרפית ואת צבעי מפת החום.
@@ -374,10 +393,14 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))
   const sorted = useMemo(() => {
     const val = (r: SectorRow) => r[sort.key] ?? -Infinity
-    return rows
+    // המדד נכנס למיון כמו כל שורה — כך הוא חוצץ בין מי שהכה אותו למי שפיגר
+    return (bench ? [...rows, bench] : rows)
       .filter((r) => r[period] != null)
       .sort((a, b) => (sort.dir === 'desc' ? val(b) - val(a) : val(a) - val(b)))
-  }, [rows, sort, period])
+  }, [rows, bench, sort, period])
+  // תשואה עודפת מול המדד — מוצגת בריחוף על המספר
+  const excess = (r: SectorRow, p: Period) =>
+    bench && !r.bench && r[p] != null && bench[p] != null ? `מול ${bench.sector}: ${fmtPct(r[p]! - bench[p]!)}` : undefined
   const scale = Math.max(...sorted.map((r) => Math.abs(r[period] ?? 0)), 0.01)
 
   if (!sorted.length) {
@@ -402,7 +425,7 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
         </div>
         <div className="flex flex-wrap gap-2">
           {sorted.map((r) => (
-            <HeatTile key={r.sector} r={r} period={period} scale={scale} weighted={weighted} open={open === r.sector} onClick={() => toggle(r.sector)} />
+            <HeatTile key={r.sector} r={r} excess={excess(r, period)} period={period} scale={scale} weighted={weighted} open={open === r.sector} onClick={() => toggle(r.sector)} />
           ))}
         </div>
         {opened?.stocks && (
@@ -455,7 +478,13 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
           const expandable = Boolean(r.stocks?.length)
           const isOpen = open === r.sector
           return (
-            <li key={r.sector} style={{ borderTop: i ? '1px solid var(--line)' : undefined }}>
+            <li
+              key={r.sector}
+              style={{
+                borderTop: i ? `1px solid ${r.bench || sorted[i - 1]?.bench ? 'var(--line2)' : 'var(--line)'}` : undefined,
+                background: r.bench ? BENCH_BG : undefined,
+              }}
+            >
               <button
                 type="button"
                 disabled={!expandable}
@@ -464,8 +493,9 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
                 className={`grid w-full ${cols} items-center gap-2 px-4 py-3 text-right transition-colors sm:px-5 enabled:hover:bg-[var(--hover)] sm:gap-4`}
               >
                 <span className="min-w-0">
-                  <span className="block text-[16px] font-bold leading-snug sm:truncate" style={{ color: 'var(--ink)' }}>
-                    {r.sector}
+                  <span className="flex items-center gap-2 text-[16px] font-bold leading-snug" style={{ color: 'var(--ink)' }}>
+                    <span className={r.bench ? 'font-extrabold' : 'sm:truncate'}>{r.sector}</span>
+                    {r.bench && <BenchTag />}
                   </span>
                   {r.source && (
                     <span className="block truncate text-[13px]" dir="auto" title={r.source} style={{ color: 'var(--muted)' }}>
@@ -483,7 +513,7 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
                   <span className="absolute inset-y-[-3px] left-1/2 w-px" style={{ background: 'var(--line2)' }} />
                   <span
                     className="absolute inset-y-0 rounded-full"
-                    style={{ background: tone(v), width: `${pct}%`, ...(v >= 0 ? { left: '50%' } : { right: '50%' }) }}
+                    style={{ background: r.bench ? 'var(--accent)' : tone(v), width: `${pct}%`, ...(v >= 0 ? { left: '50%' } : { right: '50%' }) }}
                   />
                 </span>
                 {PERIODS.map((p) => (
@@ -491,6 +521,7 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
                     key={p}
                     className={`text-left tabular-nums ${p === period ? 'text-[16px] font-extrabold' : 'text-[15px] font-semibold'}`}
                     dir="ltr"
+                    title={excess(r, p)}
                     style={{ color: tone(r[p]) }}
                   >
                     {fmtPct(r[p])}
@@ -517,6 +548,16 @@ function Sectors({ rows, view, weighted, valuation }: { rows: SectorRow[]; view:
   )
 }
 
+// שורת המדד: גוון עדין של צבע ההדגשה + תווית, כדי שלא תיראה כעוד סקטור
+const BENCH_BG = 'color-mix(in oklab, var(--accent) 7%, transparent)'
+function BenchTag() {
+  return (
+    <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>
+      המדד
+    </span>
+  )
+}
+
 // מפת החום: רשימת המניות של אריח פתוח — בלי עמודה גרפית
 const STOCK_COLS = 'grid-cols-[132px_52px_repeat(5,68px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_repeat(5,84px)]'
 const STOCK_COLS_PE = 'grid-cols-[132px_52px_repeat(5,68px)_repeat(2,60px)] sm:grid-cols-[minmax(160px,1.3fr)_64px_repeat(5,80px)_repeat(2,72px)]'
@@ -526,6 +567,7 @@ const STOCK_COLS_PE = 'grid-cols-[132px_52px_repeat(5,68px)_repeat(2,60px)] sm:g
 // המספר כתוב באריח תמיד, כך שהצבע לעולם אינו הנשא היחיד של המידע.
 function HeatTile({
   r,
+  excess,
   period,
   scale,
   weighted,
@@ -533,6 +575,7 @@ function HeatTile({
   onClick,
 }: {
   r: SectorRow
+  excess?: string
   period: Period
   scale: number
   weighted?: boolean
@@ -543,7 +586,8 @@ function HeatTile({
   const t = Math.min(1, Math.abs(v) / scale)
   const flat = Math.abs(v) < 0.05
   const bg = flat ? 'var(--chip)' : `color-mix(in oklab, ${v > 0 ? UP : DOWN} ${Math.round(14 + t * 46)}%, var(--surface))`
-  const w = weighted && r.weight ? r.weight : 1
+  // המדד לא מתפרש לרוחב לפי משקל 100% — אריח בגודל רגיל
+  const w = weighted && r.weight && !r.bench ? r.weight : 1
   const expandable = Boolean(r.stocks?.length)
   return (
     <button
@@ -551,17 +595,18 @@ function HeatTile({
       disabled={!expandable}
       onClick={onClick}
       aria-expanded={expandable ? open : undefined}
-      title={[r.source ?? r.sector, ...PERIODS.map((p) => `${PERIOD_LABEL[p]} ${fmtPct(r[p])}`)].join(' · ')}
+      title={[r.source ?? r.sector, ...PERIODS.map((p) => `${PERIOD_LABEL[p]} ${fmtPct(r[p])}`), excess].filter(Boolean).join(' · ')}
       className="min-h-[96px] rounded-[11px] px-3 py-2.5 text-right transition-opacity enabled:hover:opacity-90"
       style={{
         flex: weighted ? `${w} 1 ${Math.max(116, w * 9)}px` : '1 1 150px',
         background: bg,
-        outline: open ? '2px solid var(--ink)' : undefined,
-        outlineOffset: open ? '-2px' : undefined,
+        outline: open || r.bench ? `2px solid ${r.bench ? 'var(--accent)' : 'var(--ink)'}` : undefined,
+        outlineOffset: open || r.bench ? '-2px' : undefined,
       }}
     >
-      <div className="truncate text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
-        {r.sector}
+      <div className="flex items-center gap-2 text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+        <span className="truncate">{r.sector}</span>
+        {r.bench && <BenchTag />}
       </div>
       <div className="mt-1 text-[22px] font-extrabold leading-tight tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
         {fmtPct(v)}
@@ -569,7 +614,7 @@ function HeatTile({
       <div className="text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
         {PERIOD_LABEL[period]}
       </div>
-      {weighted && r.weight != null && (
+      {weighted && r.weight != null && !r.bench && (
         <div className="mt-0.5 text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
           משקל {r.weight}%
         </div>
