@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 // כולו נצבע באחד משבעה גוונים לפי המיקום על המד.
 
 type Shade = -3 | -2 | -1 | 0 | 1 | 2 | 3
-type Unit = 'pct' | 'pts' | 'ils' | 'z'
+type Unit = 'pct' | 'pp' | 'pts' | 'ils' | 'z'
 interface Indicator {
   id: string
   group: string
@@ -26,6 +26,8 @@ interface Indicator {
   unit: Unit
   kind: 'pct' | 'trend' | 'curve'
   date: string
+  prevLabel?: string // "חודש קודם" / "רבעון קודם" במקום "חודש"
+  period?: string // נתון חודשי/רבעוני — "ספטמבר 2026" / "רבעון 2 2026"
   value: number
   close?: number
   ma?: number
@@ -72,6 +74,8 @@ const REFRESH_MS = 5 * 60 * 1000
 const dataUrl = supabase.storage.from('public-data').getPublicUrl('market/indicators-v2.json').data.publicUrl
 
 const GROUP_HINT: Record<string, string> = {
+  macro: 'אינפלציה וצמיחה — הנתונים הרשמיים האחרונים. באינפלציה המד ירוק כשהיא קרובה ליעד של 2%.',
+  macro_il: 'אינפלציה וצמיחה בישראל — הלמ"ס ובנק ישראל. יעד האינפלציה: בין 1% ל-3%.',
   risk: 'כמה פחד השוק מתמחר, והאם המדדים במגמה ארוכה עולה או יורדת.',
   credit: 'כמה המלווים דורשים מחברות מעל ממשלת ארה"ב. המיקום מחושב מול 3 שנים — זה כל מה שמתפרסם בחינם.',
   rates: 'מחיר הכסף בארה"ב, צורת העקום וציפיות האינפלציה. ריבית גבוהה = תנאים מהדקים לשוק, ולכן נצבעת באדום.',
@@ -124,16 +128,17 @@ function useData() {
 
 const sign = (x: number) => (x > 0 ? '+' : x < 0 ? '−' : '')
 const fmtValue = (u: Unit, v: number) =>
-  u === 'pct' ? `${v.toFixed(2)}%` : u === 'ils' ? `₪${v.toFixed(3)}` : u === 'z' ? `${sign(v)}${Math.abs(v).toFixed(2)}` : v.toFixed(2)
+  u === 'pct' || u === 'pp' ? `${v.toFixed(2)}%` : u === 'ils' ? `₪${v.toFixed(3)}` : u === 'z' ? `${sign(v)}${Math.abs(v).toFixed(2)}` : v.toFixed(2)
 const fmtChange = (u: Unit, x: number | null) => {
   if (x == null) return '—'
   const a = Math.abs(x)
   if (u === 'pct') return `${sign(x)}${a.toFixed(0)} נ״ב`
+  if (u === 'pp') return `${sign(x)}${a.toFixed(2)} נק׳ אחוז`
   if (u === 'ils') return `${sign(x)}${a.toFixed(1)}%`
   if (u === 'z') return `${sign(x)}${a.toFixed(2)} ס״ת`
   return `${sign(x)}${a.toFixed(2)}`
 }
-const fmtRange = (u: Unit, v: number) => (u === 'pct' ? `${v.toFixed(2)}%` : u === 'ils' ? v.toFixed(2) : v.toFixed(1))
+const fmtRange = (u: Unit, v: number) => (u === 'pct' || u === 'pp' ? `${v.toFixed(2)}%` : u === 'ils' ? v.toFixed(2) : v.toFixed(1))
 // "2026-10-14" → "14.10.26"
 const shortDate = (iso: string) => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}.${iso.slice(2, 4)}`
 const fmtNum = (x: number) => x.toLocaleString('he-IL', { maximumFractionDigits: 0 })
@@ -329,6 +334,7 @@ const pctHelp = (it: Indicator) =>
   `אחוזון: ב-${it.pct}% ${windowText(it)} הערך היה נמוך מהיום או שווה לו. הטווח — הערך הנמוך והגבוה ביותר באותה תקופה.`
 const CH_HELP: Record<Unit, string> = {
   pct: 'השינוי לעומת לפני חודש ולפני שנה, בנקודות בסיס (נ״ב): 100 נ״ב = 1%.',
+  pp: 'השינוי לעומת הנתון הקודם (חודש או רבעון) ולעומת לפני שנה, בנקודות אחוז: מ-3.4% ל-3.7% = עלייה של 0.3 נק׳ אחוז.',
   z: 'השינוי לעומת לפני חודש ולפני שנה, בסטיות תקן (ס״ת).',
   ils: 'השינוי בשער לעומת לפני חודש ולפני שנה, באחוזים. עלייה = הדולר התחזק מול השקל.',
   pts: 'השינוי לעומת לפני חודש ולפני שנה, בנקודות מדד.',
@@ -445,7 +451,7 @@ function IndicatorCard({ it }: { it: Indicator }) {
             <div className="flex gap-5 text-[13px]">
               {(['ch1m', 'ch1y'] as const).map((k) => (
                 <span key={k} style={{ color: 'var(--muted)' }}>
-                  {k === 'ch1m' ? 'חודש' : 'שנה'}{' '}
+                  {k === 'ch1m' ? (it.prevLabel ?? 'חודש') : 'שנה'}{' '}
                   <span className="font-bold tabular-nums" dir="ltr" style={{ color: 'var(--ink)' }}>
                     {fmtChange(it.unit, it[k])}
                   </span>
@@ -461,8 +467,7 @@ function IndicatorCard({ it }: { it: Indicator }) {
           className="mt-2 block text-[12px] underline-offset-2 hover:underline"
           style={{ color: it.stale ? DOWN : 'var(--muted)' }}
         >
-          {it.org} · {it.stale ? 'לא עודכן מאז ' : 'נכון ל-'}
-          {shortDate(it.date)}
+          {it.org} · {it.period ? `${it.stale ? 'אחרון: ' : ''}${it.period}` : `${it.stale ? 'לא עודכן מאז ' : 'נכון ל-'}${shortDate(it.date)}`}
         </a>
       </div>
     </Card>

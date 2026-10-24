@@ -70,7 +70,7 @@ async function cboe(symbol) {
 }
 
 // בנק ישראל (SDMX). הממשק ממלא סופי שבוע בערך האחרון — זה הערך הרשמי בתוקף.
-async function boi(flow, key) {
+async function boi(flow, key, minRows = 30) {
   const from = isoAgo(new Date().toISOString().slice(0, 10), 365 * 6)
   const csv = await get(`https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/${flow}/1.0/${key}?startperiod=${from}&format=csv`)
   const [head, ...lines] = csv.trim().split('\n')
@@ -79,10 +79,14 @@ async function boi(flow, key) {
   const vi = cols.indexOf('OBS_VALUE')
   const rows = lines
     .map((l) => l.split(','))
-    .map((c) => ({ date: c[di], value: +c[vi] }))
+    // תקופה: יומי "2026-10-23", חודשי "2026-09", רבעוני "2026-Q2" → תאריך תחילת התקופה
+    .map((c) => ({
+      date: c[di].replace(/^(\d{4})-Q([1-4])$/, (_, y, q) => `${y}-${String((q - 1) * 3 + 1).padStart(2, '0')}-01`).replace(/^(\d{4}-\d\d)$/, '$1-01'),
+      value: +c[vi],
+    }))
     .filter((r) => /^\d{4}-\d\d-\d\d$/.test(r.date) && Number.isFinite(r.value))
     .sort((a, b) => (a.date < b.date ? -1 : 1))
-  if (rows.length < 30) throw new Error(`בנק ישראל ${key}: היסטוריה קצרה מדי`)
+  if (rows.length < minRows) throw new Error(`בנק ישראל ${key}: היסטוריה קצרה מדי`)
   return rows
 }
 
@@ -260,7 +264,8 @@ function vsMA200(closes) {
 // zones — שמות שלושת האזורים, משמאל (אדום) לימין (ירוק).
 // מרווחי ICE BofA: FRED מפרסם בחינם רק 3 שנים, ולכן השמות "גבוה/נמוך" ולא
 // "לחוץ/רגוע" — שלוש שנים רגועות לא מספיקות כדי לקרוא לרמה "לחץ".
-// unit: pct = אחוזים (שינוי בנ"ב), pts = נקודות, ils = שקלים (שינוי ב-%), z = סטיות תקן
+// unit: pct = אחוזים (שינוי בנ"ב), pp = אחוזים (שינוי בנקודות אחוז — מאקרו), pts = נקודות,
+// ils = שקלים (שינוי ב-%), z = סטיות תקן
 const FRED_URL = (id) => `https://fred.stlouisfed.org/series/${id}`
 const H15 = 'מועצת הפדרל ריזרב, דרך FRED'
 const ICE = 'ICE Data Indices, דרך FRED'
@@ -404,9 +409,87 @@ const INDICATORS = [
     what: 'השער היציג של בנק ישראל. אין כאן טוב או רע: שקל חזק פוגע ביצואנים, שקל חלש מייקר את המחירים.',
     fetch: () => boi('EXR', 'RER_USD_ILS'),
   },
+  // ── מאקרו (חודשי/רבעוני). kind 'target' — מרחק מיעד האינפלציה של הפד (2%);
+  // kind 'growth' — צמיחת התוצר: 0% = גבול התכווצות/חלשה, 3% = גבול מתונה/חזקה.
+  {
+    id: 'cpi', group: 'macro', name: 'אינפלציה שנתית', nick: 'CPI YoY', nickHe: 'מדד המחירים לצרכן, שנתי',
+    official: 'Consumer Price Index for All Urban Consumers: All Items, change from a year ago', code: 'CPIAUCNS',
+    term: 'CPI = Consumer Price Index, מדד המחירים לצרכן של הלשכה האמריקאית לסטטיסטיקה של העבודה (BLS). YoY = Year over Year, השינוי לעומת אותו חודש לפני שנה — הנתון שמתפרסם בכותרות.',
+    valueHelp: 'עליית המחירים ב-12 החודשים האחרונים, באחוזים. יעד הפד: 2%.',
+    org: 'הלשכה לסטטיסטיקה של העבודה (BLS), דרך FRED', url: FRED_URL('CPIAUCNS'), unit: 'pp', kind: 'target', period: 'month', maxAge: 80, sparkYears: 3,
+    zones: ['רחוק מהיעד', 'קרוב ליעד', 'ביעד'],
+    what: 'כמה עלו המחירים לצרכן בארה"ב בשנה האחרונה. המד: ככל שהאינפלציה קרובה יותר ליעד של 2% — ירוק יותר.',
+    fetch: async () => {
+      // אחוז שינוי שנתי מתוך המדד החודשי (לא מנוכה עונתיות — כמו הנתון הרשמי)
+      const idx = await fred('CPIAUCNS')
+      const at = Object.fromEntries(idx.map((r) => [r.date, r.value]))
+      return idx
+        .map((r) => {
+          const prev = at[`${+r.date.slice(0, 4) - 1}${r.date.slice(4)}`]
+          return prev ? { date: r.date, value: (r.value / prev - 1) * 100 } : null
+        })
+        .filter(Boolean)
+    },
+  },
+  {
+    id: 'exp1y', group: 'macro', name: 'תחזית אינפלציה לשנה קדימה', nick: 'Expected Inflation 1Y', nickHe: 'ציפיות אינפלציה לשנה',
+    official: '1-Year Expected Inflation (Federal Reserve Bank of Cleveland)', code: 'EXPINF1YR',
+    term: 'מודל של הפד בקליבלנד שמשלב תשואות אג"ח, נתוני אינפלציה, תחזיות של חזאים מקצועיים ומחירי חוזי החלפה — ומחלץ מהם את האינפלציה הצפויה ב-12 החודשים הקרובים.',
+    valueHelp: 'אינפלציה צפויה ב-12 החודשים הקרובים, באחוזים. יעד הפד: 2%.',
+    org: 'הפד בקליבלנד, דרך FRED', url: FRED_URL('EXPINF1YR'), unit: 'pp', kind: 'target', period: 'month', maxAge: 80, sparkYears: 3,
+    zones: ['רחוק מהיעד', 'קרוב ליעד', 'ביעד'],
+    what: 'האינפלציה שצפויה בארה"ב בשנה הקרובה. מתעדכן פעם בחודש.',
+    fetch: () => fred('EXPINF1YR'),
+  },
+  {
+    id: 'gdp', group: 'macro', name: 'צמיחת התוצר האמריקאי', nick: 'Real GDP Growth', nickHe: 'צמיחת התוצר הריאלי',
+    official: 'Real Gross Domestic Product, Percent Change from Preceding Period, Seasonally Adjusted Annual Rate', code: 'A191RL1Q225SBEA',
+    term: 'GDP = Gross Domestic Product, התוצר המקומי הגולמי — שווי כל הסחורות והשירותים שהמשק מייצר. Real = במחירים קבועים, בניכוי אינפלציה. מתפרסם בידי הלשכה לניתוח כלכלי (BEA).',
+    valueHelp: 'הצמיחה ברבעון האחרון לעומת הרבעון שלפניו, בקצב שנתי (כפי שמקובל בארה"ב) ובניכוי עונתיות. 2% ≈ קצב הצמיחה הארוך של המשק.',
+    org: 'הלשכה לניתוח כלכלי (BEA), דרך FRED', url: FRED_URL('A191RL1Q225SBEA'), unit: 'pp', kind: 'growth', period: 'quarter', maxAge: 240, sparkYears: 5,
+    zones: ['חלשה', 'מתונה', 'חזקה'],
+    what: 'קצב הצמיחה של כלכלת ארה"ב ברבעון האחרון. שלילי = המשק מתכווץ.',
+    fetch: () => fred('A191RL1Q225SBEA'),
+  },
 ]
 
+// מאקרו ישראל — נתוני הלמ"ס ובנק ישראל, דרך ממשק בנק ישראל
+INDICATORS.push(
+  {
+    id: 'cpi_il', group: 'macro_il', name: 'אינפלציה שנתית', nick: 'CPI YoY', nickHe: 'מדד המחירים לצרכן, שנתי',
+    official: 'Consumer Price Index — General, change over 12 months', code: 'CP_PCHYTY',
+    term: 'מדד המחירים לצרכן של הלשכה המרכזית לסטטיסטיקה (למ"ס) — המדד הכללי. YoY = Year over Year, השינוי לעומת אותו חודש לפני שנה.',
+    valueHelp: 'עליית המחירים ב-12 החודשים האחרונים, באחוזים. יעד בנק ישראל: בין 1% ל-3%.',
+    org: 'הלשכה המרכזית לסטטיסטיקה, דרך בנק ישראל', url: 'https://www.cbs.gov.il/he/subjects/Pages/מדד-המחירים-לצרכן.aspx', unit: 'pp', kind: 'target', period: 'month', maxAge: 80, sparkYears: 3,
+    zones: ['רחוק מהיעד', 'קרוב ליעד', 'ביעד'],
+    what: 'כמה עלו המחירים לצרכן בישראל בשנה האחרונה. המד: ככל שהאינפלציה קרובה יותר ל-2%, אמצע היעד — ירוק יותר.',
+    fetch: () => boi('PRI', 'CP_PCHYTY'),
+  },
+  {
+    id: 'exp1y_il', group: 'macro_il', name: 'תחזית אינפלציה לשנה קדימה', nick: 'Forecasters 1Y', nickHe: 'ממוצע תחזיות החזאים',
+    official: 'Inflation expectations, 1 year ahead — average of professional forecasters', code: 'EXP_HAZ_MAD_AVG_01Y_MA',
+    term: 'ממוצע התחזיות של החזאים המקצועיים (בנקים, בתי השקעות) לאינפלציה ב-12 החודשים הקרובים, כפי שבנק ישראל מרכז ומפרסם.',
+    valueHelp: 'אינפלציה צפויה ב-12 החודשים הקרובים, באחוזים. יעד בנק ישראל: בין 1% ל-3%.',
+    org: 'בנק ישראל', url: 'https://www.boi.org.il/roles/statistics/', unit: 'pp', kind: 'target', period: 'month', maxAge: 80, sparkYears: 3,
+    zones: ['רחוק מהיעד', 'קרוב ליעד', 'ביעד'],
+    what: 'האינפלציה שהחזאים צופים בישראל בשנה הקרובה. מתעדכן פעם בחודש.',
+    fetch: () => boi('ZCM', 'EXP_HAZ_MAD_AVG_01Y_MA'),
+  },
+  {
+    id: 'gdp_il', group: 'macro_il', name: 'צמיחת התוצר הישראלי', nick: 'Real GDP Growth', nickHe: 'צמיחת התוצר הריאלי',
+    official: 'GDP at constant prices, seasonally adjusted, annualized quarterly change', code: 'GDP_Q_FP_SA_ANNPCH',
+    term: 'התוצר המקומי הגולמי (GDP) — שווי כל הסחורות והשירותים שהמשק מייצר, במחירים קבועים (בניכוי אינפלציה). מתפרסם בידי הלמ"ס.',
+    valueHelp: 'הצמיחה ברבעון האחרון לעומת הרבעון שלפניו, בקצב שנתי ובניכוי עונתיות. ברבעון בודד הנתון תנודתי — למשל התאוששות אחרי רבעון חלש.',
+    org: 'הלשכה המרכזית לסטטיסטיקה, דרך בנק ישראל', url: 'https://www.cbs.gov.il/he/subjects/Pages/חשבונות-לאומיים.aspx', unit: 'pp', kind: 'growth', period: 'quarter', maxAge: 240, sparkYears: 5,
+    zones: ['חלשה', 'מתונה', 'חזקה'],
+    what: 'קצב הצמיחה של כלכלת ישראל ברבעון האחרון. שלילי = המשק מתכווץ.',
+    fetch: () => boi('NA', 'GDP_Q_FP_SA_ANNPCH', 12), // רבעוני: 6 שנים = 24 נקודות
+  },
+)
+
 const GROUPS = [
+  { id: 'macro', title: 'מאקרו — ארה"ב' },
+  { id: 'macro_il', title: 'מאקרו — ישראל' },
   { id: 'risk', title: 'פחד ומגמה' },
   { id: 'credit', title: 'אשראי' },
   { id: 'rates', title: 'ריביות ועקום התשואות — ארה"ב' },
@@ -424,15 +507,23 @@ function change(unit, now, then) {
   if (then == null) return null
   if (unit === 'pct') return round((now - then) * 100, 0) // נקודות בסיס
   if (unit === 'ils') return round((now / then - 1) * 100) // אחוזים
+  if (unit === 'pp') return round(now - then) // נקודות אחוז (נתוני מאקרו)
   return round(now - then) // נקודות / סטיות תקן
 }
 
 const clamp = (x) => Math.max(0, Math.min(100, x))
 
+// התקופה שהנתון מתאר — "ספטמבר 2026" / "רבעון 2 2026" (התאריך ב-FRED הוא תחילת התקופה)
+const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+const periodOf = (kind, iso) =>
+  kind === 'quarter' ? `רבעון ${Math.floor((+iso.slice(5, 7) - 1) / 3) + 1} ${iso.slice(0, 4)}` : `${MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`
+
 // מיקום על המד (0 = אדום, 100 = ירוק)
 function gaugeOf(spec, value, pct) {
   if (spec.kind === 'trend') return clamp(50 + 17 * value) // ±1 ס"ת = 33/67
   if (spec.kind === 'curve') return clamp(33 + 34 * value) // 0% = 33, 1% = 67
+  if (spec.kind === 'target') return clamp(100 - 50 * Math.abs(value - 2)) // 2% = 100; ±0.66 = 67; ±1.34 = 33
+  if (spec.kind === 'growth') return clamp(33 + 11.33 * value) // 0% = 33, 3% = 67
   if (pct == null) return null
   return spec.dir === 'up-good' ? pct : 100 - pct // בדרך כלל ערך גבוה = שמאלה; בפרמיית סיכון — ימינה
 }
@@ -491,9 +582,12 @@ function build(spec, rows) {
     unit: spec.unit,
     kind: spec.kind,
     date: last.date,
+    ...(spec.period ? { period: periodOf(spec.period, last.date) } : {}),
     value: round(last.value, spec.unit === 'ils' ? 3 : 2),
     ...(last.close != null ? { close: round(last.close), ma: round(last.ma), dist: round(last.dist) } : {}),
-    ch1m: change(spec.unit, last.value, valueAt(rows, isoAgo(last.date, 30))),
+    // נתון חודשי/רבעוני — מול התצפית הקודמת (החודש/הרבעון הקודם); יומי — מול לפני 30 יום
+    ch1m: change(spec.unit, last.value, spec.period ? rows[rows.length - 2]?.value : valueAt(rows, isoAgo(last.date, 30))),
+    ...(spec.period ? { prevLabel: spec.period === 'quarter' ? 'רבעון קודם' : 'חודש קודם' } : {}),
     ch1y: change(spec.unit, last.value, valueAt(rows, isoAgo(last.date, 365))),
     years,
     min,
