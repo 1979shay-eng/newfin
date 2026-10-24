@@ -450,6 +450,7 @@ const INDICATORS = [
     zones: ['חלשה', 'מתונה', 'חזקה'],
     what: 'קצב הצמיחה של כלכלת ארה"ב ברבעון האחרון. שלילי = המשק מתכווץ.',
     fetch: () => fred('A191RL1Q225SBEA'),
+    extra: async () => gdpViews(await fred('GDPC1'), 'GDPC1'),
   },
 ]
 
@@ -484,6 +485,7 @@ INDICATORS.push(
     zones: ['חלשה', 'מתונה', 'חזקה'],
     what: 'קצב הצמיחה של כלכלת ישראל ברבעון האחרון. שלילי = המשק מתכווץ.',
     fetch: () => boi('NA', 'GDP_Q_FP_SA_ANNPCH', 12), // רבעוני: 6 שנים = 24 נקודות
+    extra: async () => gdpViews(await boi('NA', 'GDP_Q_FP_SA', 12), 'GDP_Q_FP_SA'),
   },
 )
 
@@ -495,6 +497,39 @@ const GROUPS = [
   { id: 'rates', title: 'ריביות ועקום התשואות — ארה"ב' },
   { id: 'israel', title: 'ישראל' },
 ]
+
+// ── צמיחה: שני מבטים יציבים יותר מהנתון הרבעוני בקצב שנתי ─────────────
+// מתוך רמת התוצר הריאלי (מנוכה עונתיות). רבעון בודד בקצב שנתי מגדיל כל תנודה
+// פי 4 — אחרי רבעון חלש (מלחמה) הוא מזנק. לכן לצדו:
+//   שנתי — הרבעון האחרון מול אותו רבעון אשתקד
+//   מחצית — שני הרבעונים האחרונים מול השניים שלפניהם, בקצב שנתי (ההשוואה
+//           שהלמ"ס ממליצה עליה בתקופה של שתי מלחמות)
+function gdpViews(levels, code) {
+  const v = levels.map((r) => r.value)
+  const n = v.length
+  if (n < 5) throw new Error(`${code}: פחות מ-5 רבעונים`)
+  const q = (iso) => ({ y: iso.slice(0, 4), h: +iso.slice(5, 7) <= 6 ? 1 : 2, q: Math.floor((+iso.slice(5, 7) - 1) / 3) + 1 })
+  const last = q(levels[n - 1].date)
+  const yoy = (v[n - 1] / v[n - 5] - 1) * 100
+  const half = (((v[n - 1] + v[n - 2]) / (v[n - 3] + v[n - 4])) ** 2 - 1) * 100
+  // רבעון 2 / 4 → מחצית קלנדרית; אחרת — שני רבעונים מתגלגלים
+  const halfLabel =
+    last.q % 2 === 0 ? `מחצית ${last.h} ${last.y} מול מחצית ${last.h === 1 ? 2 : 1} ${last.h === 1 ? +last.y - 1 : last.y}` : 'שני הרבעונים האחרונים מול השניים שלפניהם'
+  return [
+    {
+      id: 'yoy',
+      label: 'מול הרבעון המקביל אשתקד',
+      value: round(yoy),
+      help: `רבעון ${last.q} ${last.y} מול רבעון ${last.q} ${+last.y - 1}: הצמיחה בשנה שלמה, בלי הכפלה לקצב שנתי. פחות רגיש לרבעון חריג אחד.`,
+    },
+    {
+      id: 'half',
+      label: halfLabel,
+      value: round(half),
+      help: `${halfLabel}, בקצב שנתי. ממצע שני רבעונים מול שניים — ההשוואה שהלמ"ס ממליצה עליה כשרבעון בודד מעוות בגלל מלחמה או אירוע חד-פעמי.`,
+    },
+  ]
+}
 
 // ── חישוב ─────────────────────────────────────────────────────────
 // הערך האחרון עד תאריך (כולל) — לשינוי מול חודש/שנה
@@ -681,6 +716,14 @@ const today = new Date().toISOString().slice(0, 10)
 for (const spec of INDICATORS) {
   try {
     const it = build(spec, await spec.fetch(ctx))
+    // מבטים משלימים (צמיחה שנתית / מחצית) — כישלון בהם לא מפיל את האינדיקטור
+    if (spec.extra) {
+      try {
+        it.extra = await spec.extra()
+      } catch (e) {
+        errors.push(`${spec.name} (מבטים משלימים): ${e.message}`)
+      }
+    }
     // מקור שהפסיק להתעדכן — מוצג, אבל מסומן
     if ((Date.parse(today) - Date.parse(it.date)) / DAY > spec.maxAge) it.stale = true
     items.push(it)

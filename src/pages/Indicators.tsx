@@ -26,6 +26,7 @@ interface Indicator {
   unit: Unit
   kind: 'pct' | 'trend' | 'curve'
   date: string
+  extra?: { id: string; label: string; value: number; help: string }[] // צמיחה: מבטים יציבים יותר
   prevLabel?: string // "חודש קודם" / "רבעון קודם" במקום "חודש"
   period?: string // נתון חודשי/רבעוני — "ספטמבר 2026" / "רבעון 2 2026"
   value: number
@@ -146,6 +147,18 @@ const fmtNum = (x: number) => x.toLocaleString('he-IL', { maximumFractionDigits:
 export default function Indicators() {
   const { data, error } = useData()
   const updated = data ? new Date(data.updated_at) : null
+  const [view, setView] = useView()
+  // לחיצה על אריח במפת החום — עוברים לכרטיסים וגוללים לכרטיס של אותו אינדיקטור
+  const pick = (id: string) => {
+    setView('cards')
+    // קפיצה ישירה (גלילה רכה של אלפי פיקסלים נקטעת) + הבהוב קצר שמסמן איפה נחתנו
+    setTimeout(() => {
+      const el = document.getElementById(`ind-${id}`)
+      if (!el) return
+      el.scrollIntoView({ block: 'center' })
+      el.animate([{ boxShadow: '0 0 0 3px var(--accent)' }, { boxShadow: '0 0 0 3px transparent' }], { duration: 1600, easing: 'ease-out' })
+    }, 60)
+  }
 
   return (
     <div>
@@ -166,6 +179,13 @@ export default function Indicators() {
         )}
       </p>
 
+      {data && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <ViewToggle view={view} onChange={setView} />
+          {view === 'heat' && <Legend />}
+        </div>
+      )}
+
       {!data && !error && <Loading />}
       {!data && error && (
         <Card className="mt-5 px-6 py-8 text-center">
@@ -177,9 +197,11 @@ export default function Indicators() {
 
       {data && (
         <>
-          {data.overall && <Overall o={data.overall} />}
+          {data.overall && (view === 'cards' ? <Overall o={data.overall} /> : <OverallLine o={data.overall} />)}
 
-          {data.groups.map((g) => (
+          {view === 'heat' && <Heatmap data={data} onPick={pick} />}
+
+          {view === 'cards' && data.groups.map((g) => (
             <section key={g.id} className="mt-8">
               <h2 className="text-[20px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
                 {g.title}
@@ -197,9 +219,9 @@ export default function Indicators() {
             </section>
           ))}
 
-          {data.erp && <Erp erp={data.erp} />}
+          {view === 'cards' && data.erp && <Erp erp={data.erp} />}
 
-          {!!data.erpLong?.length && (
+          {view === 'cards' && !!data.erpLong?.length && (
             <section className="mt-6">
               <h3 className="text-[17px] font-extrabold" style={{ color: 'var(--ink)' }}>
                 בפרספקטיבה היסטורית
@@ -377,13 +399,31 @@ function Overall({ o }: { o: NonNullable<Data['overall']> }) {
   )
 }
 
+// במפת החום — מצב-על בשורה אחת, בלי המד הגדול
+function OverallLine({ o }: { o: NonNullable<Data['overall']> }) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[14px] border px-4 py-2.5" style={cardStyle(o.shade)}>
+      <span className="text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
+        תנאי השוק
+      </span>
+      <Chip shade={o.shade}>{o.reading}</Chip>
+      <span className="text-[15px] font-extrabold tabular-nums" style={{ color: 'var(--ink)' }}>
+        {o.gauge}/100
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[14px]" title={o.text} style={{ color: 'var(--ink2)' }}>
+        {o.text}
+      </span>
+    </div>
+  )
+}
+
 // ── כרטיס אינדיקטור ──────────────────────────────────────────────
 function IndicatorCard({ it }: { it: Indicator }) {
   const s = SHADE[it.shade]
   const [open, setOpen] = useState<string | null>(null)
   const toggle = (id: string) => setOpen((x) => (x === id ? null : id))
   return (
-    <Card className="flex flex-col px-5 py-4" style={cardStyle(it.shade)}>
+    <Card id={`ind-${it.id}`} className="flex scroll-mt-24 flex-col px-5 py-4" style={cardStyle(it.shade)}>
       <h3 className="text-[17px] font-extrabold leading-snug" style={{ color: 'var(--ink)' }}>
         {it.name}
       </h3>
@@ -426,6 +466,23 @@ function IndicatorCard({ it }: { it: Indicator }) {
           </div>
         )}
       </Hot>
+
+      {it.extra && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {it.extra.map((x) => (
+            <Hot key={x.id} id={`x-${x.id}`} open={open} onToggle={toggle} help={x.help}>
+              <div className="rounded-[11px] px-3 py-2" style={{ background: 'color-mix(in oklab, var(--surface) 70%, transparent)' }}>
+                <div className="text-[12px] font-bold leading-snug" style={{ color: 'var(--muted)' }}>
+                  {x.label}
+                </div>
+                <div className="mt-0.5 text-[18px] font-extrabold tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
+                  {fmtValue(it.unit, x.value)}
+                </div>
+              </div>
+            </Hot>
+          ))}
+        </div>
+      )}
 
       {it.gauge != null && (
         <Hot id="gauge" open={open} onToggle={toggle} help={gaugeHelp(it)} className="mt-3">
@@ -606,6 +663,119 @@ function Erp({ erp }: { erp: NonNullable<Data['erp']> }) {
   )
 }
 
+// ── מפת חום: כל האינדיקטורים במסך אחד ─────────────────────────────
+type View = 'cards' | 'heat'
+const VIEW_KEY = 'nf-indicators-view'
+function useView(): [View, (v: View) => void] {
+  const [view, setView] = useState<View>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'heat' ? 'heat' : 'cards'
+    } catch {
+      return 'cards'
+    }
+  })
+  const set = (v: View) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      /* מצב פרטי — התצוגה פשוט לא נזכרת */
+    }
+  }
+  return [view, set]
+}
+
+function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
+  return (
+    <div className="inline-flex rounded-[11px] border p-1" style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }} role="group" aria-label="תצוגה">
+      {(['cards', 'heat'] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={view === v}
+          onClick={() => onChange(v)}
+          className="rounded-[8px] px-4 py-1.5 text-[14px] font-bold transition-colors"
+          style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--muted)' }}
+        >
+          {v === 'cards' ? 'כרטיסים' : 'מפת חום'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// סולם שבעת הגוונים — משמאל (לחץ) לימין (רגיעה), כמו המדים
+function Legend() {
+  const shades: Shade[] = [-3, -2, -1, 0, 1, 2, 3]
+  return (
+    <div className="flex items-center gap-2 text-[12px] font-bold" dir="ltr" style={{ color: 'var(--muted)' }}>
+      <span>לחץ / מהדק</span>
+      <span className="flex overflow-hidden rounded-md border" style={{ borderColor: 'var(--line2)' }}>
+        {shades.map((sh) => (
+          <span key={sh} className="h-4 w-6" style={{ background: SHADE[sh].bg }} />
+        ))}
+      </span>
+      <span>רגוע / מקל</span>
+    </div>
+  )
+}
+
+function Heatmap({ data, onPick }: { data: Data; onPick: (id: string) => void }) {
+  const rows = [...data.groups, ...(data.erpLong?.length ? [{ id: 'erp', title: 'פרמיית סיכון — פרספקטיבה היסטורית', items: data.erpLong }] : [])]
+  return (
+    // במסך רחב — שתי קבוצות בשורה, כדי שהכל ייכנס במסך אחד
+    <div className="mt-4 grid gap-x-6 gap-y-4 xl:grid-cols-2">
+      {rows.map((g) => (
+        <section key={g.id} className={`flex flex-col gap-2 ${g.items.length > 4 ? 'xl:col-span-2' : ''}`}>
+          <h2 className="text-[15px] font-extrabold leading-snug" style={{ color: 'var(--ink)' }}>
+            {g.title}
+          </h2>
+          <div className="flex flex-1 flex-wrap gap-2">
+            {g.items.map((it) => (
+              <HeatTile key={it.id} it={it} onClick={() => onPick(it.id)} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+// אריח: שם, ערך ותווית — צבוע בגוון של האינדיקטור. הערך והתווית כתובים תמיד,
+// כך שהצבע לעולם אינו הנשא היחיד של המידע.
+function HeatTile({ it, onClick }: { it: Indicator; onClick: () => void }) {
+  const s = SHADE[it.shade]
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${it.name} — ${it.nickHe}. לחיצה לכרטיס המלא`}
+      className="flex min-h-[96px] min-w-[150px] flex-1 basis-[160px] flex-col rounded-[12px] border px-3 py-2 text-right transition-transform hover:-translate-y-0.5 sm:max-w-[260px]"
+      style={{ ...cardStyle(it.shade), boxShadow: 'var(--shadow)' }}
+    >
+      <span className="line-clamp-2 text-[13px] font-bold leading-snug" style={{ color: 'var(--ink)' }}>
+        {it.name}
+      </span>
+      <span className="mt-auto pt-1.5 text-[22px] font-extrabold leading-none tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
+        {fmtValue(it.unit, it.value)}
+        {it.unit === 'z' && <span className="mr-1 text-[12px] font-bold"> ס״ת</span>}
+      </span>
+      <span className="mt-1.5 flex items-center justify-between gap-2">
+        {it.reading ? (
+          <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: s.chip, color: s.chipFg }}>
+            {it.reading}
+          </span>
+        ) : (
+          <span />
+        )}
+        <span className="text-[11px]" style={{ color: it.stale ? DOWN : 'var(--muted)' }}>
+          {it.period ?? shortDate(it.date)}
+        </span>
+      </span>
+    </button>
+  )
+}
+
 // ── מעטפות ───────────────────────────────────────────────────────
 function Chip({ shade, children }: { shade: Shade; children: ReactNode }) {
   const s = SHADE[shade]
@@ -616,9 +786,10 @@ function Chip({ shade, children }: { shade: Shade; children: ReactNode }) {
   )
 }
 
-function Card({ className = '', style, children }: { className?: string; style?: CSSProperties; children: ReactNode }) {
+function Card({ id, className = '', style, children }: { id?: string; className?: string; style?: CSSProperties; children: ReactNode }) {
   return (
     <div
+      id={id}
       className={`rounded-[18px] border ${className}`}
       style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)', ...style }}
     >
