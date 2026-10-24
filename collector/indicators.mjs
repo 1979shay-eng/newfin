@@ -1,19 +1,21 @@
 // אינדיקטורים — תמונת מצב-על של השווקים והתנאים הפיננסיים.
-// הפלט: market/indicators.json באחסון הציבורי של Supabase, שדף "אינדיקטורים"
+// הפלט: market/indicators-v2.json (v2 = מבנה עם מד וגוונים) באחסון הציבורי של Supabase, שדף "אינדיקטורים"
 // קורא ישירות. אין טבלה — הכל נגזר מחדש בכל ריצה (חוץ מהיסטוריית פרמיית
 // הסיכון, שאין לה מקור היסטורי ולכן נצברת כאן יום אחר יום).
 //
 // מקורות — רשמיים בלבד, בלי מפתח:
 //   Cboe            — קובץ ההיסטוריה הרשמי של VIX
-//   FRED (הפד בסנט לואיס) — מרווחי ICE BofA, ריביות ותשואות של מועצת הפד, S&P 500
+//   FRED (הפד בסנט לואיס) — מרווחי ICE BofA, ריביות ותשואות של מועצת הפד, S&P 500,
+//                     ציפיות אינפלציה של הפד בקליבלנד
 //   בנק ישראל       — ממשק הסטטיסטיקה הרשמי (ריבית, שער יציג)
 //   הבורסה בת"א     — היסטוריית ת"א-35 מהמטמון של markets.mjs (market/history.json)
-//   פרמיית הסיכון   — מחושבת: מכפיל רווח עתידי (market/summary.json) מול ריבית ריאלית
+//   פרמיית הסיכון   — מחושבת: מכפיל רווח עתידי (market/summary.json) מול ריבית ריאלית לשנתיים
 //
 // עיקרון: אף מספר לא מוצג בלי מקור. אינדיקטור שנכשל — נשאר הערך הקודם, מסומן
 // בתאריך שלו. לעולם לא מנוחש.
 //
 // הרצה: node collector/indicators.mjs   (--test כותב לקובץ נפרד)
+import AdmZip from 'adm-zip'
 import { db } from './db.mjs'
 
 const BUCKET = 'public-data'
@@ -84,6 +86,135 @@ async function boi(flow, key) {
   return rows
 }
 
+// ── קבצי Excel, בלי ספרייה ────────────────────────────────────────
+// xlsx (דמודרן) = zip של XML. שומרים על מיקום העמודה (תאים ריקים נשמטים בקובץ).
+function xlsxSheet(buf, sheetName) {
+  const zip = new AdmZip(buf)
+  const xml = (name) => zip.getEntry(name)?.getData().toString('utf8') ?? ''
+  const rid = xml('xl/workbook.xml').match(new RegExp(`<sheet [^>]*name="${sheetName}"[^>]*r:id="([^"]+)"`))?.[1]
+  const target = rid && xml('xl/_rels/workbook.xml.rels').match(new RegExp(`Id="${rid}"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Id="${rid}"`))
+  const path = target && `xl/${(target[1] ?? target[2]).replace(/^\/?xl\//, '')}`
+  if (!path) throw new Error(`xlsx: אין גיליון "${sheetName}"`)
+  const colNum = (letters) => [...letters].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1
+  // קבצים שנשמרו ב-Excel למק סופרים תאריכים מ-1904 ולא מ-1900
+  const epoch = Date.UTC(...(/date1904="(1|true)"/.test(xml('xl/workbook.xml')) ? [1904, 0, 1] : [1899, 11, 30]))
+  const rows = [...xml(path).matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)].map((row) => {
+    const cells = []
+    for (const [, col, attrs, v] of row[1].matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>[\s\S]*?(?:<v>([^<]*)<\/v>)?[\s\S]*?<\/c>)/g)) {
+      if (v != null && !/t="(s|str|inlineStr)"/.test(attrs)) cells[colNum(col)] = Number(v)
+    }
+    return cells
+  })
+  return { rows, toDate: (serial) => new Date(epoch + serial * DAY).toISOString().slice(0, 10) }
+}
+
+// xls ישן (שילר) = קובץ OLE2 שבתוכו זרם BIFF8. קוראים רק תאים מספריים
+// (NUMBER / RK / MULRK / תוצאת FORMULA) של גיליון אחד.
+function xlsNumbers(buf, sheetName) {
+  const u16 = (o) => buf.readUInt16LE(o)
+  const u32 = (o) => buf.readUInt32LE(o)
+  const ss = 1 << u16(0x1e)
+  const sector = (i) => buf.subarray((i + 1) * ss, (i + 2) * ss)
+  // טבלת ה-FAT: 109 הראשונים בכותרת, השאר בשרשרת DIFAT
+  const fatIds = []
+  for (let i = 0; i < 109; i++) fatIds.push(u32(0x4c + i * 4))
+  for (let d = u32(0x44), n = u32(0x48); n-- > 0 && d < 0xfffffffa; ) {
+    const s = sector(d)
+    for (let i = 0; i < ss / 4 - 1; i++) fatIds.push(s.readUInt32LE(i * 4))
+    d = s.readUInt32LE(ss - 4)
+  }
+  const fat = []
+  for (const id of fatIds.slice(0, u32(0x2c))) for (let i = 0, s = sector(id); i < ss / 4; i++) fat.push(s.readUInt32LE(i * 4))
+  const stream = (start, size) => {
+    const parts = []
+    for (let s = start; s < 0xfffffffa && parts.length * ss < size; s = fat[s]) parts.push(sector(s))
+    return Buffer.concat(parts).subarray(0, size)
+  }
+  const dir = stream(u32(0x30), Infinity)
+  let wb = null
+  for (let o = 0; o + 128 <= dir.length; o += 128) {
+    const name = dir.subarray(o, o + Math.max(0, dir.readUInt16LE(o + 0x40) - 2)).toString('utf16le')
+    if (name === 'Workbook' || name === 'Book') wb = stream(dir.readUInt32LE(o + 0x74), dir.readUInt32LE(o + 0x78))
+  }
+  if (!wb || wb.length < 4096) throw new Error('xls: אין זרם Workbook')
+  // רשימת הגיליונות (BOUNDSHEET) → מיקום הגיליון המבוקש בזרם
+  let pos = null
+  for (let o = 0; o + 4 <= wb.length; ) {
+    const type = wb.readUInt16LE(o)
+    const len = wb.readUInt16LE(o + 2)
+    if (type === 0x85) {
+      const cch = wb[o + 10]
+      const wide = wb[o + 11] & 1
+      const name = wb.subarray(o + 12, o + 12 + cch * (wide ? 2 : 1)).toString(wide ? 'utf16le' : 'latin1')
+      if (name === sheetName) pos = wb.readUInt32LE(o + 4)
+    }
+    if (type === 0x0a) break // סוף הגלובלים
+    o += 4 + len
+  }
+  if (pos == null) throw new Error(`xls: אין גיליון "${sheetName}"`)
+  const rk = (v) => {
+    let x
+    if (v & 2) x = v >> 2
+    else {
+      const b = Buffer.alloc(8)
+      b.writeUInt32LE(v & 0xfffffffc, 4)
+      x = b.readDoubleLE(0)
+    }
+    return v & 1 ? x / 100 : x
+  }
+  const cells = {} // `${row},${col}` → מספר
+  for (let o = pos; o + 4 <= wb.length; ) {
+    const type = wb.readUInt16LE(o)
+    const len = wb.readUInt16LE(o + 2)
+    const d = o + 4
+    if (type === 0x203) cells[`${wb.readUInt16LE(d)},${wb.readUInt16LE(d + 2)}`] = wb.readDoubleLE(d + 6)
+    else if (type === 0x27e) cells[`${wb.readUInt16LE(d)},${wb.readUInt16LE(d + 2)}`] = rk(wb.readUInt32LE(d + 6))
+    else if (type === 0xbd) {
+      const row = wb.readUInt16LE(d)
+      const first = wb.readUInt16LE(d + 2)
+      const n = (len - 6) / 6
+      for (let i = 0; i < n; i++) cells[`${row},${first + i}`] = rk(wb.readUInt32LE(d + 4 + i * 6 + 2))
+    } else if (type === 0x06 && wb.readUInt16LE(d + 12) !== 0xffff) cells[`${wb.readUInt16LE(d)},${wb.readUInt16LE(d + 2)}`] = wb.readDoubleLE(d + 6)
+    else if (type === 0x0a) break
+    o += 4 + len
+  }
+  return cells
+}
+
+// ── פרמיות סיכון היסטוריות (חודשי) ────────────────────────────────
+// דמודרן: פרמיית הסיכון הגלומה מול אג"ח 10 שנים, עמודת "ERP (T12m)" — המספר
+// שהוא מפרסם כל חודש. תאריכים כמספר סידורי של Excel.
+async function damodaran() {
+  const r = await fetch('https://pages.stern.nyu.edu/~adamodar/pc/implprem/ERPbymonth.xlsx', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) })
+  if (!r.ok) throw new Error(`דמודרן: ${r.status}`)
+  const { rows, toDate } = xlsxSheet(Buffer.from(await r.arrayBuffer()), 'Historical ERP')
+  const out = rows.filter((c) => c[0] > 30000 && Number.isFinite(c[9])).map((c) => ({ date: toDate(c[0]), value: c[9] * 100 }))
+  if (out.length < 100 || out.some((x) => x.value < -5 || x.value > 20)) throw new Error('דמודרן: מבנה הקובץ השתנה')
+  return out
+}
+
+// שילר: Excess CAPE Yield, גיליון Data עמודה Q (16). תאריך בפורמט 2026.1 = אוקטובר.
+// הכתובת של הקובץ משתנה בכל עדכון — נלקחת מדף הבית.
+async function shiller() {
+  const home = await get('https://shillerdata.com/')
+  const href = home.match(/href="([^"]*ie_data\.xls[^"]*)"/)?.[1]
+  if (!href) throw new Error('שילר: לא נמצא קישור לקובץ')
+  const r = await fetch(href.startsWith('//') ? `https:${href}` : href, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) })
+  if (!r.ok) throw new Error(`שילר: ${r.status}`)
+  const cells = xlsNumbers(Buffer.from(await r.arrayBuffer()), 'Data')
+  const out = []
+  for (let row = 0; row < 5000; row++) {
+    const t = cells[`${row},0`]
+    const v = cells[`${row},16`]
+    if (!(t > 1800) || !Number.isFinite(v)) continue
+    const y = Math.floor(t)
+    const m = Math.round((t - y) * 100)
+    out.push({ date: `${y}-${String(m).padStart(2, '0')}-01`, value: v * 100 })
+  }
+  if (out.length < 1000 || out.some((x) => x.value < -10 || x.value > 30) || out.some((x, i) => i && x.date <= out[i - 1].date)) throw new Error('שילר: מבנה הקובץ השתנה')
+  return out
+}
+
 async function loadJson(path) {
   const { data } = await db.storage.from(BUCKET).download(path)
   if (!data) return null
@@ -94,43 +225,66 @@ async function loadJson(path) {
   }
 }
 
-// מרחק המדד מהממוצע הנע של 200 ימי מסחר, באחוזים — סדרה יומית
+// מרחק המדד מהממוצע הנע של 200 ימי מסחר — בסטיות תקן (z), כמו רצועות בולינגר:
+// (סגירה − ממוצע) ÷ סטיית התקן של הסגירות באותו חלון. כך מרחק של 5% במדד
+// תנודתי ובמדד רגוע לא נראים זהים. dist = אותו מרחק באחוזים, להקשר.
 function vsMA200(closes) {
   const out = []
   let sum = 0
+  let sq = 0
   for (let i = 0; i < closes.length; i++) {
-    sum += closes[i].value
-    if (i >= 200) sum -= closes[i - 200].value
-    if (i >= 199) out.push({ date: closes[i].date, value: (closes[i].value / (sum / 200) - 1) * 100, close: closes[i].value, ma: sum / 200 })
+    const v = closes[i].value
+    sum += v
+    sq += v * v
+    if (i >= 200) {
+      sum -= closes[i - 200].value
+      sq -= closes[i - 200].value ** 2
+    }
+    if (i >= 199) {
+      const ma = sum / 200
+      const sd = Math.sqrt(Math.max(0, sq / 200 - ma * ma))
+      out.push({ date: closes[i].date, value: sd ? (v - ma) / sd : 0, dist: (v / ma - 1) * 100, close: v, ma })
+    }
   }
   return out
 }
 
 // ── הגדרת האינדיקטורים ────────────────────────────────────────────
-// kind קובע את הפרשנות:
-// (מרווחי ICE BofA הם level ולא stress: FRED מפרסם בחינם רק 3 שנים אחרונות,
-// ושלוש שנים רגועות הופכות מרווח נמוך היסטורית ל"לחוץ" — מטעה)
-//   stress — גבוה = לחץ (אחוזון מול ההיסטוריה: רגוע / תקין / לחוץ)
-//   level  — אין "טוב" או "רע", רק מיקום מול ההיסטוריה (נמוך / בינוני / גבוה)
-//   curve  — שיפוע עקום: הפוך / שטוח / חיובי לפי סימן וגודל
-//   trend  — מרחק מממוצע 200 יום: מעל / מתחת
-// unit: pct = אחוזים (שינוי בנקודות בסיס), pts = נקודות מדד, ils = שקלים
-// (שינוי באחוזים), dist = מרחק באחוזים (שינוי בנקודות אחוז)
+// כל אינדיקטור מקבל מיקום על מד (gauge) של 0–100: 0 = הקצה האדום (לחץ / תנאים
+// מהדקים לשוק), 100 = הקצה הירוק. שלושה אזורים: 0–33, 33–67, 67–100.
+//   kind 'pct'   — המיקום = אחוזון הערך מתוך החלון ההיסטורי (years), הפוך:
+//                  ערך גבוה = אדום (VIX, מרווחים, ריביות).
+//                  dir 'none' — אין טוב או רע (דולר-שקל): מד בלי צבע.
+//   kind 'trend' — מרחק מממוצע 200 יום בסטיות תקן: ±1 ס"ת = גבול האזור.
+//   kind 'curve' — שיפוע העקום: 0 = גבול הפוך/שטוח, 1% = גבול שטוח/חיובי.
+// zones — שמות שלושת האזורים, משמאל (אדום) לימין (ירוק).
+// מרווחי ICE BofA: FRED מפרסם בחינם רק 3 שנים, ולכן השמות "גבוה/נמוך" ולא
+// "לחוץ/רגוע" — שלוש שנים רגועות לא מספיקות כדי לקרוא לרמה "לחץ".
+// unit: pct = אחוזים (שינוי בנ"ב), pts = נקודות, ils = שקלים (שינוי ב-%), z = סטיות תקן
 const FRED_URL = (id) => `https://fred.stlouisfed.org/series/${id}`
 const H15 = 'מועצת הפדרל ריזרב, דרך FRED'
 const ICE = 'ICE Data Indices, דרך FRED'
+const RATE_ZONES = ['גבוה', 'בינוני', 'נמוך']
+const MA_ZONES = ['מתחת לממוצע', 'סביב הממוצע', 'מעל הממוצע']
+const MA_WHAT = 'המרחק מהממוצע של 200 ימי המסחר האחרונים, בסטיות תקן של אותה תקופה. מעל 1 או מתחת ל-1- = מגמה ברורה.'
 
 const INDICATORS = [
   {
-    id: 'vix', group: 'risk', name: 'מדד הפחד', official: 'Cboe Volatility Index', code: 'VIX',
-    org: 'Cboe', url: 'https://www.cboe.com/tradable_products/vix/', unit: 'pts', kind: 'stress', years: 5, maxAge: 7,
+    id: 'vix', group: 'risk', name: 'מדד הפחד', nick: 'VIX · Fear Index', official: 'Cboe Volatility Index', code: 'VIX',
+    nickHe: 'מדד התנודתיות · מדד הפחד',
+    term: 'VIX = Volatility Index, מדד התנודתיות. מחושב ממחירי אופציות על S&P 500, ומכונה "מדד הפחד" כי הוא מזנק כשמשקיעים ממהרים לקנות הגנה מירידות.',
+    valueHelp: 'נקודות מדד. VIX של 20 פירושו שהשוק מתמחר תנודה שנתית של כ-20% — כ-1.25% ביום.',
+    org: 'Cboe', url: 'https://www.cboe.com/tradable_products/vix/', unit: 'pts', kind: 'pct', years: 5, maxAge: 7,
+    zones: ['לחוץ', 'תקין', 'רגוע'],
     what: 'התנודתיות שהשוק מתמחר ב-S&P 500 ל-30 הימים הקרובים, מתוך מחירי האופציות.',
     fetch: () => cboe('VIX'),
   },
   {
-    id: 'spx200', group: 'risk', name: 'S&P 500 מול ממוצע 200 יום', official: 'S&P 500 Index vs. 200-day moving average', code: 'SP500',
-    org: 'S&P Dow Jones Indices, דרך FRED', url: FRED_URL('SP500'), unit: 'dist', kind: 'trend', years: 5, maxAge: 7,
-    what: 'כמה המדד רחוק מהממוצע של 200 ימי המסחר האחרונים — המדד המקובל למגמה ארוכה.',
+    id: 'spx200', group: 'risk', name: 'S&P 500 מול ממוצע 200 יום', nick: '200DMA', official: 'S&P 500 Index vs. 200-day moving average', code: 'SP500',
+    nickHe: 'ממוצע נע 200 יום',
+    term: '200-Day Moving Average — הממוצע של מחירי הסגירה ב-200 ימי המסחר האחרונים (כ-10 חודשים). מדד שנסחר מעליו נחשב במגמה ארוכה עולה, ומתחתיו — יורדת.',
+    valueHelp: 'סטיות תקן: המרחק מהממוצע חלקי התנודתיות הרגילה של המדד באותם 200 יום. 0 = על הממוצע; 1 או 1- = מרחק משמעותי; 2 או 2- = קיצוני.',
+    org: 'S&P Dow Jones Indices, דרך FRED', url: FRED_URL('SP500'), unit: 'z', kind: 'trend', maxAge: 7, zones: MA_ZONES, what: MA_WHAT,
     fetch: async (ctx) => {
       const rows = await fred('SP500')
       // FRED מתעדכן ביום-יומיים איחור. סגירות מאוחרות יותר — מדף השווקים (אותו מדד)
@@ -140,9 +294,12 @@ const INDICATORS = [
     },
   },
   {
-    id: 'ta35200', group: 'risk', name: 'ת"א-35 מול ממוצע 200 יום', official: 'TA-35 Index vs. 200-day moving average', code: 'TA-35',
-    org: 'הבורסה לניירות ערך בתל אביב', url: 'https://market.tase.co.il/he/market_data/index/142/major_data', unit: 'dist', kind: 'trend', years: 5, maxAge: 7,
-    what: 'כמה המדד רחוק מהממוצע של 200 ימי המסחר האחרונים — המדד המקובל למגמה ארוכה.',
+    id: 'ta35200', group: 'risk', name: 'ת"א-35 מול ממוצע 200 יום', nick: '200DMA', official: 'TA-35 Index vs. 200-day moving average', code: 'TA-35',
+    nickHe: 'ממוצע נע 200 יום',
+    term: '200-Day Moving Average — הממוצע של מחירי הסגירה ב-200 ימי המסחר האחרונים (כ-10 חודשים). מדד שנסחר מעליו נחשב במגמה ארוכה עולה, ומתחתיו — יורדת.',
+    valueHelp: 'סטיות תקן: המרחק מהממוצע חלקי התנודתיות הרגילה של המדד באותם 200 יום. 0 = על הממוצע; 1 או 1- = מרחק משמעותי; 2 או 2- = קיצוני.',
+    org: 'הבורסה לניירות ערך בתל אביב', url: 'https://market.tase.co.il/he/market_data/index/142/major_data', unit: 'z', kind: 'trend', maxAge: 7,
+    zones: MA_ZONES, what: MA_WHAT,
     fetch: async (ctx) => {
       const e = ctx.history?.idx?.['142']
       if (!e) throw new Error('ת"א-35: אין היסטוריה במטמון')
@@ -157,63 +314,94 @@ const INDICATORS = [
     },
   },
   {
-    id: 'hy', group: 'credit', name: 'מרווח אג"ח בדירוג נמוך', official: 'ICE BofA US High Yield Index Option-Adjusted Spread', code: 'BAMLH0A0HYM2',
-    org: ICE, url: FRED_URL('BAMLH0A0HYM2'), unit: 'pct', kind: 'level', years: 3, maxAge: 7,
+    id: 'hy', group: 'credit', name: 'מרווח אג"ח בדירוג נמוך', nick: 'Junk Spread · HY OAS', official: 'ICE BofA US High Yield Index Option-Adjusted Spread', code: 'BAMLH0A0HYM2',
+    nickHe: 'מרווח הזבל · מרווח תשואה גבוהה',
+    term: 'High Yield (תשואה גבוהה) = אג"ח של חברות בדירוג נמוך מ-BBB-, המכונות "אג"ח זבל". OAS = Option-Adjusted Spread, מרווח מתוקנן לאופציות של פדיון מוקדם.',
+    valueHelp: 'אחוזים מעל אג"ח ממשלת ארה"ב באותו מח"מ. 1% = 100 נקודות בסיס (נ״ב).',
+    org: ICE, url: FRED_URL('BAMLH0A0HYM2'), unit: 'pct', kind: 'pct', years: 3, maxAge: 7, zones: RATE_ZONES,
     what: 'התוספת שחברות בדירוג נמוך משלמות מעל אג"ח ממשלת ארה"ב. עלייה = המלווים דורשים יותר על הסיכון.',
     fetch: () => fred('BAMLH0A0HYM2'),
   },
   {
-    id: 'ig', group: 'credit', name: 'מרווח אג"ח בדירוג השקעה', official: 'ICE BofA US Corporate Index Option-Adjusted Spread', code: 'BAMLC0A0CM',
-    org: ICE, url: FRED_URL('BAMLC0A0CM'), unit: 'pct', kind: 'level', years: 3, maxAge: 7,
+    id: 'ig', group: 'credit', name: 'מרווח אג"ח בדירוג השקעה', nick: 'IG OAS', official: 'ICE BofA US Corporate Index Option-Adjusted Spread', code: 'BAMLC0A0CM',
+    nickHe: 'מרווח דירוג השקעה',
+    term: 'Investment Grade (דירוג השקעה) = אג"ח בדירוג BBB- ומעלה. OAS = Option-Adjusted Spread, מרווח מתוקנן לאופציות של פדיון מוקדם.',
+    valueHelp: 'אחוזים מעל אג"ח ממשלת ארה"ב באותו מח"מ. 1% = 100 נקודות בסיס (נ״ב).',
+    org: ICE, url: FRED_URL('BAMLC0A0CM'), unit: 'pct', kind: 'pct', years: 3, maxAge: 7, zones: RATE_ZONES,
     what: 'התוספת שחברות בדירוג השקעה משלמות מעל אג"ח ממשלת ארה"ב.',
     fetch: () => fred('BAMLC0A0CM'),
   },
   {
-    id: 'ff', group: 'rates', name: 'ריבית הפד', official: 'Federal Funds Effective Rate', code: 'DFF',
-    org: H15, url: FRED_URL('DFF'), unit: 'pct', kind: 'level', years: 5, maxAge: 7,
+    id: 'ff', group: 'rates', name: 'ריבית הפד', nick: 'Fed Funds', official: 'Federal Funds Effective Rate', code: 'DFF',
+    nickHe: 'ריבית הפדרל פאנדס',
+    term: 'Federal Funds Rate — הריבית שבה בנקים בארה"ב מלווים זה לזה ללילה אחד. הפד קובע לה טווח יעד; Effective = הריבית שנסחרה בפועל.',
+    valueHelp: 'אחוזים בשנה.',
+    org: H15, url: FRED_URL('DFF'), unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
     what: 'הריבית בפועל על הלוואות לילה בין בנקים בארה"ב — הכלי המרכזי של הפד.',
     fetch: () => fred('DFF'),
   },
   {
-    id: 'us2', group: 'rates', name: 'תשואת אג"ח ארה"ב ל-2 שנים', official: 'Market Yield on U.S. Treasury Securities at 2-Year Constant Maturity', code: 'DGS2',
-    org: H15, url: FRED_URL('DGS2'), unit: 'pct', kind: 'level', years: 5, maxAge: 7,
+    id: 'us2', group: 'rates', name: 'תשואת אג"ח ארה"ב ל-2 שנים', nick: '2Y Treasury', official: 'Market Yield on U.S. Treasury Securities at 2-Year Constant Maturity', code: 'DGS2',
+    nickHe: 'אג"ח ממשלת ארה"ב לשנתיים',
+    term: 'Treasury = אג"ח של משרד האוצר האמריקאי. Constant Maturity = תשואה מחושבת למח"מ קבוע של שנתיים בדיוק, גם כשאין אג"ח שנפדה בדיוק אז.',
+    valueHelp: 'התשואה לפדיון, באחוזים בשנה.',
+    org: H15, url: FRED_URL('DGS2'), unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
     what: 'משקפת בעיקר את ציפיות השוק לריבית הפד בשנתיים הקרובות.',
     fetch: () => fred('DGS2'),
   },
   {
-    id: 'us10', group: 'rates', name: 'תשואת אג"ח ארה"ב ל-10 שנים', official: 'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity', code: 'DGS10',
-    org: H15, url: FRED_URL('DGS10'), unit: 'pct', kind: 'level', years: 5, maxAge: 7,
+    id: 'us10', group: 'rates', name: 'תשואת אג"ח ארה"ב ל-10 שנים', nick: '10Y Treasury', official: 'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity', code: 'DGS10',
+    nickHe: 'אג"ח ממשלת ארה"ב ל-10 שנים',
+    term: 'Treasury = אג"ח של משרד האוצר האמריקאי. Constant Maturity = תשואה מחושבת למח"מ קבוע של 10 שנים בדיוק, גם כשאין אג"ח שנפדה בדיוק אז.',
+    valueHelp: 'התשואה לפדיון, באחוזים בשנה.',
+    org: H15, url: FRED_URL('DGS10'), unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
     what: 'ריבית העוגן של העולם — משמשת להיוון כמעט כל נכס.',
     fetch: () => fred('DGS10'),
   },
   {
-    id: 'curve', group: 'rates', name: 'שיפוע העקום: 10 מול 2 שנים', official: '10-Year Treasury Constant Maturity Minus 2-Year Treasury Constant Maturity', code: 'T10Y2Y',
-    org: 'הפד בסנט לואיס (FRED)', url: FRED_URL('T10Y2Y'), unit: 'pct', kind: 'curve', years: 5, maxAge: 7,
+    id: 'curve', group: 'rates', name: 'שיפוע העקום: 10 מול 2 שנים', nick: '2s10s', official: '10-Year Treasury Constant Maturity Minus 2-Year Treasury Constant Maturity', code: 'T10Y2Y',
+    nickHe: 'שנתיים-עשר',
+    term: '2s10s ("twos-tens") — הפרש התשואות בין אג"ח ל-10 שנים לאג"ח לשנתיים. כשהוא שלילי העקום "הפוך": הריבית הקצרה גבוהה מהארוכה.',
+    valueHelp: 'נקודות אחוז: תשואת ה-10 שנים פחות תשואת השנתיים.',
+    org: 'הפד בסנט לואיס (FRED)', url: FRED_URL('T10Y2Y'), unit: 'pct', kind: 'curve', maxAge: 7, zones: ['הפוך', 'שטוח', 'חיובי'],
     what: 'הפרש התשואות בין 10 ל-2 שנים. שלילי = עקום הפוך, שקדם היסטורית למיתונים.',
     fetch: () => fred('T10Y2Y'),
   },
   {
-    id: 'bei', group: 'rates', name: 'ציפיות אינפלציה ל-10 שנים', official: '10-Year Breakeven Inflation Rate', code: 'T10YIE',
-    org: 'הפד בסנט לואיס (FRED)', url: FRED_URL('T10YIE'), unit: 'pct', kind: 'level', years: 5, maxAge: 7,
+    id: 'bei', group: 'rates', name: 'ציפיות אינפלציה ל-10 שנים', nick: 'Breakeven 10Y', official: '10-Year Breakeven Inflation Rate', code: 'T10YIE',
+    nickHe: 'נקודת האיזון ל-10 שנים',
+    term: 'Breakeven (נקודת איזון) = שיעור האינפלציה שבו אג"ח רגיל ואג"ח צמוד מניבים בדיוק אותו דבר — כלומר האינפלציה שהשוק מתמחר.',
+    valueHelp: 'אחוזי אינפלציה בשנה, בממוצע ל-10 השנים הקרובות.',
+    org: 'הפד בסנט לואיס (FRED)', url: FRED_URL('T10YIE'), unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
     what: 'האינפלציה השנתית שהשוק מתמחר — הפער בין אג"ח רגיל לאג"ח צמוד. יעד הפד: 2%.',
     fetch: () => fred('T10YIE'),
   },
   {
-    id: 'real10', group: 'rates', name: 'ריבית ריאלית ל-10 שנים', official: 'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Inflation-Indexed', code: 'DFII10',
-    org: H15, url: FRED_URL('DFII10'), unit: 'pct', kind: 'level', years: 5, maxAge: 7,
+    id: 'real10', group: 'rates', name: 'ריבית ריאלית ל-10 שנים', nick: 'TIPS 10Y', official: 'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Inflation-Indexed', code: 'DFII10',
+    nickHe: 'אג"ח צמוד מדד ל-10 שנים',
+    term: 'TIPS = Treasury Inflation-Protected Securities — אג"ח ממשלת ארה"ב שהקרן שלהן צמודה למדד המחירים. התשואה שלהן היא הריבית הריאלית.',
+    valueHelp: 'אחוזים בשנה, מעל האינפלציה.',
+    org: H15, url: FRED_URL('DFII10'), unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
     what: 'התשואה על אג"ח ממשלתי צמוד (TIPS) — מחיר הכסף אחרי אינפלציה.',
     fetch: () => fred('DFII10'),
   },
   {
-    id: 'boi', group: 'israel', name: 'ריבית בנק ישראל', official: 'Bank of Israel interest rate', code: 'MNT_RIB_BOI_D',
-    org: 'בנק ישראל', url: 'https://www.boi.org.il/roles/monetarypolicy/', unit: 'pct', kind: 'level', years: 5, maxAge: 7,
+    id: 'boi', group: 'israel', name: 'ריבית בנק ישראל', nick: 'BoI Rate', official: 'Bank of Israel interest rate', code: 'MNT_RIB_BOI_D',
+    nickHe: 'ריבית בנק ישראל',
+    term: 'הריבית שבנק ישראל משלם ולוקח מהבנקים על פיקדונות והלוואות קצרים. הוועדה המוניטרית קובעת אותה 8 פעמים בשנה.',
+    valueHelp: 'אחוזים בשנה.',
+    org: 'בנק ישראל', url: 'https://www.boi.org.il/roles/monetarypolicy/', unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
     what: 'הריבית שקובעת הוועדה המוניטרית של בנק ישראל.',
     fetch: () => boi('BR', 'MNT_RIB_BOI_D'),
   },
   {
-    id: 'usdils', group: 'israel', name: 'שער יציג דולר-שקל', official: 'Representative exchange rate USD/ILS', code: 'RER_USD_ILS',
-    org: 'בנק ישראל', url: 'https://www.boi.org.il/roles/markets/exchangerates/', unit: 'ils', kind: 'level', years: 5, maxAge: 7,
-    what: 'השער היציג שמפרסם בנק ישראל בכל יום עסקים.',
+    id: 'usdils', group: 'israel', name: 'שער יציג דולר-שקל', nick: 'USD/ILS', official: 'Representative exchange rate USD/ILS', code: 'RER_USD_ILS',
+    nickHe: 'דולר-שקל',
+    term: 'שער יציג — שער החליפין הרשמי שבנק ישראל קובע בכל יום עסקים לפי המסחר בין הבנקים. משמש בחוזים, בדיווחים ובהצמדות.',
+    valueHelp: 'שקלים לדולר אחד.',
+    org: 'בנק ישראל', url: 'https://www.boi.org.il/roles/markets/exchangerates/', unit: 'ils', kind: 'pct', dir: 'none', years: 5, maxAge: 7,
+    zones: ['שקל חלש', 'בינוני', 'שקל חזק'],
+    what: 'השער היציג של בנק ישראל. אין כאן טוב או רע: שקל חזק פוגע ביצואנים, שקל חלש מייקר את המחירים.',
     fetch: () => boi('EXR', 'RER_USD_ILS'),
   },
 ]
@@ -236,30 +424,30 @@ function change(unit, now, then) {
   if (then == null) return null
   if (unit === 'pct') return round((now - then) * 100, 0) // נקודות בסיס
   if (unit === 'ils') return round((now / then - 1) * 100) // אחוזים
-  return round(now - then) // נקודות / נקודות אחוז
+  return round(now - then) // נקודות / סטיות תקן
 }
 
-function reading(spec, value, pct, rows) {
-  if (spec.kind === 'trend') {
-    return value >= 0
-      ? { label: 'מעל הממוצע', tone: 'calm' }
-      : { label: 'מתחת לממוצע', tone: 'stress' }
-  }
-  if (spec.kind === 'curve') {
-    if (value < 0) return { label: 'עקום הפוך', tone: 'stress' }
-    if (value < 0.5) return { label: 'עקום שטוח', tone: 'normal' }
-    return { label: 'עקום חיובי', tone: 'calm' }
-  }
+const clamp = (x) => Math.max(0, Math.min(100, x))
+
+// מיקום על המד (0 = אדום, 100 = ירוק)
+function gaugeOf(spec, value, pct) {
+  if (spec.kind === 'trend') return clamp(50 + 17 * value) // ±1 ס"ת = 33/67
+  if (spec.kind === 'curve') return clamp(33 + 34 * value) // 0% = 33, 1% = 67
   if (pct == null) return null
-  if (spec.kind === 'stress') {
-    if (pct <= 20) return { label: 'רגוע', tone: 'calm' }
-    if (pct >= 80) return { label: 'לחוץ', tone: 'stress' }
-    return { label: 'תקין', tone: 'normal' }
-  }
-  if (pct <= 33) return { label: 'נמוך', tone: 'level' }
-  if (pct >= 67) return { label: 'גבוה', tone: 'level' }
-  return { label: 'בינוני', tone: 'level' }
+  return spec.dir === 'up-good' ? pct : 100 - pct // בדרך כלל ערך גבוה = שמאלה; בפרמיית סיכון — ימינה
 }
+
+// שבעה גוונים — מאדום חזק (-3) דרך ניטרלי (0) לירוק חזק (3)
+function shadeOf(g) {
+  if (g < 10) return -3
+  if (g < 25) return -2
+  if (g < 40) return -1
+  if (g <= 60) return 0
+  if (g <= 75) return 1
+  if (g <= 90) return 2
+  return 3
+}
+const zoneOf = (g) => (g < 33 ? 0 : g < 67 ? 1 : 2)
 
 // קו מגמה של שנה — דילול לנקודה בשבוע בערך, כדי שהקובץ יישאר קטן
 function spark(rows, from) {
@@ -272,16 +460,29 @@ function spark(rows, from) {
 
 function build(spec, rows) {
   const last = rows[rows.length - 1]
-  const from = isoAgo(last.date, 365 * spec.years)
-  const window = rows.filter((r) => r.date >= from)
-  // אחוזון רק כשיש היסטוריה מלאה לחלון — אחוזון על חצי שנה מתחזה לתמונה ארוכה
-  const fullWindow = rows[0].date <= isoAgo(last.date, 365 * spec.years - 10)
-  const pct = fullWindow ? round((window.filter((r) => r.value <= last.value).length / window.length) * 100, 0) : null
-  const values = window.map((r) => r.value)
+  let pct = null
+  let years = null
+  let min = null
+  let max = null
+  if (spec.kind === 'pct') {
+    const window = rows.filter((r) => r.date >= isoAgo(last.date, 365 * spec.years))
+    // אחוזון רק כשיש היסטוריה מלאה לחלון — אחוזון על חצי שנה מתחזה לתמונה ארוכה
+    if (rows[0].date <= isoAgo(last.date, 365 * spec.years - 10)) {
+      pct = round((window.filter((r) => r.value <= last.value).length / window.length) * 100, 0)
+      years = spec.years
+      min = round(Math.min(...window.map((r) => r.value)), 3)
+      max = round(Math.max(...window.map((r) => r.value)), 3)
+    }
+  }
+  const g = gaugeOf(spec, last.value, pct)
   return {
     id: spec.id,
     group: spec.group,
     name: spec.name,
+    nick: spec.nick,
+    nickHe: spec.nickHe,
+    term: spec.term,
+    valueHelp: spec.valueHelp,
     official: spec.official,
     code: spec.code,
     org: spec.org,
@@ -291,26 +492,33 @@ function build(spec, rows) {
     kind: spec.kind,
     date: last.date,
     value: round(last.value, spec.unit === 'ils' ? 3 : 2),
-    ...(last.close != null ? { close: round(last.close), ma: round(last.ma) } : {}),
+    ...(last.close != null ? { close: round(last.close), ma: round(last.ma), dist: round(last.dist) } : {}),
     ch1m: change(spec.unit, last.value, valueAt(rows, isoAgo(last.date, 30))),
     ch1y: change(spec.unit, last.value, valueAt(rows, isoAgo(last.date, 365))),
-    years: fullWindow ? spec.years : null,
-    min: fullWindow ? round(Math.min(...values), 3) : null,
-    max: fullWindow ? round(Math.max(...values), 3) : null,
+    years,
+    min,
+    max,
     pct,
-    reading: reading(spec, last.value, pct, rows),
-    spark: spark(rows, isoAgo(last.date, 365)),
+    zones: spec.zones,
+    gauge: g == null ? null : round(g, 0),
+    // dir 'none' — המד מראה מיקום, בלי צבע
+    shade: g == null || spec.dir === 'none' ? 0 : shadeOf(g),
+    neutral: spec.dir === 'none' || undefined,
+    reading: g == null ? null : spec.zones[zoneOf(g)],
+    spark: spark(rows, isoAgo(last.date, 365 * (spec.sparkYears ?? 1))),
   }
 }
 
 // ── פרמיית סיכון המניות ───────────────────────────────────────────
-// תשואת הרווח העתידית (1 ÷ מכפיל רווח עתידי) פחות הריבית הריאלית ל-10 שנים.
-// המכפיל — מדף השווקים (תחזית האנליסטים ב-Yahoo, ממוצע הרמוני משוקלל), הריבית — הפד.
+// תשואת הרווח העתידית (1 ÷ מכפיל רווח עתידי) פחות הריבית הריאלית לשנתיים,
+// בדומה למודל הפד. הריבית הריאלית לשנתיים = תשואת אג"ח ממשלתי לשנתיים (DGS2)
+// פחות ציפיות האינפלציה לשנתיים של הפד בקליבלנד (EXPINF2YR, חודשי) — אין אג"ח
+// צמוד לשנתיים. המכפיל — מדף השווקים (תחזית האנליסטים ב-Yahoo).
 // אין לזה מקור היסטורי — הסדרה נצברת כאן, נקודה לכל יום.
-function erp(summary, real10, prevHist) {
+function erp(summary, real, prevHist) {
   const spx = summary?.us?.indices?.find((i) => i.symbol === '^GSPC')
-  if (!spx?.fpe || real10 == null) return { block: null, hist: prevHist }
-  const calc = (fpe) => (fpe > 0 ? { ey: round(100 / fpe), erp: round(100 / fpe - real10) } : { ey: null, erp: null })
+  if (!spx?.fpe || !real) return { block: null, hist: prevHist }
+  const calc = (fpe) => (fpe > 0 ? { ey: round(100 / fpe), erp: round(100 / fpe - real.value) } : { ey: null, erp: null })
   const hist = { ...prevHist, [spx.date]: calc(spx.fpe).erp }
   const series = Object.keys(hist)
     .sort()
@@ -319,7 +527,7 @@ function erp(summary, real10, prevHist) {
     hist,
     block: {
       date: spx.date,
-      real10,
+      real,
       index: { name: 'S&P 500', fpe: spx.fpe, ...calc(spx.fpe) },
       sectors: (summary.us.breakdown ?? [])
         .filter((s) => s.fpe)
@@ -331,26 +539,31 @@ function erp(summary, real10, prevHist) {
   }
 }
 
-// ── שורת מצב-על — נגזרת מהמספרים בלבד, בלי AI ──────────────────────
+// ── מד מצב-על — נגזר מהמספרים בלבד, בלי AI ─────────────────────────
+// ממוצע המיקום של האינדיקטורים שיש להם כיוון ברור והיסטוריה מלאה: פחד (5 שנים),
+// מגמה בשני השווקים, עקום. מרווחי האשראי בחוץ — 3 שנים זה חלון קצר מדי.
+const CORE = ['vix', 'spx200', 'ta35200', 'curve']
+const OVERALL_ZONES = ['לחוצים', 'מעורבים', 'רגועים']
 function overall(items) {
   const by = Object.fromEntries(items.map((i) => [i.id, i]))
-  // הסימנים שיש להם כיוון ברור: פחד (אחוזון 5 שנים), מגמה בשני השווקים, עקום
-  const core = ['vix', 'spx200', 'ta35200', 'curve'].map((k) => by[k]).filter((i) => i?.reading)
+  const core = CORE.map((k) => by[k]).filter((i) => i?.gauge != null && !i.stale)
   if (core.length < 3) return null
-  const stress = core.filter((i) => i.reading.tone === 'stress').length
-  const calm = core.filter((i) => i.reading.tone === 'calm').length
-  const label = stress >= 2 ? 'לחוצים' : stress === 1 ? 'מעורבים' : calm >= 2 ? 'רגועים' : 'תקינים'
-  const tone = stress >= 2 ? 'stress' : stress === 1 ? 'normal' : 'calm'
-  const sign = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(1)}%`
-  const where = (i) => (i.pct == null ? '' : i.pct >= 67 ? 'גבוה' : i.pct <= 33 ? 'נמוך' : 'בטווח הרגיל')
-  const ma = (i, name) => `${name} ${i.value >= 0 ? 'מעל ' : 'מתחת ל'}ממוצע 200 יום (${sign(i.value)})`
+  const g = round(core.reduce((a, i) => a + i.gauge, 0) / core.length, 0)
+  const sgn = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(1)}`
+  const ma = (i, name) => `${name} ${i.value >= 0 ? 'מעל ' : 'מתחת ל'}ממוצע 200 יום (${sgn(i.value)} סטיות תקן, ${sgn(i.dist)}%)`
   const parts = []
-  if (by.vix) parts.push(`מדד הפחד VIX עומד על ${by.vix.value.toFixed(2)}${by.vix.pct != null ? ` — ${where(by.vix)} ביחס ל-${by.vix.years} השנים האחרונות` : ''}`)
-  if (by.spx200) parts.push(ma(by.spx200, 'S&P 500'))
-  if (by.ta35200) parts.push(ma(by.ta35200, 'ת"א-35'))
-  if (by.curve) parts.push(`עקום התשואות ${by.curve.value < 0 ? 'הפוך' : by.curve.value < 0.5 ? 'שטוח' : 'חיובי'} (10 מול 2 שנים: ${by.curve.value > 0 ? '+' : ''}${by.curve.value.toFixed(2)})`)
-  if (by.hy?.pct != null) parts.push(`מרווח האשראי בדירוג נמוך ${by.hy.value.toFixed(2)}% — ${where(by.hy)} ביחס ל-${by.hy.years} השנים האחרונות`)
-  return { label, tone, text: `${parts.join('; ')}.` }
+  if (by.vix?.pct != null) parts.push(`מדד הפחד VIX עומד על ${by.vix.value.toFixed(2)} — גבוה מ-${by.vix.pct}% מהימים ב-5 השנים האחרונות`)
+  if (by.spx200?.dist != null) parts.push(ma(by.spx200, 'S&P 500'))
+  if (by.ta35200?.dist != null) parts.push(ma(by.ta35200, 'ת"א-35'))
+  if (by.curve) parts.push(`עקום התשואות ${by.curve.reading} (10 מול 2 שנים: ${by.curve.value > 0 ? '+' : ''}${by.curve.value.toFixed(2)})`)
+  return {
+    gauge: g,
+    shade: shadeOf(g),
+    zones: OVERALL_ZONES,
+    reading: OVERALL_ZONES[zoneOf(g)],
+    parts: core.map((i) => ({ name: i.name, gauge: i.gauge })),
+    text: `${parts.join('; ')}.`,
+  }
 }
 
 // ── ריצה ──────────────────────────────────────────────────────────
@@ -360,7 +573,7 @@ console.log('🧭 אינדיקטורים — מתחיל...')
 const [summary, history, prev, prevErp] = await Promise.all([
   loadJson('market/summary.json'),
   loadJson('market/history.json'),
-  loadJson('market/indicators.json'),
+  loadJson('market/indicators-v2.json'),
   loadJson('market/erp-history.json'),
 ])
 const ctx = {
@@ -380,7 +593,8 @@ for (const spec of INDICATORS) {
   } catch (e) {
     errors.push(`${spec.name}: ${e.message}`)
     const old = prev?.groups?.flatMap((g) => g.items).find((i) => i.id === spec.id)
-    if (old) items.push({ ...old, stale: true })
+    // ערך ישן ממבנה קודם (בלי מד) — לא מציגים, כדי לא לשבור את הדף
+    if (old && 'gauge' in old) items.push({ ...old, stale: true })
   }
 }
 
@@ -390,30 +604,82 @@ if (!items.length) {
   process.exit(1)
 }
 
-const real10 = items.find((i) => i.id === 'real10')?.value ?? null
-const { block: erpBlock, hist: erpHist } = erp(summary, real10, prevErp ?? {})
-if (!erpBlock) errors.push('פרמיית סיכון: חסר מכפיל עתידי של S&P 500 או ריבית ריאלית')
+// ריבית ריאלית לשנתיים לפרמיית הסיכון
+let real = null
+const us2 = items.find((i) => i.id === 'us2' && !i.stale)
+try {
+  const exp = await fred('EXPINF2YR')
+  const e = exp[exp.length - 1]
+  if (us2) real = { value: round(us2.value - e.value), nominal: us2.value, nominalDate: us2.date, inflation: round(e.value), inflationDate: e.date }
+} catch (e) {
+  errors.push(`ציפיות אינפלציה לשנתיים: ${e.message}`)
+}
+const { block: erpBlock, hist: erpHist } = erp(summary, real, prevErp ?? {})
+
+// פרמיות סיכון עם היסטוריה ארוכה — לפרופורציה. שיטות שונות משלנו, ולכן מוצגות
+// לצד הפרמיה שלנו ולא מושוות אליה אחד-לאחד. החלון = כל ההיסטוריה של המקור.
+const ERP_ZONES = ['פרמיה נמוכה', 'בינונית', 'פרמיה גבוהה']
+const ERP_LONG = [
+  {
+    id: 'damodaran', group: 'erp', name: 'פרמיית הסיכון הגלומה — דמודרן', nick: 'Implied ERP', nickHe: 'פרמיית סיכון גלומה',
+    official: 'Implied Equity Risk Premium, S&P 500 (T12m)', code: 'ERPbymonth',
+    org: "פרופ' אסוואת' דמודרן, אוניברסיטת ניו יורק", url: 'https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/implpr.html',
+    unit: 'pct', kind: 'pct', dir: 'up-good', maxAge: 70, sparkYears: 10, zones: ERP_ZONES,
+    what: 'התשואה העודפת שמחיר S&P 500 מגלם מעל אג"ח ממשלת ארה"ב ל-10 שנים, לפי מודל של תזרים לבעלי המניות (דיבידנדים ורכישות חוזרות) וצמיחה צפויה. מתעדכן בתחילת כל חודש.',
+    term: 'Implied ERP — פרמיה "גלומה": לא נמדדת מתשואות העבר, אלא מחולצת ממחיר המדד היום — איזו תשואה עודפת צריך כדי שהמחיר יצדיק את התזרים הצפוי.',
+    valueHelp: 'אחוזים בשנה מעל תשואת אג"ח ממשלת ארה"ב ל-10 שנים.',
+    fetch: damodaran,
+  },
+  {
+    id: 'shiller', group: 'erp', name: 'תשואת CAPE העודפת — שילר', nick: 'Excess CAPE Yield', nickHe: 'תשואת CAPE עודפת',
+    official: 'Excess CAPE Yield (ECY)', code: 'ie_data',
+    org: "פרופ' רוברט שילר, אוניברסיטת ייל", url: 'https://shillerdata.com/',
+    unit: 'pct', kind: 'pct', dir: 'up-good', maxAge: 70, sparkYears: 10, zones: ERP_ZONES,
+    what: 'תשואת הרווח של S&P 500 לפי הרווח הממוצע של 10 שנים מותאם אינפלציה (1 חלקי CAPE), פחות הריבית הריאלית ל-10 שנים. מתעדכן פעם בחודש.',
+    term: 'CAPE = Cyclically Adjusted P/E, מכפיל רווח מנוטרל מחזוריות (נקרא גם "מכפיל שילר"): מחיר המדד חלקי הרווח הממוצע של 10 השנים האחרונות, במונחים ריאליים.',
+    valueHelp: 'אחוזים בשנה מעל הריבית הריאלית ל-10 שנים.',
+    fetch: shiller,
+  },
+]
+const erpLong = []
+for (const spec of ERP_LONG) {
+  try {
+    const rows = await spec.fetch()
+    // החלון = כל ההיסטוריה של המקור (שנים שלמות)
+    const it = build({ ...spec, years: Math.floor((Date.parse(rows[rows.length - 1].date) - Date.parse(rows[0].date)) / DAY / 365) }, rows)
+    it.since = rows[0].date
+    if ((Date.parse(today) - Date.parse(it.date)) / DAY > spec.maxAge) it.stale = true
+    erpLong.push(it)
+  } catch (e) {
+    errors.push(`${spec.name}: ${e.message}`)
+    const old = prev?.erpLong?.find((i) => i.id === spec.id)
+    if (old) erpLong.push({ ...old, stale: true })
+  }
+}
+if (!erpBlock) errors.push('פרמיית סיכון: חסר מכפיל עתידי של S&P 500 או ריבית ריאלית לשנתיים')
 
 const out = {
   updated_at: new Date().toISOString(),
   overall: overall(items),
   groups: GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.group === g.id) })).filter((g) => g.items.length),
-  erp: erpBlock ?? prev?.erp ?? null,
+  erp: erpBlock ?? (prev?.erp?.real?.value != null ? prev.erp : null),
+  erpLong,
   errors,
 }
 
 const TEST = process.argv.includes('--test')
 const put = (path, obj) =>
   db.storage.from(BUCKET).upload(path, JSON.stringify(obj), { upsert: true, contentType: 'application/json', cacheControl: '60' })
-const { error } = await put(TEST ? 'market/indicators-test.json' : 'market/indicators.json', out)
+const { error } = await put(TEST ? 'market/indicators-test.json' : 'market/indicators-v2.json', out)
 if (error) throw error
 if (erpBlock && !TEST) {
   const { error: e2 } = await put('market/erp-history.json', erpHist)
   if (e2) throw e2
 }
 
-for (const i of items) console.log(`  ${i.stale ? '⚠️' : '✅'} ${i.name}: ${i.value} (${i.date})${i.reading ? ` — ${i.reading.label}` : ''}${i.pct != null ? `, אחוזון ${i.pct}` : ''}`)
-if (erpBlock) console.log(`  ✅ פרמיית סיכון S&P 500: ${erpBlock.index.erp}% (${erpBlock.sectors.length} סקטורים)`)
-if (out.overall) console.log(`📝 תנאי השוק ${out.overall.label}: ${out.overall.text}`)
+for (const i of items) console.log(`  ${i.stale ? '⚠️' : '✅'} ${i.name}: ${i.value} (${i.date}) — ${i.reading ?? '—'}, מד ${i.gauge ?? '—'}, גוון ${i.shade}`)
+if (erpBlock) console.log(`  ✅ פרמיית סיכון S&P 500: ${erpBlock.index.erp}% מול ריאלית לשנתיים ${real.value}% (${erpBlock.sectors.length} סקטורים)`)
+for (const i of erpLong) console.log(`  ${i.stale ? '⚠️' : '✅'} ${i.name}: ${i.value}% (${i.date}, מאז ${i.since}) — ${i.reading}, אחוזון ${i.pct}, מד ${i.gauge}, גוון ${i.shade}`)
+if (out.overall) console.log(`📝 תנאי השוק ${out.overall.reading} (${out.overall.gauge}): ${out.overall.text}`)
 if (errors.length) console.warn(`⚠️ ${errors.length} שגיאות:`, errors)
 console.log(`⏱️ ${((Date.now() - t0) / 1000).toFixed(1)} שניות`)
