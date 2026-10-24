@@ -9,6 +9,7 @@ import AuthModal from './AuthModal'
 const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean; desktopOnly?: boolean }[] = [
   { to: '/', label: 'פיד', end: true },
   { to: '/markets', label: 'שווקים' },
+  { to: '/indicators', label: 'אינדיקטורים' },
   { to: '/companies', label: 'חברות' },
   { to: '/about', label: 'אודות', desktopOnly: true },
   { to: '/admin', label: 'ניהול', adminOnly: true },

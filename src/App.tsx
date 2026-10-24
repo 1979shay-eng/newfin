@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Feed from './pages/Feed'
 import Companies from './pages/Companies'
 import Markets from './pages/Markets'
+import Indicators from './pages/Indicators'
 import CompanyProfile from './pages/CompanyProfile'
 import About from './pages/About'
 import Admin from './pages/Admin'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Feed />} />
           <Route path="markets" element={<Markets />} />
+          <Route path="indicators" element={<Indicators />} />
           <Route path="companies" element={<Companies />} />
           <Route path="company/:slug" element={<CompanyProfile />} />
           <Route path="about" element={<About />} />
