@@ -149,7 +149,7 @@ export default function Markets() {
     lead && lead.days.length > 1 ? `${shortDate(lead.days[0].date)}–${shortDate(lead.days[lead.days.length - 1].date)}` : ''
 
   return (
-    <div className="mx-auto max-w-[1200px]">
+    <div>
       <h1 className="font-serif text-[38px] font-black leading-[1.05] tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
         סיכום מסחר
       </h1>
