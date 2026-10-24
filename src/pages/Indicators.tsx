@@ -85,18 +85,18 @@ const GROUP_HINT: Record<string, string> = {
 // שבעה גוונים: רקע הכרטיס, מסגרת וצבע התווית
 const mix = (c: string, p: number, base = 'var(--surface)') => `color-mix(in oklab, ${c} ${p}%, ${base})`
 const SHADE: Record<Shade, { bg: string; border: string; fg: string; chip: string; chipFg: string }> = {
-  [-3]: { bg: mix(DOWN, 46), border: mix(DOWN, 80), fg: DOWN, chip: DOWN, chipFg: '#fff' },
-  [-2]: { bg: mix(DOWN, 28), border: mix(DOWN, 60), fg: DOWN, chip: mix(DOWN, 75, 'transparent'), chipFg: '#fff' },
-  [-1]: { bg: mix(DOWN, 13), border: mix(DOWN, 38), fg: DOWN, chip: mix(DOWN, 20, 'transparent'), chipFg: DOWN },
+  [-3]: { bg: mix(DOWN, 62), border: DOWN, fg: DOWN, chip: DOWN, chipFg: '#fff' },
+  [-2]: { bg: mix(DOWN, 40), border: mix(DOWN, 80), fg: DOWN, chip: DOWN, chipFg: '#fff' },
+  [-1]: { bg: mix(DOWN, 20), border: mix(DOWN, 55), fg: DOWN, chip: mix(DOWN, 30, 'transparent'), chipFg: DOWN },
   0: { bg: 'var(--surface)', border: 'var(--line2)', fg: 'var(--ink2)', chip: 'var(--chip)', chipFg: 'var(--ink2)' },
-  1: { bg: mix(UP, 13), border: mix(UP, 38), fg: UP, chip: mix(UP, 20, 'transparent'), chipFg: UP },
-  2: { bg: mix(UP, 28), border: mix(UP, 60), fg: UP, chip: mix(UP, 75, 'transparent'), chipFg: '#fff' },
-  3: { bg: mix(UP, 46), border: mix(UP, 80), fg: UP, chip: UP, chipFg: '#fff' },
+  1: { bg: mix(UP, 20), border: mix(UP, 55), fg: UP, chip: mix(UP, 30, 'transparent'), chipFg: UP },
+  2: { bg: mix(UP, 40), border: mix(UP, 80), fg: UP, chip: UP, chipFg: '#fff' },
+  3: { bg: mix(UP, 62), border: UP, fg: UP, chip: UP, chipFg: '#fff' },
 }
 
 // בגוונים החזקים הטקסט המשני (מקור, אחוזון) מוחשך — אחרת הוא נבלע ברקע הצבעוני
 const cardStyle = (shade: Shade) =>
-  ({ background: SHADE[shade].bg, borderColor: SHADE[shade].border, ...(Math.abs(shade) >= 2 ? { '--muted': 'var(--ink2)' } : {}) }) as CSSProperties
+  ({ background: SHADE[shade].bg, borderColor: SHADE[shade].border, ...(Math.abs(shade) >= 1 ? { '--muted': 'var(--ink2)' } : {}) }) as CSSProperties
 
 function useData() {
   const [data, setData] = useState<Data | null>(null)
@@ -253,6 +253,8 @@ function Gauge({ value, zones, neutral, size = 180, center }: { value: number; z
       <div className="relative" style={{ width: W, height: H }}>
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`מד: ${zones[active]}`}>
           {/* רווח קטן בין האזורים */}
+          {/* מצע בהיר מתחת לקשת — שהאזורים לא ייבלעו בכרטיס צבוע */}
+          <path d={arc(0, 100)} fill="none" stroke="var(--surface)" strokeWidth={sw + 6} strokeLinecap="round" />
           <path d={arc(0, 32.4)} fill="none" stroke={colors[0]} strokeWidth={sw} />
           <path d={arc(33.6, 66.4)} fill="none" stroke={colors[1]} strokeWidth={sw} />
           <path d={arc(67.6, 100)} fill="none" stroke={colors[2]} strokeWidth={sw} />
