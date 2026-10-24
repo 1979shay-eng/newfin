@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/useAuth'
 import { useTheme } from '../lib/theme'
 import AuthModal from './AuthModal'
@@ -14,6 +14,8 @@ const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean;
   { to: '/about', label: 'אודות', desktopOnly: true },
   { to: '/admin', label: 'ניהול', adminOnly: true },
 ]
+
+const WIDE_ROUTES = ['/indicators']
 
 function Logo() {
   return (
@@ -35,6 +37,9 @@ export default function Layout() {
   const [authOpen, setAuthOpen] = useState(false)
   const initial = (user?.email ?? '?').trim().charAt(0).toUpperCase()
   const items = navItems.filter((n) => !n.adminOnly || isAdmin)
+  // דפי לוח (כרטיסים בגריד) מנצלים מסך רחב; דפי קריאה נשארים צרים
+  const { pathname } = useLocation()
+  const width = WIDE_ROUTES.includes(pathname) ? 'max-w-[1600px]' : 'max-w-[1200px]'
 
   return (
     <div className="relative min-h-screen" style={{ backgroundColor: 'var(--bg)', color: 'var(--ink)' }}>
@@ -61,7 +66,7 @@ export default function Layout() {
         className="sticky top-0 z-30 border-b backdrop-blur-xl"
         style={{ background: 'var(--nav)', borderColor: 'var(--line2)' }}
       >
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-3 sm:px-6">
+        <div className={`mx-auto flex ${width} items-center justify-between px-4 py-3 sm:px-6`}>
           <Link to="/" className="flex items-center gap-2">
             <Logo />
             {/* מילת הלוגו נושרת במסך צר — האייקון לבדו מקשר לבית */}
@@ -144,7 +149,7 @@ export default function Layout() {
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
-      <main className="relative z-10 mx-auto max-w-[1200px] px-4 py-7 sm:px-6">
+      <main className={`relative z-10 mx-auto ${width} px-4 py-7 sm:px-6`}>
         <Outlet />
       </main>
 

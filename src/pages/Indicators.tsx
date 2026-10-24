@@ -80,15 +80,19 @@ const GROUP_HINT: Record<string, string> = {
 
 // שבעה גוונים: רקע הכרטיס, מסגרת וצבע התווית
 const mix = (c: string, p: number, base = 'var(--surface)') => `color-mix(in oklab, ${c} ${p}%, ${base})`
-const SHADE: Record<Shade, { bg: string; border: string; fg: string; chip: string }> = {
-  [-3]: { bg: mix(DOWN, 26), border: mix(DOWN, 55), fg: DOWN, chip: mix(DOWN, 22, 'transparent') },
-  [-2]: { bg: mix(DOWN, 16), border: mix(DOWN, 38), fg: DOWN, chip: mix(DOWN, 16, 'transparent') },
-  [-1]: { bg: mix(DOWN, 7), border: mix(DOWN, 22), fg: DOWN, chip: mix(DOWN, 11, 'transparent') },
-  0: { bg: 'var(--surface)', border: 'var(--line2)', fg: 'var(--ink2)', chip: 'var(--chip)' },
-  1: { bg: mix(UP, 7), border: mix(UP, 22), fg: UP, chip: mix(UP, 11, 'transparent') },
-  2: { bg: mix(UP, 16), border: mix(UP, 38), fg: UP, chip: mix(UP, 16, 'transparent') },
-  3: { bg: mix(UP, 26), border: mix(UP, 55), fg: UP, chip: mix(UP, 22, 'transparent') },
+const SHADE: Record<Shade, { bg: string; border: string; fg: string; chip: string; chipFg: string }> = {
+  [-3]: { bg: mix(DOWN, 46), border: mix(DOWN, 80), fg: DOWN, chip: DOWN, chipFg: '#fff' },
+  [-2]: { bg: mix(DOWN, 28), border: mix(DOWN, 60), fg: DOWN, chip: mix(DOWN, 75, 'transparent'), chipFg: '#fff' },
+  [-1]: { bg: mix(DOWN, 13), border: mix(DOWN, 38), fg: DOWN, chip: mix(DOWN, 20, 'transparent'), chipFg: DOWN },
+  0: { bg: 'var(--surface)', border: 'var(--line2)', fg: 'var(--ink2)', chip: 'var(--chip)', chipFg: 'var(--ink2)' },
+  1: { bg: mix(UP, 13), border: mix(UP, 38), fg: UP, chip: mix(UP, 20, 'transparent'), chipFg: UP },
+  2: { bg: mix(UP, 28), border: mix(UP, 60), fg: UP, chip: mix(UP, 75, 'transparent'), chipFg: '#fff' },
+  3: { bg: mix(UP, 46), border: mix(UP, 80), fg: UP, chip: UP, chipFg: '#fff' },
 }
+
+// בגוונים החזקים הטקסט המשני (מקור, אחוזון) מוחשך — אחרת הוא נבלע ברקע הצבעוני
+const cardStyle = (shade: Shade) =>
+  ({ background: SHADE[shade].bg, borderColor: SHADE[shade].border, ...(Math.abs(shade) >= 2 ? { '--muted': 'var(--ink2)' } : {}) }) as CSSProperties
 
 function useData() {
   const [data, setData] = useState<Data | null>(null)
@@ -139,7 +143,7 @@ export default function Indicators() {
   const updated = data ? new Date(data.updated_at) : null
 
   return (
-    <div className="mx-auto max-w-[1200px]">
+    <div>
       <h1 className="font-serif text-[38px] font-black leading-[1.05] tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
         אינדיקטורים
       </h1>
@@ -180,7 +184,7 @@ export default function Indicators() {
                   {GROUP_HINT[g.id]}
                 </p>
               )}
-              <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {g.items.map((it) => (
                   <IndicatorCard key={it.id} it={it} />
                 ))}
@@ -236,7 +240,7 @@ function Gauge({ value, zones, neutral, size = 180, center }: { value: number; z
     const [x1, y1] = pt(g1)
     return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`
   }
-  const colors = neutral ? ['var(--chip)', 'var(--line2)', 'var(--chip)'] : [mix(DOWN, 55, 'transparent'), 'var(--line2)', mix(UP, 55, 'transparent')]
+  const colors = neutral ? ['var(--chip)', 'var(--line2)', 'var(--chip)'] : [DOWN, 'var(--line2)', UP]
   const [nx, ny] = pt(value, r - sw / 2 - 4)
   const active = value < 33 ? 0 : value < 67 ? 1 : 2
   return (
@@ -334,11 +338,10 @@ const OVERALL_HELP =
 
 // ── מד מצב-על בראש הדף ───────────────────────────────────────────
 function Overall({ o }: { o: NonNullable<Data['overall']> }) {
-  const s = SHADE[o.shade]
   const [open, setOpen] = useState<string | null>(null)
   const toggle = (id: string) => setOpen((x) => (x === id ? null : id))
   return (
-    <Card className="mt-5 flex flex-col items-center gap-5 px-6 py-5 sm:flex-row sm:items-center" style={{ background: s.bg, borderColor: s.border }}>
+    <Card className="mt-5 flex flex-col items-center gap-5 px-6 py-5 sm:flex-row sm:items-center" style={cardStyle(o.shade)}>
       <Hot id="gauge" open={open} onToggle={toggle} help={OVERALL_HELP} className="w-full max-w-[280px] sm:w-auto">
         <Gauge
           value={o.gauge}
@@ -372,7 +375,7 @@ function IndicatorCard({ it }: { it: Indicator }) {
   const [open, setOpen] = useState<string | null>(null)
   const toggle = (id: string) => setOpen((x) => (x === id ? null : id))
   return (
-    <Card className="flex flex-col px-5 py-4" style={{ background: s.bg, borderColor: s.border }}>
+    <Card className="flex flex-col px-5 py-4" style={cardStyle(it.shade)}>
       <h3 className="text-[17px] font-extrabold leading-snug" style={{ color: 'var(--ink)' }}>
         {it.name}
       </h3>
@@ -600,7 +603,7 @@ function Erp({ erp }: { erp: NonNullable<Data['erp']> }) {
 function Chip({ shade, children }: { shade: Shade; children: ReactNode }) {
   const s = SHADE[shade]
   return (
-    <span className="inline-block shrink-0 rounded-full px-2.5 py-0.5 text-[13px] font-bold" style={{ background: s.chip, color: s.fg }}>
+    <span className="inline-block shrink-0 rounded-full px-2.5 py-0.5 text-[13px] font-bold" style={{ background: s.chip, color: s.chipFg }}>
       {children}
     </span>
   )
@@ -619,7 +622,7 @@ function Card({ className = '', style, children }: { className?: string; style?:
 
 function Loading() {
   return (
-    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="טוען אינדיקטורים">
+    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" aria-busy="true" aria-label="טוען אינדיקטורים">
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <div key={i} className="h-[300px] animate-pulse rounded-[18px]" style={{ background: 'var(--chip)' }} />
       ))}
