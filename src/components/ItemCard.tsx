@@ -26,7 +26,32 @@ function delayStyle(index = 0) {
   return { animationDelay: `${Math.min(index * 40, 360)}ms` }
 }
 
-// כרטיס דיווח עצמאי (handoff). מנוהל ע"י טוקני CSS — עובד זהה בכהה ובהיר.
+// סימן חשיבות: 5 נקודות + תווית. יושב בתחילת שורת המטא (ימין, נקודת הכניסה של
+// העין ב-RTL) — לא בפינה השמאלית, שם נקרא אחרון.
+export function ImportanceMark({ score }: { score: number }) {
+  const lvl = impLevel(score)
+  const dots = impDots(score)
+  return (
+    <span className="flex shrink-0 items-center gap-1.5" aria-label={`${impLabel[lvl]} (${score} מתוך 10)`}>
+      <span className="flex gap-[3px]" aria-hidden>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span
+            key={i}
+            className="h-[7px] w-[7px] rounded-full"
+            style={{ background: i < dots ? impColor[lvl] : 'var(--dot-empty)' }}
+          />
+        ))}
+      </span>
+      <span className="text-[12px] font-bold leading-none" style={{ color: impColor[lvl] }}>
+        {impLabel[lvl]}
+      </span>
+    </span>
+  )
+}
+
+// כרטיס דיווח (handoff). החשיבות קובעת את הצורה: ידיעה בחשיבות גבוהה — כותרת
+// גדולה, פירוט ושורה תחתונה מלאה; בינונית — כותרת קטנה ושורה תחתונה מקוצרת
+// לשתי שורות שנפתחת בלחיצה. כך ידיעה ב-9 לא נראית כמו ידיעה ב-4.
 export default function ItemCard({
   item,
   compact = false,
@@ -36,8 +61,8 @@ export default function ItemCard({
   isNew = false,
 }: Props) {
   const canWatch = Boolean(item.company_id && onToggleWatch)
-  const lvl = impLevel(item.materiality_score)
-  const dots = impDots(item.materiality_score)
+  const major = impLevel(item.materiality_score) === 'high'
+  const [expanded, setExpanded] = useState(false)
   const sent = sentiment(item.direction)
   const company = item.company_name
   const sectorName =
@@ -50,21 +75,28 @@ export default function ItemCard({
   const { time, date } = clockParts(item.published_at)
   const [reporting, setReporting] = useState(false)
 
+  // בינונית: השורה התחתונה מקוצרת עד שפותחים; הפירוט מהמקור מוצג רק בפתיחה
+  const open = major || expanded
+
   return (
     <article
+      id={`item-${item.id}`}
       style={{
         ...delayStyle(index),
         background: 'var(--surface)',
         borderColor: 'var(--line2)',
         boxShadow: 'var(--shadow)',
       }}
-      className="animate-fade-up rounded-[18px] border px-6 py-5 transition-colors duration-150 hover:bg-[var(--hover)]"
+      className={`animate-fade-up scroll-mt-24 rounded-[18px] border transition-colors duration-150 hover:bg-[var(--hover)] ${
+        major ? 'px-6 py-5' : 'px-5 py-4'
+      }`}
     >
       {/* שורת מטא עליונה */}
       <div className="flex items-start justify-between gap-4">
-        {/* ימין: אווטר → חברה → סקטור → סנטימנט */}
+        {/* ימין: חשיבות → אווטר → חברה → סקטור → סנטימנט */}
         <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
-          {company && (
+          <ImportanceMark score={item.materiality_score} />
+          {major && company && (
             <span
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white"
               style={{ background: avatarColor(company) }}
@@ -106,22 +138,8 @@ export default function ItemCard({
           )}
         </div>
 
-        {/* שמאל: חשיבות (5 נקודות + תווית) + כוכב מעקב */}
+        {/* שמאל: כוכב מעקב */}
         <div className="flex shrink-0 items-center gap-3">
-          <div className="flex flex-col items-center gap-1">
-            <div className="flex gap-1">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span
-                  key={i}
-                  className="h-[7px] w-[7px] rounded-full"
-                  style={{ background: i < dots ? impColor[lvl] : 'var(--dot-empty)' }}
-                />
-              ))}
-            </div>
-            <span className="text-[11.5px] font-bold leading-none" style={{ color: impColor[lvl] }}>
-              {impLabel[lvl]}
-            </span>
-          </div>
           {canWatch && (
             <button
               onClick={onToggleWatch}
@@ -135,16 +153,18 @@ export default function ItemCard({
         </div>
       </div>
 
-      {/* כותרת — פונט מעוגל (Rubik), קריא ונוח */}
+      {/* כותרת — פונט מעוגל (Rubik), קריא ונוח. גודל לפי חשיבות. */}
       <h2
-        className="mt-2.5 font-display text-[21px] font-bold leading-[1.4] tracking-[-0.01em]"
+        className={`font-display font-bold tracking-[-0.01em] ${
+          major ? 'mt-2.5 text-[21px] leading-[1.4]' : 'mt-2 text-[17px] leading-[1.45]'
+        }`}
         style={{ color: 'var(--ink)' }}
       >
         {item.title}
       </h2>
 
       {/* פירוט מהמקור — עד 3 שורות, נמתח לכל רוחב הכרטיס; מוסתר בתצוגה תמציתית */}
-      {!compact && detail && (
+      {!compact && open && detail && (
         <p
           className="mt-2 text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden"
           style={{ color: 'var(--muted)' }}
@@ -163,12 +183,24 @@ export default function ItemCard({
             borderRight: '3px solid var(--accent)',
           }}
         >
-          <span className="font-bold" style={{ color: 'var(--accent)' }}>
-            שורה תחתונה ·{' '}
-          </span>
-          {bottomLine}
-          <span className="mt-1 block text-[11.5px]" style={{ color: 'var(--muted2)' }}>
-            סיכום אוטומטי (AI) · עלול לכלול טעויות — הכתבה המקורית היא הקובעת
+          <p className={open ? undefined : '[display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden'}>
+            <span className="font-bold" style={{ color: 'var(--accent)' }}>
+              שורה תחתונה ·{' '}
+            </span>
+            {bottomLine}
+          </p>
+          <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-[11.5px]" style={{ color: 'var(--muted2)' }}>
+            <span>סיכום אוטומטי (AI) · עלול לכלול טעויות — הכתבה המקורית היא הקובעת</span>
+            {!major && (
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                aria-expanded={expanded}
+                className="font-bold hover:underline"
+                style={{ color: 'var(--accent)' }}
+              >
+                {expanded ? 'פחות' : 'הצג הכל'}
+              </button>
+            )}
           </span>
         </div>
       )}

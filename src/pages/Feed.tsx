@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
-import ItemCard from '../components/ItemCard'
+import ItemCard, { ImportanceMark } from '../components/ItemCard'
 import { fetchFeed, searchFeed, fetchHighImportance } from '../lib/queries'
 import { loadWatch, saveWatch, onWatchChanged } from '../lib/watchlist'
 import { track } from '../lib/track'
@@ -183,6 +183,17 @@ export default function Feed() {
   const isNew = (it: FeedItem) => lastSeen !== null && +new Date(it.published_at) > lastSeen
   const newCount = useMemo(() => filtered.filter(isNew).length, [filtered, lastSeen])
 
+  // "הכי חשוב עכשיו": עד 3 ידיעות בחשיבות גבוהה מ-24 השעות האחרונות, לפי דירוג משולב.
+  // רק במיון לפי זמן (בשאר המיונים הרשימה עצמה כבר מתחילה בחשובות) ובלי חיפוש פעיל.
+  const topNow = useMemo(() => {
+    if (sort !== 'time' || archive || query.trim()) return []
+    const since = Date.now() - 24 * 3600e3
+    return filtered
+      .filter((it) => impLevel(it.materiality_score) === 'high' && +new Date(it.published_at) >= since)
+      .sort((a, b) => rankScore(b) - rankScore(a))
+      .slice(0, 3)
+  }, [filtered, sort, archive, query])
+
   return (
     <div className="mx-auto max-w-[1200px]">
       {/* כותרת */}
@@ -295,6 +306,8 @@ export default function Feed() {
         )}
       </div>
 
+      {topNow.length > 0 && <TopNow items={topNow} />}
+
       {/* רשימה — כל דיווח בכרטיס נפרד */}
       <div className="mt-4">
         <div
@@ -373,6 +386,55 @@ export default function Feed() {
         )}
       </div>
     </div>
+  )
+}
+
+// ── הכי חשוב עכשיו ───────────────────────────────────────────────
+// עמוד ראשון של עיתון: עד 3 כותרות, זו לצד זו, מופרדות בקווים דקים — בלי
+// כרטיסים ובלי צל. כותרת בלבד (בלי תקציר AI); לחיצה קופצת לכרטיס המלא ברשימה.
+function TopNow({ items }: { items: FeedItem[] }) {
+  return (
+    <section aria-labelledby="top-now" className="mt-5">
+      <h2 id="top-now" className="mb-2 px-1 text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
+        הכי חשוב עכשיו · 24 השעות האחרונות
+      </h2>
+      <ol
+        className="grid rounded-[14px] border lg:grid-cols-3"
+        style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }}
+      >
+        {items.map((it, i) => {
+          const sector = it.company_sector && it.company_sector !== 'אחר' ? it.company_sector : it.headline_tag
+          return (
+            <li
+              key={it.id}
+              className={i ? 'border-t lg:border-r lg:border-t-0' : undefined}
+              style={{ borderColor: 'var(--line2)' }}
+            >
+              <a
+                href={`#item-${it.id}`}
+                className="flex h-full flex-col gap-2 px-5 py-4 transition-colors duration-150 hover:bg-[var(--hover)]"
+              >
+                <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] font-bold" style={{ color: 'var(--ink2)' }}>
+                  <ImportanceMark score={it.materiality_score} />
+                  {it.company_name && <span>{it.company_name}</span>}
+                  {sector && (
+                    <span className="nf-sc rounded-md px-2 py-0.5 text-[12px]" style={{ ['--sc' as string]: sectorColor(sector) }}>
+                      {sector}
+                    </span>
+                  )}
+                </span>
+                <span className="font-display text-[18px] font-bold leading-[1.4]" style={{ color: 'var(--ink)' }}>
+                  {it.title}
+                </span>
+                <span className="mt-auto text-[12px] tabular-nums" style={{ color: 'var(--muted)' }}>
+                  {new Date(it.published_at).toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </a>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
   )
 }
 
