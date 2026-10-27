@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 
 // אינדיקטורים — תמונת מצב-על של השווקים והתנאים הפיננסיים.
 // הנתונים מגיעים מקובץ JSON שהאספן (collector/indicators.mjs) מעדכן בכל סבב.
-// כל מספר מגיע ממקור רשמי, עם שמו הרשמי וקישור. נתון חסר — "—", לא מנוחש.
+// כל מספר מגיע ממקור רשמי. שם המקור והקישור אליו פנימיים ולא מוצגים לגולשים
+// (האספן לא כותב אותם לקובץ הציבורי). נתון חסר — "—", לא מנוחש.
 // כל אינדיקטור מוצג על מד של שלושה אזורים (אדום משמאל, ירוק מימין), והכרטיס
 // כולו נצבע באחד משבעה גוונים לפי המיקום על המד.
 
@@ -18,10 +19,6 @@ interface Indicator {
   nickHe: string
   term: string
   valueHelp: string
-  official: string
-  code: string
-  org: string
-  url: string
   what: string
   unit: Unit
   kind: 'pct' | 'trend' | 'curve'
@@ -76,11 +73,11 @@ const dataUrl = supabase.storage.from('public-data').getPublicUrl('market/indica
 
 const GROUP_HINT: Record<string, string> = {
   macro: 'אינפלציה וצמיחה — הנתונים הרשמיים האחרונים. באינפלציה המד ירוק כשהיא קרובה ליעד של 2%.',
-  macro_il: 'אינפלציה וצמיחה בישראל — הלמ"ס ובנק ישראל. יעד האינפלציה: בין 1% ל-3%.',
+  macro_il: 'אינפלציה וצמיחה בישראל. יעד האינפלציה: בין 1% ל-3%.',
   risk: 'כמה פחד השוק מתמחר, והאם המדדים במגמה ארוכה עולה או יורדת.',
   credit: 'כמה המלווים דורשים מחברות מעל ממשלת ארה"ב. המיקום מחושב מול 3 שנים — זה כל מה שמתפרסם בחינם.',
   rates: 'מחיר הכסף בארה"ב, צורת העקום וציפיות האינפלציה. ריבית גבוהה = תנאים מהדקים לשוק, ולכן נצבעת באדום.',
-  israel: 'הריבית ושער הדולר — מבנק ישראל.',
+  israel: 'הריבית ושער הדולר בישראל.',
 }
 
 // שבעה גוונים: רקע הכרטיס, מסגרת וצבע התווית
@@ -436,9 +433,6 @@ function IndicatorCard({ it }: { it: Indicator }) {
             {it.nickHe}
           </span>
         </div>
-        <div className="mt-1 text-[12px] leading-snug" dir="ltr" style={{ color: 'var(--muted)', textAlign: 'right' }}>
-          {it.official} · {it.code}
-        </div>
       </Hot>
 
       <Hot id="value" open={open} onToggle={toggle} help={it.valueHelp} className="mt-2">
@@ -519,15 +513,9 @@ function IndicatorCard({ it }: { it: Indicator }) {
             </div>
           </Hot>
         </div>
-        <a
-          href={it.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 block text-[12px] underline-offset-2 hover:underline"
-          style={{ color: it.stale ? DOWN : 'var(--muted)' }}
-        >
-          {it.org} · {it.period ? `${it.stale ? 'אחרון: ' : ''}${it.period}` : `${it.stale ? 'לא עודכן מאז ' : 'נכון ל-'}${shortDate(it.date)}`}
-        </a>
+        <div className="mt-2 text-[12px]" style={{ color: it.stale ? DOWN : 'var(--muted)' }}>
+          {it.period ? `${it.stale ? 'אחרון: ' : ''}${it.period}` : `${it.stale ? 'לא עודכן מאז ' : 'נכון ל-'}${shortDate(it.date)}`}
+        </div>
       </div>
     </Card>
   )

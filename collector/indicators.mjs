@@ -14,7 +14,7 @@
 // על markets.mjs — נתוני הבורסה (בלי רישיון הפצה) ומכפילי Yahoo (API לא רשמי) —
 // שהושבת. לחידוש: אחרי הסדרת רישיון נתונים (ראה git log).
 //
-// עיקרון: אף מספר לא מוצג בלי מקור. אינדיקטור שנכשל — נשאר הערך הקודם, מסומן
+// עיקרון: אף מספר לא מוצג בלי מקור רשמי (המקור מתועד כאן ולא נחשף בקובץ הציבורי). אינדיקטור שנכשל — נשאר הערך הקודם, מסומן
 // בתאריך שלו. לעולם לא מנוחש.
 //
 // הרצה: node collector/indicators.mjs   (--test כותב לקובץ נפרד)
@@ -685,7 +685,7 @@ if (!items.length) {
 const ERP_ZONES = ['פרמיה נמוכה', 'בינונית', 'פרמיה גבוהה']
 const ERP_LONG = [
   {
-    id: 'damodaran', group: 'erp', name: 'פרמיית הסיכון הגלומה — דמודרן', nick: 'Implied ERP', nickHe: 'פרמיית סיכון גלומה',
+    id: 'damodaran', group: 'erp', name: 'פרמיית הסיכון הגלומה', nick: 'Implied ERP', nickHe: 'פרמיית סיכון גלומה',
     official: 'Implied Equity Risk Premium, S&P 500 (T12m)', code: 'ERPbymonth',
     org: "פרופ' אסוואת' דמודרן, אוניברסיטת ניו יורק", url: 'https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/implpr.html',
     unit: 'pct', kind: 'pct', dir: 'up-good', maxAge: 70, sparkYears: 10, zones: ERP_ZONES,
@@ -695,12 +695,12 @@ const ERP_LONG = [
     fetch: damodaran,
   },
   {
-    id: 'shiller', group: 'erp', name: 'תשואת CAPE העודפת — שילר', nick: 'Excess CAPE Yield', nickHe: 'תשואת CAPE עודפת',
+    id: 'shiller', group: 'erp', name: 'תשואת CAPE העודפת', nick: 'Excess CAPE Yield', nickHe: 'תשואת CAPE עודפת',
     official: 'Excess CAPE Yield (ECY)', code: 'ie_data',
     org: "פרופ' רוברט שילר, אוניברסיטת ייל", url: 'https://shillerdata.com/',
     unit: 'pct', kind: 'pct', dir: 'up-good', maxAge: 70, sparkYears: 10, zones: ERP_ZONES,
     what: 'תשואת הרווח של S&P 500 לפי הרווח הממוצע של 10 שנים מותאם אינפלציה (1 חלקי CAPE), פחות הריבית הריאלית ל-10 שנים. מתעדכן פעם בחודש.',
-    term: 'CAPE = Cyclically Adjusted P/E, מכפיל רווח מנוטרל מחזוריות (נקרא גם "מכפיל שילר"): מחיר המדד חלקי הרווח הממוצע של 10 השנים האחרונות, במונחים ריאליים.',
+    term: 'CAPE = Cyclically Adjusted P/E, מכפיל רווח מנוטרל מחזוריות: מחיר המדד חלקי הרווח הממוצע של 10 השנים האחרונות, במונחים ריאליים.',
     valueHelp: 'אחוזים בשנה מעל הריבית הריאלית ל-10 שנים.',
     fetch: shiller,
   },
@@ -717,17 +717,20 @@ for (const spec of ERP_LONG) {
   } catch (e) {
     errors.push(`${spec.name}: ${e.message}`)
     const old = prev?.erpLong?.find((i) => i.id === spec.id)
-    if (old) erpLong.push({ ...old, stale: true })
+    if (old) erpLong.push({ ...old, name: spec.name, stale: true })
   }
 }
 
+// מקורות הנתונים לא נחשפים לגולשים: שם הגוף, הקישור, השם הרשמי וקוד הסדרה נשארים
+// בהגדרות לתיעוד פנימי ולא נכתבים לקובץ הציבורי (גם לא מנתון ישן שנשמר לפני כן).
+// השגיאות — שמזכירות מקורות וכתובות — נשארות בלוג של הריצה בלבד.
+const strip = ({ org, url, official, code, ...rest }) => rest
 const out = {
   updated_at: new Date().toISOString(),
   overall: overall(items),
-  groups: GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.group === g.id) })).filter((g) => g.items.length),
+  groups: GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.group === g.id).map(strip) })).filter((g) => g.items.length),
   erp: null, // פרמיית הסיכון המחושבת הושבתה (מכפילי Yahoo) — ראה הערה בראש הקובץ
-  erpLong,
-  errors,
+  erpLong: erpLong.map(strip),
 }
 
 const TEST = process.argv.includes('--test')
