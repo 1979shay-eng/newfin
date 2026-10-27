@@ -694,7 +694,8 @@ function useView(): [View, (v: View) => void] {
 
 function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   return (
-    <div className="inline-flex rounded-[11px] border p-1" style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }} role="group" aria-label="תצוגה">
+    // אותו בקר מקטעים כמו בפיד ובשווקים: רקע אפור, הבחירה על משטח לבן (DESIGN.md)
+    <div className="inline-flex gap-0.5 rounded-[11px] p-[3px]" style={{ background: 'var(--seg)' }} role="group" aria-label="תצוגה">
       {(['cards', 'heat'] as const).map((v) => (
         <button
           key={v}
@@ -702,7 +703,7 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
           aria-pressed={view === v}
           onClick={() => onChange(v)}
           className="rounded-[8px] px-4 py-1.5 text-[14px] font-bold transition-colors"
-          style={view === v ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' } : { color: 'var(--muted)' }}
+          style={view === v ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' } : { color: 'var(--muted)' }}
         >
           {v === 'cards' ? 'כרטיסים' : 'מפת חום'}
         </button>

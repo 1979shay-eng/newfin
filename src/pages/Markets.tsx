@@ -256,13 +256,8 @@ export default function Markets() {
       {/* שורה שנייה: האזור (רק בתצוגה לפי אזור) והתקופה — משותפת לכל הטבלאות */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {mode === 'region' ? (
-          <div className="flex gap-2">
-            {(['il', 'us', 'eu'] as Market[]).map((k) => (
-              <Tab key={k} active={market === k} onClick={() => setMarket(k)}>
-                {REGION_LABEL[k]}
-              </Tab>
-            ))}
-          </div>
+          // בקר מקטעים כמו שאר הבחירות בעמוד — סגנון כפתור אחד לבחירה (DESIGN.md)
+          <Seg opts={(['il', 'us', 'eu'] as Market[]).map((k) => ({ key: k, label: REGION_LABEL[k] }))} value={market} onChange={setMarket} />
         ) : (
           <span />
         )}
@@ -1108,22 +1103,6 @@ function Dot() {
   return <span aria-hidden>·</span>
 }
 
-function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className="rounded-[11px] px-[18px] py-[9px] text-sm font-bold transition-colors"
-      style={
-        active
-          ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' }
-          : { background: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--line2)' }
-      }
-    >
-      {children}
-    </button>
-  )
-}
 
 function Seg<T extends string>({
   label,
