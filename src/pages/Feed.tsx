@@ -22,8 +22,10 @@ type Imp = 'all' | 'high' | 'mid'
 const IMP_OPTS: { key: Imp; label: string }[] = [
   { key: 'all', label: 'הכל' },
   { key: 'high', label: 'גבוהה' },
-  { key: 'mid', label: 'בינונית' },
+  { key: 'mid', label: 'בינונית ומעלה' },
 ]
+// הבחירה היא סף מינימלי, לא התאמה מדויקת: "בינונית" מציגה בינונית וכל מה שמעליה
+const IMP_RANK = { low: 0, mid: 1, high: 2 } as const
 const SORT_OPTS: { key: Sort; label: string }[] = [
   { key: 'smart', label: 'מומלץ' },
   { key: 'importance', label: 'חשיבות' },
@@ -158,7 +160,7 @@ export default function Feed() {
   const filtered = useMemo(() => {
     const q = query.trim()
     let r = base.filter((it) => {
-      if (importance !== 'all' && impLevel(it.materiality_score) !== importance) return false
+      if (importance !== 'all' && IMP_RANK[impLevel(it.materiality_score)] < IMP_RANK[importance]) return false
       if (sector !== 'all' && itemSector(it) !== sector) return false
       // סינון טקסט בצד-לקוח רק כשאין תוצאות שרת (המאגר כבר סינן טוב יותר)
       if (q && !archive) {

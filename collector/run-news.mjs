@@ -9,6 +9,7 @@ import { fetchAllRss, isClickbait, bodyReveals } from './rss.mjs'
 import { collectThematic } from './thematic.mjs'
 import { collectYahoo } from './yahoo.mjs'
 import { classifyHeadline } from './headlines.mjs'
+import { priorityTag } from './priority.mjs'
 
 const ENRICH_TOP = 16
 const ENRICH_MIN = 5 // סף ציון-כללים להעשרה — מתחתיו לא שורפים מכסת Groq על שגרה
@@ -30,6 +31,13 @@ try {
     // בניגוד לדיווח מאיה שברירת המחדל שלו 3 (טופס שגרתי שטרם מופה → ארכיון).
     .map((it) => ({ it, score: scoreReport(it, { source: 'news' }), bottom_line: null, headlineTag: null }))
     .filter((r) => {
+      // נושא עדיפות (בנק מזרחי / יוני פנינג) — תמיד נשמר, גם בלי חברה מזוהה וגם
+      // בניסוח קליקבייטי. הציון מועלה לרצפת "גבוהה" ב-upsertItems.
+      const pTag = priorityTag(r.it)
+      if (pTag) {
+        if (!r.it.company_id) r.headlineTag = pTag
+        return true
+      }
       // קליקבייט: כותרת-חידה שהתקציר לא חושף את העובדות מאחוריה — נזרקת,
       // גם אם זוהתה חברה. מדיניות: מציגים עובדות, לא פיתיונות.
       if (isClickbait(r.it.title) && !bodyReveals(r.it.body)) return false

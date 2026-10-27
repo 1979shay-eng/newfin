@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { applyPriority } from './priority.mjs'
 
 // קריאת .env ידנית (בלי dotenv — כדי לא להוסיף תלות)
 const __dir = dirname(fileURLToPath(import.meta.url))
@@ -125,6 +126,9 @@ export async function upsertItems(items) {
     const prev = firstSeen.get(it.maya_report_id)
     return prev && new Date(prev) < new Date(it.published_at) ? { ...it, published_at: prev } : it
   })
+  // כללי עדיפות קשיחים (בנק מזרחי / יוני פנינג) → רצפת חשיבות גבוהה. כאן כי כל
+  // מסלולי האיסוף נשמרים דרך הפונקציה הזו — אחרי ציון הכללים וה-AI.
+  items = await applyPriority(db, items)
   const { data, error } = await db
     .from('items')
     .upsert(items, { onConflict: 'maya_report_id' })
