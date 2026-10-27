@@ -50,6 +50,51 @@ const US_SECTORS = [
   { symbol: 'XLB', name: 'חומרים', full: 'Materials Select Sector SPDR Fund' },
 ]
 
+// אירופה: מדד רחב + שני השווקים הגדולים, וסקטורי STOXX Europe 600 — דרך קרן הסל
+// של כל סקטור (כמו קרנות הסקטורים בארה"ב). שמות המדדים בלבד, בלי שם מנהל הקרן.
+const EU_INDICES = [
+  { symbol: '^STOXX', name: 'STOXX 600', full: '600 החברות הגדולות באירופה' },
+  { symbol: '^GDAXI', name: 'DAX', full: '40 החברות הגדולות בגרמניה' },
+  { symbol: '^FTSE', name: 'FTSE 100', full: '100 החברות הגדולות בבריטניה' },
+]
+const EU_SECTORS = [
+  { symbol: 'EXV1.DE', name: 'בנקים', full: 'STOXX Europe 600 Banks' },
+  { symbol: 'EXH5.DE', name: 'ביטוח', full: 'STOXX Europe 600 Insurance' },
+  { symbol: 'EXH2.DE', name: 'שירותים פיננסיים', full: 'STOXX Europe 600 Financial Services' },
+  { symbol: 'EXV3.DE', name: 'טכנולוגיה', full: 'STOXX Europe 600 Technology' },
+  { symbol: 'EXV4.DE', name: 'בריאות', full: 'STOXX Europe 600 Health Care' },
+  { symbol: 'EXH4.DE', name: 'תעשייה', full: 'STOXX Europe 600 Industrial Goods & Services' },
+  { symbol: 'EXH1.DE', name: 'נפט וגז', full: 'STOXX Europe 600 Oil & Gas' },
+  { symbol: 'EXH9.DE', name: 'תשתיות', full: 'STOXX Europe 600 Utilities' },
+  { symbol: 'EXI5.DE', name: 'נדל"ן', full: 'STOXX Europe 600 Real Estate' },
+  { symbol: 'EXV6.DE', name: 'משאבי טבע', full: 'STOXX Europe 600 Basic Resources' },
+  { symbol: 'EXV7.DE', name: 'כימיה', full: 'STOXX Europe 600 Chemicals' },
+  { symbol: 'EXV8.DE', name: 'בנייה וחומרי בניין', full: 'STOXX Europe 600 Construction & Materials' },
+  { symbol: 'EXV5.DE', name: 'רכב', full: 'STOXX Europe 600 Automobiles & Parts' },
+  { symbol: 'EXH3.DE', name: 'מזון ומשקאות', full: 'STOXX Europe 600 Food & Beverage' },
+  { symbol: 'EXH7.DE', name: 'מוצרי צריכה', full: 'STOXX Europe 600 Personal & Household Goods' },
+  { symbol: 'EXH8.DE', name: 'קמעונאות', full: 'STOXX Europe 600 Retail' },
+  { symbol: 'EXV2.DE', name: 'תקשורת', full: 'STOXX Europe 600 Telecommunications' },
+  { symbol: 'EXH6.DE', name: 'מדיה', full: 'STOXX Europe 600 Media' },
+  { symbol: 'EXV9.DE', name: 'תיירות ופנאי', full: 'STOXX Europe 600 Travel & Leisure' },
+]
+
+// השוואה בין האזורים: ענפים מקבילים (ישראל — מדד הענף הרשמי; ארה"ב ואירופה — קרן
+// הסקטור). ההתאמה אינה מושלמת (בארה"ב אין קרן בנקים בין ה-11, ולכן פיננסים).
+const COMPARE = [
+  { key: 'index', label: 'המדד המוביל', il: '142', us: '^GSPC', eu: '^STOXX' },
+  { key: 'banks', label: 'בנקים ופיננסים', il: '194', us: 'XLF', eu: 'EXV1.DE' },
+  { key: 'insurance', label: 'ביטוח', il: '033', us: null, eu: 'EXH5.DE' },
+  { key: 'tech', label: 'טכנולוגיה', il: '169', us: 'XLK', eu: 'EXV3.DE' },
+  { key: 'realestate', label: 'נדל"ן', il: '149', us: 'XLRE', eu: 'EXI5.DE' },
+  { key: 'energy', label: 'נפט וגז', il: '170', us: 'XLE', eu: 'EXH1.DE' },
+  { key: 'health', label: 'בריאות וביומד', il: '167', us: 'XLV', eu: 'EXV4.DE' },
+  { key: 'industry', label: 'תעשייה', il: '178', us: 'XLI', eu: 'EXH4.DE' },
+  { key: 'utilities', label: 'תשתיות', il: '206', us: 'XLU', eu: 'EXH9.DE' },
+  { key: 'telecom', label: 'תקשורת', il: '172', us: 'XLC', eu: 'EXV2.DE' },
+  { key: 'food', label: 'מזון וצריכה בסיסית', il: '212', us: 'XLP', eu: 'EXH3.DE' },
+]
+
 // ענף הבורסה (FullBranch, "ענף-תת ענף-תת תת ענף", למשל "פיננסי-בנקים-בנקים") →
 // קבוצה קריאה לפילוח. הסדר חשוב: הכלל הראשון שמתאים קובע.
 const SECTOR_MAP = [
@@ -410,7 +455,13 @@ async function collectIsrael() {
       contentType: 'application/json',
     })
 
-    return { indices, sectorIndices, breakdown, bases: b, errors }
+    // סגירות יומיות של המדדים שבטבלת ההשוואה — לחישוב המתאם (לא נכתב לקובץ)
+    const series = {}
+    for (const c of COMPARE) {
+      const rows = hist.idx[c.il]?.rows
+      if (rows) series[c.il] = Object.keys(rows).sort().map((d) => [d, rows[d]])
+    }
+    return { indices, sectorIndices, breakdown, bases: b, series, errors }
   } finally {
     await browser.close()
   }
@@ -418,7 +469,9 @@ async function collectIsrael() {
 
 // ── ארה"ב ─────────────────────────────────────────────────────────
 // שנה של סגירות מתואמות (adjclose — כולל דיבידנדים של קרנות הסל)
-async function yahooHistory(symbol) {
+// סגירות יומיות לפי סימול — לחישוב המתאם בין האזורים (לא נכתב לקובץ)
+const SERIES = new Map()
+async function yahooHistory(symbol, tz = 'America/New_York') {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`
   const r = await fetch(url, { headers: { 'User-Agent': UA } })
   if (!r.ok) throw new Error(`Yahoo ${symbol} -> ${r.status}`)
@@ -427,15 +480,16 @@ async function yahooHistory(symbol) {
   const ts = res.timestamp ?? []
   const closes = res.indicators?.adjclose?.[0]?.adjclose ?? res.indicators?.quote?.[0]?.close ?? []
   const raw = res.indicators?.quote?.[0]?.close ?? []
-  // ימים עם סגירה בלבד; התאריך לפי שעון ניו יורק
+  // ימים עם סגירה בלבד; התאריך לפי שעון הבורסה (ניו יורק / אירופה)
   const rows = ts
     .map((t, i) => ({
-      date: new Date(t * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+      date: new Date(t * 1000).toLocaleDateString('en-CA', { timeZone: tz }),
       close: closes[i],
       raw: raw[i],
     }))
     .filter((r) => Number.isFinite(r.close))
   if (rows.length < DAYS + 1) throw new Error(`Yahoo ${symbol}: היסטוריה קצרה מדי`)
+  SERIES.set(symbol, rows.map((r) => [r.date, r.close]))
   const b = baseDates(rows.map((r) => r.date))
   const byDate = Object.fromEntries(rows.map((r) => [r.date, r.close]))
   const last = rows[rows.length - 1]
@@ -486,6 +540,84 @@ async function collectUS() {
     }
   }
   return { indices, sectors, breakdown, holdingsAsOf, bases, errors }
+}
+
+// ── אירופה ────────────────────────────────────────────────────────
+// כמו קרנות הסקטורים בארה"ב: תשואת כל סקטור לפי קרן הסל שלו, בלי פילוח למניות.
+async function collectEU() {
+  const errors = []
+  const indices = []
+  let bases = null
+  for (const ix of EU_INDICES) {
+    try {
+      const { bases: b, ...h } = await yahooHistory(ix.symbol, 'Europe/Berlin')
+      bases ??= b
+      indices.push({ symbol: ix.symbol, name: ix.name, source: ix.full, ...h })
+    } catch (e) {
+      errors.push(e.message)
+    }
+  }
+  const sectors = []
+  for (const s of EU_SECTORS) {
+    try {
+      const { days, date, last, bases: _b, ...h } = await yahooHistory(s.symbol, 'Europe/Berlin')
+      sectors.push({ symbol: s.symbol, sector: s.name, source: s.full, ...h })
+    } catch (e) {
+      errors.push(e.message)
+    }
+  }
+  return { indices, sectors, bases, errors }
+}
+
+// ── מתאם בין האזורים ──────────────────────────────────────────────
+// תשואות שבועיות (סגירה אחרונה בכל שבוע) מתחילת השנה. שבועי ולא יומי בכוונה:
+// ת"א, אירופה וניו יורק נסגרות בשעות שונות, ומתאם יומי היה מעוות כלפי מטה.
+// שבוע ללא שבוע קודם צמוד (חג) לא נספר — כך כל תשואה מכסה בדיוק שבוע אחד.
+const weekOf = (iso) => {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  return d.toISOString().slice(0, 10)
+}
+function weeklyReturns(rows, since) {
+  const close = new Map()
+  for (const [d, c] of rows) if (d >= since && Number.isFinite(c)) close.set(weekOf(d), c)
+  const out = new Map()
+  for (const [w, c] of close) {
+    const prev = close.get(new Date(Date.parse(w) - 7 * 864e5).toISOString().slice(0, 10))
+    if (prev) out.set(w, c / prev - 1)
+  }
+  return out
+}
+function correlation(a, b) {
+  if (!a || !b) return null
+  const ks = [...a.keys()].filter((k) => b.has(k))
+  if (ks.length < 10) return null
+  const xs = ks.map((k) => a.get(k))
+  const ys = ks.map((k) => b.get(k))
+  const mx = xs.reduce((s, x) => s + x, 0) / ks.length
+  const my = ys.reduce((s, y) => s + y, 0) / ks.length
+  let sxy = 0
+  let sxx = 0
+  let syy = 0
+  for (let i = 0; i < ks.length; i++) {
+    sxy += (xs[i] - mx) * (ys[i] - my)
+    sxx += (xs[i] - mx) ** 2
+    syy += (ys[i] - my) ** 2
+  }
+  return sxx && syy ? { r: round(sxy / Math.sqrt(sxx * syy)), n: ks.length } : null
+}
+function compareRegions(ilSeries, since) {
+  const w = (rows) => (rows ? weeklyReturns(rows, since) : null)
+  let weeks = 0
+  const rows = COMPARE.map((c) => {
+    const il = w(ilSeries?.[c.il])
+    const us = c.us ? w(SERIES.get(c.us)) : null
+    const eu = c.eu ? w(SERIES.get(c.eu)) : null
+    const corr = { ilus: correlation(il, us), ileu: correlation(il, eu), useu: correlation(us, eu) }
+    for (const v of Object.values(corr)) if (v) weeks = Math.max(weeks, v.n)
+    return { ...c, corr: Object.fromEntries(Object.entries(corr).map(([k, v]) => [k, v?.r ?? null])) }
+  })
+  return { since, weeks, rows }
 }
 
 // ── פילוח S&P 500 לפי סקטורים — אותה שיטה כמו ת"א-35/125 ─────────────
@@ -745,14 +877,18 @@ if (!buckets?.some((b) => b.name === BUCKET)) {
   console.log(`🪣 נוצר אחסון ציבורי ${BUCKET}`)
 }
 
-const [il, us] = await Promise.all([
+const [il, us, eu] = await Promise.all([
   collectIsrael().catch((e) => ({ indices: [], sectorIndices: [], breakdown: {}, errors: [`ישראל: ${e.message}`] })),
   collectUS().catch((e) => ({ indices: [], sectors: [], errors: [`ארה"ב: ${e.message}`] })),
+  collectEU().catch((e) => ({ indices: [], sectors: [], errors: [`אירופה: ${e.message}`] })),
 ])
 
 const ta35 = il.indices.find((i) => i.id === '142')
 const ta35Sectors = il.breakdown['ת"א-35'] ?? []
 const spx = us.indices.find((i) => i.symbol === '^GSPC')
+const stoxx = eu.indices.find((i) => i.symbol === '^STOXX')
+// המתאם מתחילת השנה — לפי יום הבסיס של ישראל (הסדרה הקצרה מבין השלוש)
+const ytdBase = il.bases?.ytd ?? us.bases?.ytd
 
 const summary = {
   updated_at: new Date().toISOString(),
@@ -766,7 +902,13 @@ const summary = {
     errors: undefined,
     notes: { d1: writeNote(spx, us.sectors, 'd1'), d7: writeNote(spx, us.sectors, 'd7') },
   },
-  errors: [...il.errors, ...us.errors],
+  eu: {
+    ...eu,
+    errors: undefined,
+    notes: { d1: writeNote(stoxx, eu.sectors, 'd1'), d7: writeNote(stoxx, eu.sectors, 'd7') },
+  },
+  compare: ytdBase ? compareRegions(il.series, ytdBase) : null,
+  errors: [...il.errors, ...us.errors, ...eu.errors],
 }
 
 // שוק שנכשל לגמרי (למשל חסימה זמנית של אתר הבורסה) — לא מוחקים אותו מהדף:
@@ -777,12 +919,15 @@ if (!il.indices.length && !us.indices.length) {
   process.exit(1)
 }
 const prev = await loadJson('market/summary.json')
-for (const m of ['il', 'us']) {
+const REGION = { il: 'ישראל', us: 'ארה"ב', eu: 'אירופה' }
+for (const m of ['il', 'us', 'eu']) {
   if (!summary[m].indices.length && prev?.[m]?.indices?.length) {
     summary[m] = { ...prev[m], stale_since: prev[m].stale_since ?? prev.updated_at }
-    console.warn(`⚠️ ${m === 'il' ? 'ישראל' : 'ארה"ב'}: נכשל — נשאר הנתון מ-${summary[m].stale_since}`)
+    console.warn(`⚠️ ${REGION[m]}: נכשל — נשאר הנתון מ-${summary[m].stale_since}`)
   }
 }
+// ישראל נכשלה (אין סדרות) — המתאם הקודם עדיף על טבלה ריקה
+if (!il.series && prev?.compare) summary.compare = prev.compare
 
 // --test: כתיבה לקובץ נפרד, כדי שבדיקה ידנית לא תתנגש בריצת הענן
 const OUT = process.argv.includes('--test') ? 'market/summary-test.json' : 'market/summary.json'
@@ -790,7 +935,13 @@ const OUT = process.argv.includes('--test') ? 'market/summary-test.json' : 'mark
 // מקורות וכתובות — נשארות בלוג בלבד, ואין הפניות לאתר המקור (גם לא בנתון ישן מ-prev).
 const publicJson = (o) =>
   JSON.stringify(o, (k, v) =>
-    k === 'errors' ? undefined : k === 'source' && typeof v === 'string' ? (/באתר הבורסה/.test(v) ? undefined : v.replace(/s*(^[^)]*)/, '')) : v,
+    k === 'errors' || k === 'series'
+      ? undefined
+      : k === 'source' && typeof v === 'string'
+        ? /באתר הבורסה/.test(v)
+          ? undefined
+          : v.replace(/\s*\(\^[^)]*\)/, '')
+        : v,
   )
 const { error } = await db.storage.from(BUCKET).upload(OUT, publicJson(summary), {
   upsert: true,
@@ -801,7 +952,11 @@ if (error) throw error
 
 console.log(`✅ ישראל: ${il.indices.length} מדדים, ${il.sectorIndices.length} מדדי ענף, פילוח: ${Object.keys(il.breakdown).join(', ')}`)
 console.log(`✅ ארה"ב: ${us.indices.length} מדדים, ${us.sectors.length} סקטורים, פילוח S&P 500: ${us.breakdown ? `${us.breakdown.reduce((a, g) => a + g.stocks.length, 0)} מניות ב-${us.breakdown.length} סקטורים` : 'לא זמין'}`)
+console.log(`✅ אירופה: ${eu.indices.length} מדדים, ${eu.sectors.length} סקטורים`)
+if (summary.compare)
+  console.log(`🔗 מתאם (${summary.compare.weeks} שבועות):`, summary.compare.rows.map((r) => `${r.label} ${r.corr.ilus ?? '—'}/${r.corr.ileu ?? '—'}/${r.corr.useu ?? '—'}`).join(' · '))
 if (summary.errors.length) console.warn(`⚠️ ${summary.errors.length} שגיאות:`, summary.errors.slice(0, 5))
 console.log('📝', summary.il.notes.d1)
 console.log('📝', summary.us.notes.d1)
+console.log('📝', summary.eu.notes.d1)
 console.log(`⏱️ ${((Date.now() - t0) / 1000).toFixed(1)} שניות`)

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 
-// סיכום מסחר — ישראל וארה"ב: יום המסחר האחרון ותשואה מצטברת של 7 ימי מסחר,
-// עם פילוח סקטוריאלי (עמודות או מפת חום).
+// סיכום מסחר — ישראל, ארה"ב ואירופה: יום המסחר האחרון ותשואה מצטברת של 7 ימי מסחר,
+// עם פילוח סקטוריאלי (עמודות או מפת חום). שתי תצוגות: "לפי אזור" — אזור אחד במלואו,
+// ו"השוואה" — שלושת האזורים זה לצד זה + טבלת ענפים מקבילים ומתאם ביניהם.
+// בחירת התקופה משותפת לכל הטבלאות בשתי התצוגות.
 // הנתונים מגיעים מקובץ JSON שהאספן (collector/markets.mjs) מעדכן בכל סבב.
 // אין כאן אף מספר שלא הגיע מהמקור: נתון חסר מוצג כ"—", לא מנוחש.
 
 type Period = 'd1' | 'd7' | 'mtd' | 'm1' | 'ytd'
-type Market = 'il' | 'us'
+type Market = 'il' | 'us' | 'eu'
+type Mode = 'region' | 'compare'
 type View = 'bars' | 'heat'
 type SortKey = Period | 'weight' | 'pe' | 'fpe'
 interface Sort {
@@ -21,6 +24,8 @@ interface Day {
   change: number | null
 }
 interface IndexRow {
+  id?: string // ישראל — מספר המדד
+  symbol?: string // ארה"ב / אירופה
   name: string
   pe?: number | null
   fpe?: number | null
@@ -47,6 +52,7 @@ interface Stock {
   ytd: number | null
 }
 interface SectorRow {
+  symbol?: string
   sector: string
   pe?: number | null
   fpe?: number | null
@@ -65,7 +71,7 @@ interface Summary {
   il: {
     stale_since?: string
     indices: IndexRow[]
-    sectorIndices: ({ name: string; source?: string; last: number } & Record<Period, number | null>)[]
+    sectorIndices: ({ id: string; name: string; source?: string; last: number } & Record<Period, number | null>)[]
     breakdown: Record<string, SectorRow[]>
     notes: { d1: string | null; d7: string | null }
   }
@@ -77,6 +83,25 @@ interface Summary {
     holdingsAsOf?: string | null
     notes: { d1: string | null; d7: string | null }
   }
+  eu?: {
+    stale_since?: string
+    indices: IndexRow[]
+    sectors: SectorRow[]
+    notes: { d1: string | null; d7: string | null }
+  }
+  // ענפים מקבילים בשלושת האזורים + מתאם תשואות שבועיות מתחילת השנה
+  compare?: {
+    since: string
+    weeks: number
+    rows: {
+      key: string
+      label: string
+      il: string
+      us: string | null
+      eu: string | null
+      corr: { ilus: number | null; ileu: number | null; useu: number | null }
+    }[]
+  } | null
 }
 
 const UP = '#16a34a'
@@ -136,11 +161,47 @@ const benchOf = (indices: IndexRow[], name: string): SectorRow | undefined => {
   return ix && { sector: ix.name, pe: ix.pe, fpe: ix.fpe, weight: 100, d1: ix.d1, d7: ix.d7, mtd: ix.mtd, m1: ix.m1, ytd: ix.ytd, bench: true }
 }
 
+// התצוגה שנבחרה נשמרת בין ביקורים (כמו בדף האינדיקטורים)
+const MODE_KEY = 'nf-markets-mode'
+function useMode(): [Mode, (m: Mode) => void] {
+  const [mode, setMode] = useState<Mode>(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === 'compare' ? 'compare' : 'region'
+    } catch {
+      return 'region'
+    }
+  })
+  const set = (m: Mode) => {
+    setMode(m)
+    try {
+      localStorage.setItem(MODE_KEY, m)
+    } catch {
+      /* אחסון חסום — הבחירה פשוט לא תישמר */
+    }
+  }
+  return [mode, set]
+}
+
+const REGION_LABEL: Record<Market, string> = { il: 'ישראל', us: 'ארה"ב', eu: 'אירופה' }
+
 export default function Markets() {
   const { data, error } = useSummary()
+  const [mode, setMode] = useMode()
   const [market, setMarket] = useState<Market>('il')
   const [view, setView] = useState<View>('bars')
   const [ilIndex, setIlIndex] = useState('ת"א-35')
+  // התקופה משותפת לכל הטבלאות ולמפות החום. מיון לפי משקל/מכפיל לא משנה אותה.
+  const [period, setPeriod] = useState<Period>('d7')
+  const [sort, setSort] = useState<Sort>({ key: 'd7', dir: 'desc' })
+  const pickPeriod = (p: Period) => {
+    setPeriod(p)
+    setSort({ key: p, dir: 'desc' })
+  }
+  const onSort = (key: SortKey) => {
+    if ((PERIODS as SortKey[]).includes(key)) setPeriod(key as Period)
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))
+  }
+  const table = { period, sort, onSort }
 
   const updated = data ? new Date(data.updated_at) : null
   const m = data?.[market]
@@ -154,7 +215,7 @@ export default function Markets() {
         סיכום מסחר
       </h1>
       <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px]" style={{ color: 'var(--muted)' }}>
-        <span>מדדים וסקטורים בישראל ובארה"ב — יום המסחר האחרון, 7 ימים, מתחילת החודש, חודש אחרון ומתחילת השנה</span>
+        <span>מדדים וסקטורים בישראל, בארה"ב ובאירופה — יום המסחר האחרון, 7 ימים, מתחילת החודש, חודש אחרון ומתחילת השנה</span>
         {updated && (
           <>
             <Dot />
@@ -165,16 +226,16 @@ export default function Markets() {
         )}
       </p>
 
-      {/* שוק מימין, תצוגה משמאל */}
+      {/* שורה ראשונה: סוג התצוגה מימין, עמודות/מפת חום משמאל */}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          <Tab active={market === 'il'} onClick={() => setMarket('il')}>
-            ישראל
-          </Tab>
-          <Tab active={market === 'us'} onClick={() => setMarket('us')}>
-            ארה"ב
-          </Tab>
-        </div>
+        <Seg
+          opts={[
+            { key: 'region', label: 'לפי אזור' },
+            { key: 'compare', label: 'השוואה' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
         <Seg
           opts={[
             { key: 'bars', label: 'עמודות' },
@@ -183,6 +244,23 @@ export default function Markets() {
           value={view}
           onChange={setView}
         />
+      </div>
+      {/* שורה שנייה: האזור (רק בתצוגה לפי אזור) והתקופה — משותפת לכל הטבלאות */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        {mode === 'region' ? (
+          <div className="flex gap-2">
+            {(['il', 'us', 'eu'] as Market[]).map((k) => (
+              <Tab key={k} active={market === k} onClick={() => setMarket(k)}>
+                {REGION_LABEL[k]}
+              </Tab>
+            ))}
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="max-w-full overflow-x-auto">
+          <Seg label="תקופה" opts={PERIODS.map((p) => ({ key: p, label: PERIOD_LABEL[p] }))} value={period} onChange={pickPeriod} />
+        </div>
       </div>
 
       {!data && !error && <Loading />}
@@ -194,14 +272,19 @@ export default function Markets() {
         </Card>
       )}
 
-      {m && (
+      {data && mode === 'compare' && <Compare data={data} view={view} ilIndex={ilIndex} setIlIndex={setIlIndex} {...table} />}
+
+      {data && mode === 'region' && !m && (
+        <Card className="mt-4 px-6 py-8 text-center">
+          <p className="text-[15px]" style={{ color: 'var(--muted)' }}>
+            הנתונים של {REGION_LABEL[market]} עוד לא זמינים. הם יתעדכנו בסבב האיסוף הבא.
+          </p>
+        </Card>
+      )}
+
+      {data && mode === 'region' && m && (
         <>
-          {m.stale_since && (
-            <p className="mt-4 rounded-[11px] px-4 py-2.5 text-[14px] font-semibold" style={{ background: 'var(--chip)', color: 'var(--ink2)' }}>
-              העדכון האחרון נכשל — מוצגים הנתונים מ-
-              {new Date(m.stale_since).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
+          {m.stale_since && <Stale since={m.stale_since} />}
 
           {/* שתי השורות התחתונות — המוקד של הדף, תמיד שתיהן */}
           <Card className="mt-4 divide-y" style={{ borderColor: 'var(--line2)' }}>
@@ -216,20 +299,14 @@ export default function Markets() {
             ))}
           </div>
 
-          {market === 'il' ? (
+          {market === 'il' && (
             <>
               <Section
                 title="סקטורים בתוך המדד"
                 hint={`רק המניות שבתוך ${ilIndex}, מחולקות לפי ענף. התשואה של כל ענף משוקללת לפי משקל המניות שלו במדד. המדד עצמו ממוין יחד עם הענפים — מה שמעליו הניב תשואה עודפת. לחיצה על ענף מציגה את המניות.`}
-                action={
-                  <Seg
-                    opts={Object.keys(data.il.breakdown).map((k) => ({ key: k, label: k }))}
-                    value={ilIndex}
-                    onChange={setIlIndex}
-                  />
-                }
+                action={<Seg opts={Object.keys(data.il.breakdown).map((k) => ({ key: k, label: k }))} value={ilIndex} onChange={setIlIndex} />}
               >
-                <Sectors rows={data.il.breakdown[ilIndex] ?? []} bench={benchOf(data.il.indices, ilIndex)} view={view} weighted />
+                <Sectors rows={data.il.breakdown[ilIndex] ?? []} bench={benchOf(data.il.indices, ilIndex)} view={view} weighted {...table} />
               </Section>
 
               <Section title="מדדי הענף בתל אביב" hint='מדדי הענף הרשמיים, מול ת"א-125 — המדד הרחב.'>
@@ -237,35 +314,241 @@ export default function Markets() {
                   rows={data.il.sectorIndices.map(({ name, ...s }) => ({ sector: name, ...s }))}
                   bench={benchOf(data.il.indices, 'ת"א-125')}
                   view={view}
+                  {...table}
                 />
               </Section>
             </>
-          ) : (
+          )}
+          {market === 'us' && (
             <>
               {data.us.breakdown && (
                 <Section
                   title="סקטורים בתוך S&P 500"
                   hint="כל 500 המניות במדד, מחולקות לפי סקטור. התשואה של כל סקטור משוקללת לפי משקל המניות שלו במדד. המדד עצמו ממוין יחד עם הסקטורים — מה שמעליו הניב תשואה עודפת. מכפיל נוכחי — לפי הרווח ב-12 החודשים האחרונים; עתידי — לפי תחזית האנליסטים לשנה הבאה. לחיצה על סקטור מציגה את המניות."
                 >
-                  <Sectors rows={data.us.breakdown} bench={benchOf(data.us.indices, 'S&P 500')} view={view} weighted valuation />
+                  <Sectors rows={data.us.breakdown} bench={benchOf(data.us.indices, 'S&P 500')} view={view} weighted valuation {...table} />
                 </Section>
               )}
               <Section title="קרנות הסקטורים של S&P 500" hint="קרן הסל הרשמית של כל סקטור (Select Sector SPDR), מול המדד עצמו.">
-                <Sectors rows={data.us.sectors} bench={benchOf(data.us.indices, 'S&P 500')} view={view} />
+                <Sectors rows={data.us.sectors} bench={benchOf(data.us.indices, 'S&P 500')} view={view} {...table} />
               </Section>
             </>
+          )}
+          {market === 'eu' && data.eu && (
+            <Section title="סקטורים באירופה" hint="19 הסקטורים של STOXX Europe 600 — תשואת כל סקטור לפי קרן הסל העוקבת אחריו, מול המדד עצמו.">
+              <Sectors rows={data.eu.sectors} bench={benchOf(data.eu.indices, 'STOXX 600')} view={view} {...table} />
+            </Section>
           )}
 
           {/* בלי שמות מקורות בכוונה — החלטת בעל האתר (27.10.2026) */}
           <p className="mt-6 text-[13px]" style={{ color: 'var(--muted)' }}>
-            פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד
-            {market === 'us' && data.us.holdingsAsOf ? ` (${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')})` : ''}.
+            {market === 'eu' ? 'תשואת כל סקטור — לפי קרן הסל העוקבת אחריו.' : 'פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד'}
+            {market === 'us' && data.us.holdingsAsOf ? ` (${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')})` : ''}
+            {market === 'eu' ? '' : '.'}
             {market === 'us' ? ' מכפילי רווח — ממוצע הרמוני משוקלל לפי משקל במדד, כולל חברות מפסידות (עתידי = תחזית האנליסטים לשנה הבאה).' : ''} הנתונים
             מוצגים לצורכי מידע בלבד ואינם מהווים ייעוץ השקעות.
           </p>
         </>
       )}
     </div>
+  )
+}
+
+function Stale({ since }: { since: string }) {
+  return (
+    <p className="mt-4 rounded-[11px] px-4 py-2.5 text-[14px] font-semibold" style={{ background: 'var(--chip)', color: 'var(--ink2)' }}>
+      העדכון האחרון נכשל — מוצגים הנתונים מ-
+      {new Date(since).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+    </p>
+  )
+}
+
+// ── השוואה: שלושת האזורים זה לצד זה ───────────────────────────────
+interface TableProps {
+  period: Period
+  sort: Sort
+  onSort: (k: SortKey) => void
+}
+
+function Compare({
+  data,
+  view,
+  ilIndex,
+  setIlIndex,
+  ...table
+}: { data: Summary; view: View; ilIndex: string; setIlIndex: (k: string) => void } & TableProps) {
+  const usRows = data.us.breakdown ?? data.us.sectors
+  return (
+    <>
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-3">
+        <RegionPanel
+          title="ישראל"
+          indices={data.il.indices}
+          stale={data.il.stale_since}
+          period={table.period}
+          action={<Seg opts={Object.keys(data.il.breakdown).map((k) => ({ key: k, label: k }))} value={ilIndex} onChange={setIlIndex} />}
+        >
+          <Sectors rows={data.il.breakdown[ilIndex] ?? []} bench={benchOf(data.il.indices, ilIndex)} view={view} weighted compact {...table} />
+        </RegionPanel>
+        <RegionPanel title='ארה"ב' indices={data.us.indices} stale={data.us.stale_since} period={table.period}>
+          <Sectors rows={usRows} bench={benchOf(data.us.indices, 'S&P 500')} view={view} weighted={Boolean(data.us.breakdown)} compact {...table} />
+        </RegionPanel>
+        <RegionPanel title="אירופה" indices={data.eu?.indices ?? []} stale={data.eu?.stale_since} period={table.period}>
+          {data.eu ? (
+            <Sectors rows={data.eu.sectors} bench={benchOf(data.eu.indices, 'STOXX 600')} view={view} compact {...table} />
+          ) : (
+            <p className="px-5 py-6 text-[15px]" style={{ color: 'var(--muted)' }}>
+              הנתונים של אירופה יתעדכנו בסבב האיסוף הבא.
+            </p>
+          )}
+        </RegionPanel>
+      </div>
+      {data.compare && <CompareTable data={data} period={table.period} />}
+      <p className="mt-6 text-[13px]" style={{ color: 'var(--muted)' }}>
+        ישראל וארה"ב — הענפים בתוך המדד, משוקללים לפי משקל המניות; אירופה — לפי קרן הסל של כל סקטור. הנתונים מוצגים לצורכי מידע
+        בלבד ואינם מהווים ייעוץ השקעות.
+      </p>
+    </>
+  )
+}
+
+// עמודה של אזור: כל המדדים שלו לתקופה שנבחרה, ומתחתם הסקטורים
+function RegionPanel({
+  title,
+  indices,
+  stale,
+  period,
+  action,
+  children,
+}: {
+  title: string
+  indices: IndexRow[]
+  stale?: string
+  period: Period
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="min-w-0">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[20px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+          {title}
+        </h2>
+        {action}
+      </div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {indices.map((ix) => (
+          <span key={ix.name} className="rounded-[10px] border px-2.5 py-1.5 text-[14px] font-bold" style={{ borderColor: 'var(--line2)', background: 'var(--surface)', color: 'var(--ink2)' }}>
+            {ix.name}{' '}
+            <span className="tabular-nums" dir="ltr" style={{ color: tone(ix[period]) }}>
+              {fmtPct(ix[period])}
+            </span>
+          </span>
+        ))}
+      </div>
+      {stale && (
+        <p className="mb-2 text-[13px] font-semibold" style={{ color: 'var(--muted)' }}>
+          לא עודכן מאז {new Date(stale).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </p>
+      )}
+      <Card className="overflow-hidden">{children}</Card>
+    </section>
+  )
+}
+
+// טבלת ענפים מקבילים: התשואה בכל אזור לתקופה שנבחרה, והמתאם בין האזורים
+function CompareTable({ data, period }: { data: Summary; period: Period }) {
+  const cmp = data.compare!
+  type Cell = { name: string; v: number | null } | null
+  const il = (id: string): Cell => {
+    const r = data.il.indices.find((i) => i.id === id) ?? data.il.sectorIndices.find((s) => s.id === id)
+    return r ? { name: r.name, v: r[period] } : null
+  }
+  const ext = (region?: { indices: IndexRow[]; sectors: SectorRow[] }) => (sym: string | null): Cell => {
+    if (!sym || !region) return null
+    const ix = region.indices.find((i) => i.symbol === sym)
+    if (ix) return { name: ix.name, v: ix[period] }
+    const s = region.sectors.find((x) => x.symbol === sym)
+    return s ? { name: s.sector, v: s[period] } : null
+  }
+  const us = ext(data.us)
+  const eu = ext(data.eu)
+  const cols = 'grid-cols-[130px_repeat(3,96px)_repeat(3,84px)] sm:grid-cols-[minmax(150px,1.3fr)_repeat(3,minmax(96px,1fr))_repeat(3,minmax(84px,0.8fr))]'
+  return (
+    <section className="mt-8">
+      <h2 className="text-[20px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+        השוואת ענפים ומתאם בין האזורים
+      </h2>
+      <p className="mt-0.5 text-[14px]" style={{ color: 'var(--muted)' }}>
+        התשואה של כל ענף ב{PERIOD_LABEL[period] === 'יום אחרון' ? 'יום המסחר האחרון' : `טווח "${PERIOD_LABEL[period]}"`}, וכמה האזורים נעים יחד: מתאם של
+        תשואות שבועיות מתחילת השנה ({cmp.weeks} שבועות). 1 = נעים יחד לגמרי, 0 = אין קשר, מינוס = בכיוונים הפוכים.
+      </p>
+      <Card className="mt-3 overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[680px]">
+            <div className={`grid ${cols} items-end gap-2 px-4 py-2.5 text-[13px] font-bold sm:gap-3 sm:px-5`} style={{ color: 'var(--muted)', borderBottom: '1px solid var(--line2)' }}>
+              <span>ענף</span>
+              <span className="text-left">ישראל</span>
+              <span className="text-left">ארה"ב</span>
+              <span className="text-left">אירופה</span>
+              <span className="text-left">מתאם ישראל–ארה"ב</span>
+              <span className="text-left">מתאם ישראל–אירופה</span>
+              <span className="text-left">מתאם ארה"ב–אירופה</span>
+            </div>
+            <ul>
+              {cmp.rows.map((r, i) => (
+                <li
+                  key={r.key}
+                  className={`grid ${cols} items-center gap-2 px-4 py-2.5 sm:gap-3 sm:px-5`}
+                  style={{ borderTop: i ? '1px solid var(--line)' : undefined, background: r.key === 'index' ? BENCH_BG : undefined }}
+                >
+                  <span className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+                    {r.label}
+                  </span>
+                  {[il(r.il), us(r.us), eu(r.eu)].map((c, j) => (
+                    <span key={j} className="min-w-0 text-left">
+                      <span className="block text-[15px] font-extrabold tabular-nums" dir="ltr" style={{ color: c ? tone(c.v) : 'var(--muted)' }}>
+                        {c ? fmtPct(c.v) : '—'}
+                      </span>
+                      {c && (
+                        <span className="block truncate text-[12px]" title={c.name} style={{ color: 'var(--muted)' }}>
+                          {c.name}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                  {([r.corr.ilus, r.corr.ileu, r.corr.useu] as (number | null)[]).map((v, j) => (
+                    <CorrCell key={j} v={v} />
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </Card>
+    </section>
+  )
+}
+
+// תא מתאם: גוון צבע ההדגשה לפי עוצמת הקשר (לא ירוק/אדום — אלה שמורים לעלייה/ירידה)
+function CorrCell({ v }: { v: number | null }) {
+  if (v == null)
+    return (
+      <span className="text-left text-[15px]" style={{ color: 'var(--muted)' }}>
+        —
+      </span>
+    )
+  const word = Math.abs(v) >= 0.6 ? 'חזק' : Math.abs(v) >= 0.3 ? 'בינוני' : 'חלש'
+  return (
+    <span
+      className="justify-self-end rounded-md px-2 py-1 text-[15px] font-extrabold tabular-nums"
+      dir="ltr"
+      title={`מתאם ${word}${v < 0 ? ', בכיוון הפוך' : ''}`}
+      style={{ background: `color-mix(in oklab, var(--accent) ${Math.round(Math.abs(v) * 55)}%, var(--surface))`, color: 'var(--ink)' }}
+    >
+      {v > 0 ? '+' : v < 0 ? '−' : ''}
+      {Math.abs(v).toFixed(2)}
+    </span>
   )
 }
 
@@ -377,20 +660,25 @@ function Sectors({
   view,
   weighted,
   valuation,
+  compact,
+  period,
+  sort: sortIn,
+  onSort,
 }: {
   rows: SectorRow[]
   bench?: SectorRow
   view: View
   weighted?: boolean
   valuation?: boolean
-}) {
+  compact?: boolean // עמודה צרה בתצוגת ההשוואה: רק התקופה שנבחרה, בלי פתיחת מניות
+} & TableProps) {
   const [open, setOpen] = useState<string | null>(null)
-  // מיון בלחיצה על כותרת: לחיצה ראשונה — מהגבוה לנמוך, שנייה — הפוך.
-  // התקופה של העמודה הממוינת קובעת גם את העמודה הגרפית ואת צבעי מפת החום.
-  const [sort, setSort] = useState<Sort>({ key: 'd7', dir: 'desc' })
-  const period: Period = sort.key === 'weight' || sort.key === 'pe' || sort.key === 'fpe' ? 'd7' : sort.key
-  const onSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))
+  // מיון בלחיצה על כותרת: לחיצה ראשונה — מהגבוה לנמוך, שנייה — הפוך. המיון
+  // והתקופה משותפים לכל הטבלאות; מיון שלא קיים בטבלה זו (משקל/מכפיל) — לפי התקופה.
+  const sort: Sort =
+    (sortIn.key === 'weight' && !weighted) || ((sortIn.key === 'pe' || sortIn.key === 'fpe') && !valuation)
+      ? { key: period, dir: sortIn.dir }
+      : sortIn
   const sorted = useMemo(() => {
     const val = (r: SectorRow) => r[sort.key] ?? -Infinity
     // המדד נכנס למיון כמו כל שורה — כך הוא חוצץ בין מי שהכה אותו למי שפיגר
@@ -416,16 +704,29 @@ function Sectors({
   if (view === 'heat') {
     return (
       <div className="p-3">
-        <div className="mb-2 flex flex-wrap items-center gap-1 px-1 text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
-          <span className="ml-1">מיון וצבע לפי</span>
-          {weighted && <SortHead k="weight" sort={sort} onSort={onSort} label="משקל" />}
-          {PERIODS.map((p) => (
-            <SortHead key={p} k={p} sort={sort} onSort={onSort} label={PERIOD_LABEL[p]} />
-          ))}
-        </div>
+        {/* בהשוואה התקופה נבחרת למעלה, אחת לכל המפות */}
+        {!compact && (
+          <div className="mb-2 flex flex-wrap items-center gap-1 px-1 text-[13px] font-bold" style={{ color: 'var(--muted)' }}>
+            <span className="ml-1">מיון וצבע לפי</span>
+            {weighted && <SortHead k="weight" sort={sort} onSort={onSort} label="משקל" />}
+            {PERIODS.map((p) => (
+              <SortHead key={p} k={p} sort={sort} onSort={onSort} label={PERIOD_LABEL[p]} />
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {sorted.map((r) => (
-            <HeatTile key={r.sector} r={r} excess={excess(r, period)} period={period} scale={scale} weighted={weighted} open={open === r.sector} onClick={() => toggle(r.sector)} />
+            <HeatTile
+              key={r.sector}
+              r={r}
+              excess={excess(r, period)}
+              period={period}
+              scale={scale}
+              weighted={weighted}
+              compact={compact}
+              open={open === r.sector}
+              onClick={() => toggle(r.sector)}
+            />
           ))}
         </div>
         {opened?.stocks && (
@@ -440,6 +741,51 @@ function Sectors({
             </div>
           </div>
         )}
+      </div>
+    )
+  }
+
+  // השוואה: שם, עמודה גרפית והתקופה שנבחרה בלבד — כך שלוש טבלאות נכנסות זו לצד זו
+  if (compact) {
+    const ccols = 'grid-cols-[minmax(0,1.3fr)_minmax(40px,1fr)_68px]'
+    return (
+      <div>
+        <div className={`grid ${ccols} items-center gap-3 px-4 py-2 text-[13px] font-bold`} style={{ color: 'var(--muted)', borderBottom: '1px solid var(--line2)' }}>
+          <span>סקטור</span>
+          <span />
+          <SortHead k={period} sort={sort} onSort={onSort} label={PERIOD_LABEL[period]} end />
+        </div>
+        <ul>
+          {sorted.map((r, i) => {
+            const v = r[period] ?? 0
+            return (
+              <li
+                key={r.sector}
+                title={[r.source ?? r.sector, weighted && r.weight != null && !r.bench ? `משקל ${r.weight}%` : '', excess(r, period)].filter(Boolean).join(' · ')}
+                className={`grid ${ccols} items-center gap-3 px-4 py-2`}
+                style={{
+                  borderTop: i ? `1px solid ${r.bench || sorted[i - 1]?.bench ? 'var(--line2)' : 'var(--line)'}` : undefined,
+                  background: r.bench ? BENCH_BG : undefined,
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-1.5 text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+                  <span className="truncate">{r.sector}</span>
+                  {r.bench && <BenchTag />}
+                </span>
+                <span className="relative h-2 rounded-full" dir="ltr" style={{ background: 'var(--chip)' }}>
+                  <span className="absolute inset-y-[-3px] left-1/2 w-px" style={{ background: 'var(--line2)' }} />
+                  <span
+                    className="absolute inset-y-0 rounded-full"
+                    style={{ background: r.bench ? 'var(--accent)' : tone(v), width: `${(Math.abs(v) / scale) * 50}%`, ...(v >= 0 ? { left: '50%' } : { right: '50%' }) }}
+                  />
+                </span>
+                <span className="text-left text-[15px] font-extrabold tabular-nums" dir="ltr" style={{ color: tone(r[period]) }}>
+                  {fmtPct(r[period])}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       </div>
     )
   }
@@ -571,6 +917,7 @@ function HeatTile({
   period,
   scale,
   weighted,
+  compact,
   open,
   onClick,
 }: {
@@ -579,6 +926,7 @@ function HeatTile({
   period: Period
   scale: number
   weighted?: boolean
+  compact?: boolean
   open: boolean
   onClick: () => void
 }) {
@@ -588,7 +936,8 @@ function HeatTile({
   const bg = flat ? 'var(--chip)' : `color-mix(in oklab, ${v > 0 ? UP : DOWN} ${Math.round(14 + t * 46)}%, var(--surface))`
   // המדד לא מתפרש לרוחב לפי משקל 100% — אריח בגודל רגיל
   const w = weighted && r.weight && !r.bench ? r.weight : 1
-  const expandable = Boolean(r.stocks?.length)
+  // בהשוואה (עמודה צרה) — אריחים קטנים יותר ובלי פתיחת מניות
+  const expandable = !compact && Boolean(r.stocks?.length)
   return (
     <button
       type="button"
@@ -596,25 +945,33 @@ function HeatTile({
       onClick={onClick}
       aria-expanded={expandable ? open : undefined}
       title={[r.source ?? r.sector, ...PERIODS.map((p) => `${PERIOD_LABEL[p]} ${fmtPct(r[p])}`), excess].filter(Boolean).join(' · ')}
-      className="min-h-[96px] rounded-[11px] px-3 py-2.5 text-right transition-opacity enabled:hover:opacity-90"
+      className={`${compact ? 'min-h-[74px] px-2.5 py-2' : 'min-h-[96px] px-3 py-2.5'} rounded-[11px] text-right transition-opacity enabled:hover:opacity-90`}
       style={{
-        flex: weighted ? `${w} 1 ${Math.max(116, w * 9)}px` : '1 1 150px',
+        flex: compact
+          ? weighted
+            ? `${w} 1 ${Math.max(92, w * 5)}px`
+            : '1 1 104px'
+          : weighted
+            ? `${w} 1 ${Math.max(116, w * 9)}px`
+            : '1 1 150px',
         background: bg,
         outline: open || r.bench ? `2px solid ${r.bench ? 'var(--accent)' : 'var(--ink)'}` : undefined,
         outlineOffset: open || r.bench ? '-2px' : undefined,
       }}
     >
-      <div className="flex items-center gap-2 text-[15px] font-bold" style={{ color: 'var(--ink)' }}>
+      <div className={`flex items-center gap-2 ${compact ? 'text-[14px]' : 'text-[15px]'} font-bold`} style={{ color: 'var(--ink)' }}>
         <span className="truncate">{r.sector}</span>
         {r.bench && <BenchTag />}
       </div>
-      <div className="mt-1 text-[22px] font-extrabold leading-tight tabular-nums" dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
+      <div className={`mt-1 ${compact ? 'text-[18px]' : 'text-[22px]'} font-extrabold leading-tight tabular-nums`} dir="ltr" style={{ color: 'var(--ink)', textAlign: 'right' }}>
         {fmtPct(v)}
       </div>
-      <div className="text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
-        {PERIOD_LABEL[period]}
-      </div>
-      {weighted && r.weight != null && !r.bench && (
+      {!compact && (
+        <div className="text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
+          {PERIOD_LABEL[period]}
+        </div>
+      )}
+      {!compact && weighted && r.weight != null && !r.bench && (
         <div className="mt-0.5 text-[13px] font-semibold" style={{ color: 'var(--ink2)' }}>
           משקל {r.weight}%
         </div>
