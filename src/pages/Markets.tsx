@@ -1010,7 +1010,7 @@ function SortHead({ k, sort, onSort, label, end }: { k: SortKey; sort: Sort; onS
       onClick={() => onSort(k)}
       aria-sort={active ? (sort.dir === 'desc' ? 'descending' : 'ascending') : 'none'}
       title={active ? (sort.dir === 'desc' ? 'מהגבוה לנמוך — לחיצה להיפוך' : 'מהנמוך לגבוה — לחיצה להיפוך') : 'לחיצה למיון'}
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-bold transition-colors hover:bg-[var(--hover)] ${end ? 'justify-self-end' : ''}`}
+      className={`nf-hit inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-bold transition-colors hover:bg-[var(--hover)] ${end ? 'justify-self-end' : ''}`}
       style={active ? { color: 'var(--accent)', background: 'var(--chip)' } : { color: 'var(--muted)' }}
     >
       {label}
@@ -1130,7 +1130,7 @@ function Seg<T extends string>({
               key={o.key}
               onClick={() => onChange(o.key)}
               aria-pressed={on}
-              className="rounded-lg px-3 py-2 text-[14px] font-bold transition-colors"
+              className="nf-hit rounded-lg px-3 py-2 text-[14px] font-bold transition-colors"
               style={on ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' } : { color: 'var(--muted)' }}
             >
               {o.label}

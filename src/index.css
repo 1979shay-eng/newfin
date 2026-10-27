@@ -145,6 +145,23 @@
     background: color-mix(in oklab, var(--sc) 30%, transparent);
   }
 
+  /* ── שטח נגיעה של 44px במסך מגע, בלי לשנות את הפריסה: שכבה שקופה סביב
+     הכפתור קולטת את הלחיצה. במחשב (עכבר) — הגודל החזותי הוא השטח. ── */
+  @media (pointer: coarse) {
+    .nf-hit {
+      position: relative;
+    }
+    .nf-hit::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+
   /* ── בר חיפוש: מצב פוקוס עם טבעת accent — משוב ברור בלי לשנות פרופורציות ── */
   .nf-search {
     transition:

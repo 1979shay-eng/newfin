@@ -138,7 +138,7 @@ export default function ItemCard({
             <button
               onClick={onToggleWatch}
               title={watched ? 'הסר ממעקב' : 'הוסף למעקב'}
-              className="shrink-0 text-[19px] leading-none transition-colors"
+              className="nf-hit shrink-0 text-[19px] leading-none transition-colors"
               style={{ color: watched ? '#e0a93f' : 'var(--muted2)' }}
             >
               {watched ? '★' : '☆'}
@@ -191,7 +191,7 @@ export default function ItemCard({
               <button
                 onClick={() => setExpanded((e) => !e)}
                 aria-expanded={expanded}
-                className="font-bold hover:underline"
+                className="nf-hit font-bold hover:underline"
                 style={{ color: 'var(--accent)' }}
               >
                 {expanded ? 'פחות' : 'הצג הכל'}
@@ -218,7 +218,7 @@ export default function ItemCard({
         <button
           onClick={() => setReporting((r) => !r)}
           aria-expanded={reporting}
-          className={`${item.original_url ? '' : 'mr-auto '}font-semibold hover:underline`}
+          className={`nf-hit ${item.original_url ? '' : 'mr-auto '}font-semibold hover:underline`}
           style={{ color: 'var(--muted2)' }}
         >
           דווח על טעות
@@ -228,7 +228,7 @@ export default function ItemCard({
             href={item.original_url}
             target="_blank"
             rel="noreferrer"
-            className="mr-auto font-bold hover:underline"
+            className="nf-hit mr-auto font-bold hover:underline"
             style={{ color: 'var(--accent)' }}
           >
             למקור ↗

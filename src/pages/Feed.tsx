@@ -54,23 +54,38 @@ export default function Feed() {
   // יציב לאורך הסשן ולא נמחק ברענון האוטומטי כל 2 דקות.
   const [lastSeen] = useState<number | null>(() => readLastSeen())
 
-  // טעינה + רענון שקט כל 2 דקות (פיד חי)
+  // טעינה + רענון שקט כל 2 דקות (פיד חי). תקלה בשרת לא מוחקת את מה שכבר נטען:
+  // אם אין עדיין ידיעות — הודעת שגיאה עם "נסה שוב"; אם יש — הן נשארות, ובכותרת
+  // מסומן שהרענון נכשל. retry מפעיל את הטעינה מחדש.
+  const [loadError, setLoadError] = useState(false)
+  const [retry, setRetry] = useState(0)
   useEffect(() => {
     let alive = true
     const load = () =>
-      fetchFeed(80).then((data) => {
-        if (!alive) return
-        setItems(data)
-        setLastUpdated(new Date())
-        setLoading(false)
-      })
+      fetchFeed(80)
+        .then((data) => {
+          if (!alive) return
+          setItems(data)
+          setLastUpdated(new Date())
+          setLoadError(false)
+          setLoading(false)
+        })
+        .catch(() => {
+          if (!alive) return
+          setLoadError(true)
+          setLoading(false)
+        })
     load()
     const id = setInterval(load, 120000)
     return () => {
       alive = false
       clearInterval(id)
     }
-  }, [])
+  }, [retry])
+  const tryAgain = () => {
+    setLoading(items.length === 0)
+    setRetry((n) => n + 1)
+  }
 
   useEffect(() => onWatchChanged(() => setWatch(loadWatch())), [])
 
@@ -215,6 +230,18 @@ export default function Feed() {
             </span>
           </>
         )}
+        {/* הרענון נכשל אבל יש ידיעות על המסך — הן נשארות, וההודעה כאן */}
+        {loadError && items.length > 0 && (
+          <>
+            <Dot />
+            <span role="status" style={{ color: 'var(--down)' }}>
+              הרענון האחרון נכשל
+            </span>
+            <button onClick={tryAgain} className="nf-hit font-bold hover:underline" style={{ color: 'var(--accent)' }}>
+              נסה שוב
+            </button>
+          </>
+        )}
       </p>
 
       {/* שורת סינון — שתי שורות במקום ארבע (היו ~25 בחירות לפני הידיעה הראשונה):
@@ -259,7 +286,7 @@ export default function Feed() {
               <button
                 onClick={() => setQuery('')}
                 title="נקה חיפוש"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[13px] leading-none transition-colors"
+                className="nf-hit flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[13px] leading-none transition-colors"
                 style={{ background: 'var(--chip)', color: 'var(--chip-ink)' }}
               >
                 ×
@@ -296,7 +323,7 @@ export default function Feed() {
           style={{ color: 'var(--muted2)' }}
         >
           <span className="flex items-center gap-2">
-            {loading
+            {loading || (loadError && items.length === 0)
               ? '—'
               : searching || loadingHigh
                 ? 'מחפש בארכיון...'
@@ -330,6 +357,24 @@ export default function Feed() {
               </div>
             ))}
           </div>
+        ) : loadError && items.length === 0 ? (
+          <ListCard>
+            <div role="alert" className="px-6 py-14 text-center">
+              <p className="text-base font-bold" style={{ color: 'var(--ink2)' }}>
+                לא הצלחנו לטעון את הדיווחים
+              </p>
+              <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
+                כנראה תקלה זמנית בחיבור לשרת. זה לא קשור לסינון.
+              </p>
+              <button
+                onClick={tryAgain}
+                className="mt-4 rounded-[11px] px-5 py-2.5 text-sm font-bold"
+                style={{ background: 'var(--accent-fill)', color: 'var(--on-accent)' }}
+              >
+                נסה שוב
+              </button>
+            </div>
+          </ListCard>
         ) : tab === 'watched' && watch.length === 0 ? (
           <ListCard>
             <Empty
@@ -474,7 +519,7 @@ function Seg<T extends string>({
               key={o.key}
               onClick={() => onChange(o.key)}
               aria-pressed={on}
-              className="rounded-lg px-3 py-1.5 text-[12.5px] font-bold transition-colors"
+              className="nf-hit rounded-lg px-3 py-1.5 text-[12.5px] font-bold transition-colors"
               style={
                 on
                   ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' }

@@ -702,7 +702,7 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
           type="button"
           aria-pressed={view === v}
           onClick={() => onChange(v)}
-          className="rounded-[8px] px-4 py-1.5 text-[14px] font-bold transition-colors"
+          className="nf-hit rounded-[8px] px-4 py-1.5 text-[14px] font-bold transition-colors"
           style={view === v ? { background: 'var(--seg-active)', color: 'var(--ink)', boxShadow: 'var(--seg-active-shadow)' } : { color: 'var(--muted)' }}
         >
           {v === 'cards' ? 'כרטיסים' : 'מפת חום'}
