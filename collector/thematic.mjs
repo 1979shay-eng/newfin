@@ -124,7 +124,7 @@ export async function collectThematic({ signalEnabled } = {}) {
   let rateLimited = false
   for (const c of fresh) {
     if (evaluated >= GATE_CAP) break
-    const g = await gateThematic({ title: c.it.title, description: c.it.description, sector: c.feed.sector })
+    const g = await gateThematic({ title: c.it.title, description: c.it.description, sector: c.feed.sector, published: c.it.pubDate })
     // מכסת Groq אזלה — עוצרים את כל הריצה. אין טעם להמשיך לדפוק על מכסה ריקה,
     // והפריטים שטרם נבדקו יישארו "טריים" ויעברו שער בריצה הבאה.
     if (g?.rateLimited) {

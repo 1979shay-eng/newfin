@@ -1,7 +1,7 @@
 // מנוע SIGNAL — שכבת ה-AI: הופך כותרת דיווח ל"שורה תחתונה" + כיוון + ציון.
 // משתמש ב-Groq (חינמי, תואם OpenAI). אם אין מפתח — מנוטרל בעדינות.
 import { getEnv } from './env.mjs'
-import { loadCompanies, inventedCompany } from './rss.mjs'
+import { loadCompanies, inventedCompany, dropRelativeTime } from './rss.mjs'
 
 const GROQ_KEY = getEnv('GROQ_API_KEY')
 const MODEL = getEnv('GROQ_MODEL') || 'qwen/qwen3.8-27b'
@@ -28,7 +28,7 @@ bottom_line = 3-4 משפטים בטון עיתונאי יבש:
 4. רשות — מה לעקוב בהמשך.
 
 אסור: גוף ראשון, שיפוט חשיבות ("שגרתי","משמעותי"), ניסוח שולל ("אינו מכיל","ללא השפעה"), המלצה (קנייה/מכירה/החזקה), תחזית למחיר המניה, והמצאת עובדות שאינן במקור.
-אל תזכיר חברה, מניה או אדם שאינם בקלט. מילה כמו "אדמה" או "חשמל" אינה בהכרח שם חברה. מידע דל → 2-3 משפטים, ובדיווח טכני דלג על משפט ההשפעה.
+אל תזכיר חברה, מניה או אדם שאינם בקלט. מילה כמו "אדמה" או "חשמל" אינה בהכרח שם חברה. תאריך — כפי שבמקור; "היום"/"מחר"/"השבוע" רק אם המקור אומר זאת. מידע דל → 2-3 משפטים, ובדיווח טכני דלג על משפט ההשפעה.
 אם הכותרת מסתירה את שם החברה — פתח בשמה המפורש מתוך התקציר.
 
 דוגמה: "הדירקטוריון אישר דיבידנד של 0.45 שקל למניה לרבעון הראשון. זו חלוקה שנייה ברציפות לאחר שנת שיא. המהלך משקף ביטחון בתזרים השוטף של החברה."
@@ -52,11 +52,15 @@ const THEMATIC_SYSTEM = `אתה עורך מודיעין שוק ההון. מקב�
 - bottom_line = 2-3 משפטים: העובדה המרכזית, הקשר קצר, וההשלכה העסקית הקונקרטית על החברה/הסקטור הישראלי ("עשוי", "צפוי" — בלי לנחש מספרים). בלי גוף ראשון, בלי קלישאות כלליות, בלי המלצה ובלי תחזית למחיר מניה.
 - direction = אופי הידיעה לעסקי החברה/הסקטור — לא תחזית למחיר המניה.
 - אל תמציא עובדות שאינן בכותרת/תקציר. בכל ספק — relevant=false.
+- תאריכים: העתק את התאריך שבמקור ("ב-2 בנובמבר"). אל תכתוב "היום", "מחר" או "השבוע" אם המקור לא אומר זאת במפורש — אינך יודע מה התאריך היום.
 - JSON בלבד, ללא טקסט נוסף.`
 
 export async function gateThematic(item) {
   if (!GROQ_KEY) return null
-  const user = `תחום: ${item.sector || '—'}\nכותרת: ${item.title}\nתקציר: ${(item.description || '').slice(0, 400)}`
+  const pub = item.published ? new Date(item.published) : null
+  const pubLine =
+    pub && !isNaN(pub) ? `\nפורסם במקור: ${pub.toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })}` : ''
+  const user = `תחום: ${item.sector || '—'}${pubLine}\nכותרת: ${item.title}\nתקציר: ${(item.description || '').slice(0, 400)}`
   try {
     let res
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -93,8 +97,11 @@ export async function gateThematic(item) {
     const data = await res.json()
     const out = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
     if (!out.relevant) return { relevant: false }
-    const headline_he =
-      typeof out.headline_he === 'string' && out.headline_he.trim() ? out.headline_he.trim() : null
+    // "היום"/"מחר" שלא במקור — מושמט (ראה dropRelativeTime)
+    const src = `${item.title} ${item.description ?? ''}`
+    const head = dropRelativeTime(typeof out.headline_he === 'string' ? out.headline_he.trim() : '', src)
+    if (head.dropped.length) console.warn(`✂️ הושמט "${head.dropped.join('", "')}" מהכותרת: ${item.title.slice(0, 60)}`)
+    const headline_he = head.text || null
     if (!headline_he) return { relevant: false } // בלי כותרת עברית תקינה — פוסל
     const direction = ['bull', 'bear', 'neutral'].includes(out.direction) ? out.direction : 'neutral'
     let score = Math.round(Number(out.score))
@@ -102,7 +109,7 @@ export async function gateThematic(item) {
     score = Math.max(1, Math.min(10, score))
     const bottom_line =
       typeof out.bottom_line === 'string' && out.bottom_line.trim()
-        ? out.bottom_line.trim().slice(0, 500)
+        ? dropRelativeTime(out.bottom_line.trim(), src).text.slice(0, 500)
         : null
     const company = typeof out.company === 'string' && out.company.trim() ? out.company.trim() : null
     return { relevant: true, company, direction, score, headline_he, bottom_line }
@@ -161,7 +168,7 @@ export async function enrich(item) {
     let score = Math.round(Number(out.score))
     if (!Number.isFinite(score)) score = item.materiality_score ?? 5
     score = Math.max(1, Math.min(10, score))
-    const bottom_line =
+    let bottom_line =
       typeof out.bottom_line === 'string' && out.bottom_line.trim()
         ? out.bottom_line.trim().slice(0, 700)
         : null
@@ -174,6 +181,8 @@ export async function enrich(item) {
         console.warn(`🚫 תקציר נפסל — הזכיר את "${invented}" שלא מופיע במקור: ${item.title.slice(0, 60)}`)
         return null
       }
+      // "היום"/"מחר" שלא במקור — מושמט, לא נפסל (ראה dropRelativeTime)
+      bottom_line = dropRelativeTime(bottom_line, source).text
     }
     return { direction, materiality_score: score, bottom_line }
   } catch (e) {

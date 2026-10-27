@@ -103,6 +103,7 @@ export async function collectYahoo({ signalEnabled } = {}) {
       title: c.it.title,
       description: `[חברה ישראלית סחירה: ${c.t.name}] ${c.it.description || ''}`,
       sector: c.t.sector,
+      published: c.it.pubDate,
     })
     // מכסת Groq אזלה — עוצרים את הריצה; פריטים שטרם נבדקו יישארו טריים לריצה הבאה.
     if (g?.rateLimited) {
