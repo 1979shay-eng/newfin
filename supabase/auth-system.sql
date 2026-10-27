@@ -80,14 +80,15 @@ create policy "admin reads events" on public.usage_events for select
   using (public.is_admin());
 
 -- ── 6. ניקוי אוטומטי (שמירת הקרדיטים) ───────────────────────────────
--- מוחק אירועים מעל 60 יום. רץ אוטומטית אם pg_cron מותקן (ראה למטה).
+-- מוחק אירועים מעל 12 חודשים — תואם למדיניות הפרטיות ("עד 12 חודשים"); ההיסטוריה
+-- נשמרת שנה בכוונה. רץ אוטומטית אם pg_cron מותקן (ראה למטה).
 create or replace function public.prune_usage_events()
 returns void
 language sql
 security definer
 set search_path = public
 as $$
-  delete from public.usage_events where created_at < now() - interval '60 days';
+  delete from public.usage_events where created_at < now() - interval '12 months';
 $$;
 
 -- אופציונלי — תזמון יומי (דורש extension pg_cron מופעל ב-Database → Extensions):
