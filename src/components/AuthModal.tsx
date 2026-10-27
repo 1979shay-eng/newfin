@@ -82,7 +82,15 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
         )}
 
         <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400">
-          בהמשך אתה מאשר את תנאי השימוש ומדיניות הפרטיות.
+          בהמשך אתה מאשר את{' '}
+          <a href="/terms" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">
+            תנאי השימוש
+          </a>{' '}
+          ואת{' '}
+          <a href="/privacy" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">
+            מדיניות הפרטיות
+          </a>
+          .
           <br />
           חינם, בלי כרטיס אשראי. כניסה מהירה דרך חשבון Google.
         </p>

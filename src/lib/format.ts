@@ -14,14 +14,14 @@ export const reliabilityLabel: Record<Reliability, { text: string; icon: string 
   estimate: { text: 'הערכה', icon: '⚠️' },
 }
 
-// כיוון השפעה על המניה
+// אופי הידיעה לעסקי החברה (לא תחזית למניה — ראה SENTIMENT_NOTE ב-feedVisual)
 export const directionLabel: Record<
   Direction,
   { text: string; icon: string; className: string }
 > = {
-  bull: { text: 'חיובי', icon: '▲', className: 'text-emerald-600' },
-  bear: { text: 'שלילי', icon: '▼', className: 'text-rose-600' },
-  neutral: { text: 'ניטרלי', icon: '◆', className: 'text-slate-400' },
+  bull: { text: 'ידיעה חיובית', icon: '●', className: 'text-emerald-600' },
+  bear: { text: 'ידיעה שלילית', icon: '●', className: 'text-rose-600' },
+  neutral: { text: 'ניטרלית', icon: '●', className: 'text-slate-400' },
 }
 
 export type MaterialityTier = 'high' | 'mid' | 'low'

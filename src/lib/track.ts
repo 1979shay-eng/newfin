@@ -2,7 +2,8 @@
 // כותב רק עבור משתמש מחובר (RLS חוסם אנונימי ממילא). שקט: שגיאות לא מפריעות ל-UI.
 import { supabase, isSupabaseConfigured } from './supabase'
 
-type EventType = 'login' | 'page_view' | 'search' | 'watch_add' | 'watch_remove'
+// error_report — "דווח על טעות" מכרטיס ידיעה (meta: item_id, title, note); נקרא בדף הניהול
+type EventType = 'login' | 'page_view' | 'search' | 'watch_add' | 'watch_remove' | 'error_report'
 
 // קאש מזהה המשתמש הנוכחי — מתעדכן דרך onAuthStateChange (בלי לקרוא לרשת בכל track).
 let currentUserId: string | null = null

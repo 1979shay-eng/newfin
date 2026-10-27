@@ -13,6 +13,7 @@ import {
   markSeenNow,
 } from '../lib/feedVisual'
 import type { FeedItem } from '../types/db'
+import { DISCLAIMER } from '../lib/legal'
 
 type Sort = 'smart' | 'importance' | 'time'
 type Tab = 'all' | 'watched'
@@ -27,7 +28,7 @@ const IMP_OPTS: { key: Imp; label: string }[] = [
 // הבחירה היא סף מינימלי, לא התאמה מדויקת: "בינונית" מציגה בינונית וכל מה שמעליה
 const IMP_RANK = { low: 0, mid: 1, high: 2 } as const
 const SORT_OPTS: { key: Sort; label: string }[] = [
-  { key: 'smart', label: 'מומלץ' },
+  { key: 'smart', label: 'משולב' },
   { key: 'importance', label: 'חשיבות' },
   { key: 'time', label: 'זמן' },
 ]
@@ -172,7 +173,7 @@ export default function Feed() {
     if (tab === 'watched') r = r.filter((it) => it.company_id && watchSet.has(it.company_id))
     const byTime = (a: FeedItem, b: FeedItem) => +new Date(b.published_at) - +new Date(a.published_at)
     return r.sort((a, b) => {
-      // "מומלץ": עדיפות מקור + מהותיות (מצף את מאיה לראש), שובר שוויון לפי זמן.
+      // "משולב": עדיפות מקור + מהותיות (מצף את מאיה לראש), שובר שוויון לפי זמן.
       // "חשיבות": מהותיות בלבד. "זמן": כרונולוגי בלבד.
       if (sort === 'time') return byTime(a, b)
       const diff = sort === 'smart' ? rankScore(b) - rankScore(a) : b.materiality_score - a.materiality_score
@@ -204,6 +205,16 @@ export default function Feed() {
             </span>
           </>
         )}
+      </p>
+
+      {/* הבהרה משפטית — קבועה בראש הפיד (סעיף 3(ב) לחוק הייעוץ: מידע כללי, עניין אישי) */}
+      <p
+        role="note"
+        className="mt-3 rounded-xl border px-3.5 py-2.5 text-[12.5px] leading-relaxed"
+        style={{ borderColor: 'var(--line2)', background: 'var(--surface)', color: 'var(--muted)' }}
+      >
+        <b style={{ color: 'var(--ink2)' }}>לתשומת לבך: </b>
+        {DISCLAIMER}
       </p>
 
       {/* לשוניות */}

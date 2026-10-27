@@ -28,12 +28,14 @@ const EVENT_LABEL: Record<string, string> = {
   search: 'חיפוש',
   watch_add: 'הוספת מעקב',
   watch_remove: 'הסרת מעקב',
+  error_report: 'דיווח טעות',
 }
 
 export default function Admin() {
   const { isAdmin, loading: authLoading } = useAuth()
   const [users, setUsers] = useState<UserStat[]>([])
   const [events, setEvents] = useState<EventRow[]>([])
+  const [reports, setReports] = useState<EventRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -46,10 +48,18 @@ export default function Admin() {
         .select('id, type, meta, created_at, users ( email )')
         .order('created_at', { ascending: false })
         .limit(80),
-    ]).then(([u, e]) => {
+      // דיווחי טעות נשלפים בנפרד — בין 80 האירועים האחרונים הם נבלעים בצפיות
+      supabase
+        .from('usage_events')
+        .select('id, type, meta, created_at, users ( email )')
+        .eq('type', 'error_report')
+        .order('created_at', { ascending: false })
+        .limit(30),
+    ]).then(([u, e, r]) => {
       if (!alive) return
       setUsers((u.data as UserStat[]) ?? [])
       setEvents((e.data as unknown as EventRow[]) ?? [])
+      setReports((r.data as unknown as EventRow[]) ?? [])
       setLoading(false)
     })
     return () => {
@@ -90,6 +100,27 @@ export default function Admin() {
         <StatCard label="סה״כ כניסות" value={totals.logins} />
         <StatCard label="סה״כ אירועים" value={totals.events} />
       </div>
+
+      {/* דיווחי טעות ממשתמשים — לטיפול מהיר (תיקון או הסרה של הידיעה) */}
+      {reports.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-600">דיווחי טעות ({reports.length})</h2>
+          <div className="space-y-1.5 rounded-xl border border-amber-300/60 bg-amber-50/40 p-2">
+            {reports.map((e) => (
+              <div key={e.id} className="rounded-lg px-2 py-1.5 text-[13px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-semibold text-slate-800">{String(e.meta?.title ?? '—')}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-slate-500">{relTime(e.created_at)}</span>
+                </div>
+                <div className="text-slate-600">{String(e.meta?.note ?? '')}</div>
+                <div className="text-[11px] text-slate-400" dir="ltr">
+                  {e.users?.email ?? '—'} · item {String(e.meta?.item_id ?? '')}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-3">
@@ -194,6 +225,7 @@ function metaText(e: EventRow): string {
   if (e.type === 'search' && e.meta.q) return `"${e.meta.q}"`
   if (e.type === 'page_view' && e.meta.path) return String(e.meta.path)
   if ((e.type === 'watch_add' || e.type === 'watch_remove') && e.meta.company) return String(e.meta.company)
+  if (e.type === 'error_report') return `${e.meta.note ?? ''} ← ${e.meta.title ?? ''}`
   return ''
 }
 

@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import type { FeedItem } from '../types/db'
+import { track } from '../lib/track'
 import {
   impLevel,
   impLabel,
   impColor,
   impDots,
   sentiment,
+  SENTIMENT_NOTE,
   sectorColor,
   avatarColor,
   clockParts,
@@ -45,6 +48,7 @@ export default function ItemCard({
   const detail = item.body?.trim() || null
   const bottomLine = item.bottom_line?.trim() || null
   const { time, date } = clockParts(item.published_at)
+  const [reporting, setReporting] = useState(false)
 
   return (
     <article
@@ -81,14 +85,15 @@ export default function ItemCard({
               {sectorName}
             </span>
           )}
-          {/* כיוון מוצג רק כשיש בו מידע. "ניטרלי" הופיע על רוב הכרטיסים
-              ולכן שחק את המשמעות של ▲/▼ — היעדר התג הוא עצמו הניטרלי. */}
+          {/* אופי הידיעה מוצג רק כשיש בו מידע. "ניטרלית" הופיעה על רוב הכרטיסים
+              ולכן שחקה את המשמעות — היעדר התג הוא עצמו הניטרלי. */}
           {item.direction !== 'neutral' && (
             <span
-              className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+              title={SENTIMENT_NOTE}
+              className="shrink-0 cursor-help whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold"
               style={{ color: sent.color, background: sent.bg }}
             >
-              {sent.symbol} {sent.label}
+              <span aria-hidden>{sent.symbol}</span> {sent.label}
             </span>
           )}
           {isNew && (
@@ -162,6 +167,9 @@ export default function ItemCard({
             שורה תחתונה ·{' '}
           </span>
           {bottomLine}
+          <span className="mt-1 block text-[11.5px]" style={{ color: 'var(--muted2)' }}>
+            סיכום אוטומטי (AI) · עלול לכלול טעויות — הכתבה המקורית היא הקובעת
+          </span>
         </div>
       )}
 
@@ -179,6 +187,14 @@ export default function ItemCard({
         <span className="tabular-nums">
           {time} · {date}
         </span>
+        <button
+          onClick={() => setReporting((r) => !r)}
+          aria-expanded={reporting}
+          className={`${item.original_url ? '' : 'mr-auto '}font-semibold hover:underline`}
+          style={{ color: 'var(--muted2)' }}
+        >
+          דווח על טעות
+        </button>
         {item.original_url && (
           <a
             href={item.original_url}
@@ -191,6 +207,63 @@ export default function ItemCard({
           </a>
         )}
       </div>
+
+      {reporting && <ReportForm item={item} onDone={() => setReporting(false)} />}
     </article>
+  )
+}
+
+// דיווח משתמש על טעות בידיעה — נשמר כאירוע error_report ומוצג בדף הניהול.
+// ערוץ התיקון הזה הוא חלק מההגנה מפני תביעת לשון הרע: טעות שדווחה מתוקנת מהר.
+function ReportForm({ item, onDone }: { item: FeedItem; onDone: () => void }) {
+  const [note, setNote] = useState('')
+  const [sent, setSent] = useState(false)
+
+  const send = async () => {
+    await track('error_report', { item_id: item.id, title: item.title, note: note.trim() })
+    setSent(true)
+    setTimeout(onDone, 2200)
+  }
+
+  if (sent)
+    return (
+      <p role="status" className="mt-3 text-[13px] font-semibold" style={{ color: 'var(--accent)' }}>
+        תודה! הדיווח התקבל ויטופל בהקדם.
+      </p>
+    )
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+      <label className="sr-only" htmlFor={`report-${item.id}`}>
+        מה שגוי בידיעה?
+      </label>
+      <textarea
+        id={`report-${item.id}`}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        maxLength={500}
+        placeholder="מה שגוי בידיעה? (למשל: החברה הלא נכונה, נתון שגוי)"
+        className="min-w-0 flex-1 resize-none rounded-[10px] px-3 py-2 text-[13.5px] outline-none"
+        style={{ background: 'var(--field)', border: '1px solid var(--line2)', color: 'var(--ink)' }}
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={send}
+          disabled={!note.trim()}
+          className="rounded-[10px] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-50"
+          style={{ background: 'var(--accent)' }}
+        >
+          שליחה
+        </button>
+        <button
+          onClick={onDone}
+          className="rounded-[10px] px-3 py-2 text-[13px] font-semibold"
+          style={{ background: 'var(--chip)', color: 'var(--chip-ink)' }}
+        >
+          ביטול
+        </button>
+      </div>
+    </div>
   )
 }

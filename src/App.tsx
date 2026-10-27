@@ -1,8 +1,7 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import Feed from './pages/Feed'
 import Companies from './pages/Companies'
-import Markets from './pages/Markets'
 import Indicators from './pages/Indicators'
 import CompanyProfile from './pages/CompanyProfile'
 import About from './pages/About'
@@ -10,6 +9,8 @@ import Admin from './pages/Admin'
 import NotFound from './pages/NotFound'
 import { useEffect } from 'react'
 import Landing from './pages/Landing'
+import Legal, { LegalStandalone } from './pages/Legal'
+import { LEGAL_PAGES } from './lib/legal'
 import { useAuth } from './lib/useAuth'
 import { trackPageView } from './lib/track'
 
@@ -36,8 +37,16 @@ export default function App() {
 
   // שער מלא: מי שלא מחובר תמיד רואה את דף הנחיתה. כדי להגיע לפיד חובה להתחבר.
   // בפיתוח מקומי (vite dev) השער פתוח — מאפשר בדיקות UI בלי OAuth. לא משפיע על פרודקשן.
+  // חריג אחד: העמודים המשפטיים פתוחים לכולם — חובה שיהיו זמינים לפני הרשמה.
   if (!session && !import.meta.env.DEV) {
-    return <Landing />
+    return (
+      <Routes>
+        {LEGAL_PAGES.map((p) => (
+          <Route key={p.path} path={p.path} element={<LegalStandalone doc={p.doc} />} />
+        ))}
+        <Route path="*" element={<Landing />} />
+      </Routes>
+    )
   }
 
   return (
@@ -46,11 +55,16 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Feed />} />
-          <Route path="markets" element={<Markets />} />
+          {/* דף השווקים מושבת: נתוני הבורסה (TASE) ו-Yahoo נמשכו בלי רישיון הפצה.
+              הקוד נשאר (pages/Markets.tsx, collector/markets.mjs) לחידוש אחרי הסדרת רישיון. */}
+          <Route path="markets" element={<Navigate to="/" replace />} />
           <Route path="indicators" element={<Indicators />} />
           <Route path="companies" element={<Companies />} />
           <Route path="company/:slug" element={<CompanyProfile />} />
           <Route path="about" element={<About />} />
+          {LEGAL_PAGES.map((p) => (
+            <Route key={p.path} path={p.path.slice(1)} element={<Legal doc={p.doc} />} />
+          ))}
           <Route path="admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -38,9 +38,11 @@ export async function fetchFeed(limit = 40): Promise<FeedItem[]> {
       .limit(60),
   ])
 
+  // תקלה בשרת → פיד ריק, לא נתוני הדגמה: הדמו מכיל ידיעות בדויות על חברות
+  // אמיתיות, ובפרודקשן הן היו מוצגות למשתמשים כאילו הן חדשות.
   if (fresh.error) {
     console.error('fetchFeed error:', fresh.error.message)
-    return mockFeed
+    return []
   }
 
   // מיזוג ודה-דופ לפי id, מהחדש לישן

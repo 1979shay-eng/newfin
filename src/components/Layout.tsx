@@ -3,19 +3,19 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/useAuth'
 import { useTheme } from '../lib/theme'
 import AuthModal from './AuthModal'
+import { DISCLAIMER, LEGAL_PAGES } from '../lib/legal'
 
 // desktopOnly — קישור בתדירות נמוכה שנושר מהבר במסך צר כדי לפנות מקום
 // ליעדים האמיתיים (פיד, חברות). "אודות" מופיע בפוטר בכל הרזולוציות.
 const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean; desktopOnly?: boolean }[] = [
   { to: '/', label: 'פיד', end: true },
-  { to: '/markets', label: 'שווקים' },
   { to: '/indicators', label: 'אינדיקטורים' },
   { to: '/companies', label: 'חברות' },
   { to: '/about', label: 'אודות', desktopOnly: true },
   { to: '/admin', label: 'ניהול', adminOnly: true },
 ]
 
-const WIDE_ROUTES = ['/markets', '/indicators']
+const WIDE_ROUTES = ['/indicators']
 
 function Logo() {
   return (
@@ -154,14 +154,21 @@ export default function Layout() {
       </main>
 
       <footer
-        className="relative z-10 mt-12 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t py-6 text-center text-xs"
+        className="relative z-10 mt-12 border-t px-4 py-6 text-center text-xs"
         style={{ borderColor: 'var(--line2)', color: 'var(--muted2)' }}
       >
-        <span>NewFinIL · המקום שלך בשוק ההון</span>
-        <span aria-hidden>·</span>
-        <Link to="/about" className="font-semibold hover:underline" style={{ color: 'var(--muted)' }}>
-          אודות
-        </Link>
+        <p className="mx-auto max-w-[900px] leading-relaxed">{DISCLAIMER}</p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+          <span>NewFinIL · המקום שלך בשוק ההון</span>
+          {[{ path: '/about', label: 'אודות' }, ...LEGAL_PAGES].map((p) => (
+            <span key={p.path} className="contents">
+              <span aria-hidden>·</span>
+              <Link to={p.path} className="font-semibold hover:underline" style={{ color: 'var(--muted)' }}>
+                {p.label}
+              </Link>
+            </span>
+          ))}
+        </div>
       </footer>
     </div>
   )

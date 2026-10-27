@@ -30,7 +30,7 @@ export function impDots(score: number): number {
 }
 
 // עדיפות מקור: מאיה (verified) = מקור ראשוני #1 ("הלב"). דיווח רשמי גובר על תקשורת.
-// ה-boost מתווסף לציון המהותיות בדירוג "מומלץ": מצף דיווחי מאיה מהותיים לראש הפיד,
+// ה-boost מתווסף לציון המהותיות בדירוג "משולב": מצף דיווחי מאיה מהותיים לראש הפיד,
 // אך עדיין מאפשר לכתבה עיתונאית מהותית מאוד לעקוף רעש טכני של מאיה ("הרעש שוקע").
 export function reliabilityBoost(r: Reliability): number {
   if (r === 'verified') return 3 // מאיה — מקור ראשוני, מאומת
@@ -38,7 +38,7 @@ export function reliabilityBoost(r: Reliability): number {
   return 0 // דיווח עיתונאי
 }
 
-// ציון דירוג מורכב לפיד ("מומלץ"): מהותיות + עדיפות מקור + טריות. גבוה = ראש הפיד.
+// ציון דירוג מורכב לפיד ("משולב"): מהותיות + עדיפות מקור + טריות. גבוה = ראש הפיד.
 // רכיב הטריות מונע מדיווחים ישנים-וחשובים להישאר תקועים בראש: בונוס שדועך עם הזמן
 // (עד +8 לידיעה טרייה, ~1 פחות לכל 6 שעות, מתאפס אחרי ~48 שעות).
 export function rankScore(item: {
@@ -51,11 +51,15 @@ export function rankScore(item: {
   return item.materiality_score + reliabilityBoost(item.reliability) + recency
 }
 
+// אופי הידיעה לעסקי החברה — לא תחזית למחיר המניה. בלי חיצי ▲/▼ בכוונה: חץ ליד
+// שם מניה נקרא כאיתות מסחר, וזה מתקרב לייעוץ השקעות (חוק הייעוץ, סעיף 1).
+export const SENTIMENT_NOTE =
+  'הערכה אוטומטית של אופי הידיעה לעסקי החברה. אינה תחזית למחיר המניה ואינה המלצה.'
 export type Sentiment = { color: string; bg: string; symbol: string; label: string }
 export function sentiment(dir: Direction): Sentiment {
-  if (dir === 'bull') return { color: '#16a34a', bg: 'rgba(22,163,74,.12)', symbol: '▲', label: 'חיובי' }
-  if (dir === 'bear') return { color: '#dc2626', bg: 'rgba(220,38,38,.12)', symbol: '▼', label: 'שלילי' }
-  return { color: 'var(--sent-flat)', bg: 'rgba(100,116,139,.14)', symbol: '●', label: 'ניטרלי' }
+  if (dir === 'bull') return { color: '#16a34a', bg: 'rgba(22,163,74,.12)', symbol: '●', label: 'ידיעה חיובית' }
+  if (dir === 'bear') return { color: '#dc2626', bg: 'rgba(220,38,38,.12)', symbol: '●', label: 'ידיעה שלילית' }
+  return { color: 'var(--sent-flat)', bg: 'rgba(100,116,139,.14)', symbol: '●', label: 'ניטרלית' }
 }
 
 // צבע סקטור (hue; ה-tint = אותו hue ב-~0.12 alpha). כולל את טקסונומיית הבורסה שלנו.

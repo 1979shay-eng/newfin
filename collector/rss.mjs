@@ -189,7 +189,7 @@ const AMBIGUOUS = new Set([
   'אנליסט', 'אקסל', 'ארזים', 'בליץ', 'ברנד', 'גולד', 'גולף', 'חשמל',
   'יוזמות', 'יצוא', 'ירושלים', 'כנפיים', 'לאומי', 'לכיש', 'מגידו', 'מהדרין',
   'מקורות', 'ניסן', 'נובה', 'סקופ', 'פוקס', 'פועלים', 'צרפתי', 'קליל',
-  'רפאל', 'רימון', 'תעוזה',
+  'רפאל', 'רימון', 'תעוזה', 'תשתיות אנרגיה',
 ])
 
 // סימני הקשר כלכלי/שוק-הון בכותרת — תנאי להתאמת שם דו-משמעי.
@@ -212,6 +212,40 @@ const FALSE_COLLOC = [
   /עיריית ירושלים|ראש עיריית ירושלים|חוף ירושלים|הרי ירושלים|(מזרח|מערב|צפון|דרום) ירושלים|ירושלים והסביבה|יער ירושלים/g,
 ]
 
+// מיקומי השם בטקסט כמילה שלמה (מוקף בגבול-מילה משני הצדדים). withPrefix — מקבל
+// גם אותיות שימוש צמודות ("לרימון", "באיילון", "ולסקייליין"), עד שתיים.
+const PREFIX = 'ובכלמשה'
+function wordHits(text, name, withPrefix = false) {
+  const out = []
+  let from = 0
+  let idx
+  while ((idx = text.indexOf(name, from)) !== -1) {
+    let b = idx
+    if (withPrefix) while (b > 0 && idx - b < 2 && PREFIX.includes(text[b - 1])) b--
+    const before = b === 0 ? ' ' : text[b - 1]
+    const after = idx + name.length >= text.length ? ' ' : text[idx + name.length]
+    if (BOUNDARY.test(before) && BOUNDARY.test(after)) out.push(idx)
+    from = idx + 1 // אותו שם עשוי להופיע שוב במקום עם גבול תקין
+  }
+  return out
+}
+const hasWord = (text, name) => wordHits(text, name).length > 0
+
+const stripFalseColloc = (s) => FALSE_COLLOC.reduce((acc, re) => acc.replace(re, ' '), s)
+// גרש/מרכאות טיפוגרפיים → ASCII ("ג’י סיטי" = "ג'י סיטי")
+const normQuotes = (s) => s.replace(/[’‘׳`]/g, "'").replace(/[”“״]/g, '"')
+
+// שם דו-משמעי בתקציר נחשב "שם חברה" רק בהקשר של חברה: אחרי "החברה/חברת/מניית/
+// בנק/קבוצת", בתוך מרכאות, או לפני פועל של תנועת מניה/פעולה עסקית. בלי זה
+// "מקורות המימון", "אספקת חשמל" ו"חזון לאומי" נתפסו כחברות.
+const CUE_BEFORE = /(?:החברה|חברת|מניית|מניות|בנק|קבוצת)\s*['"]?$/
+const CUE_AFTER = /^['"]?\s*(?:זינק|מזנק|קפצ|קופצ|עלת|עול|ירד|יורד|צלל|נפל|איבד|הודיע|דיווח|חתמ|רכש|מכר|השלימ)/
+function companyCue(text, idx, name) {
+  const pre = text.slice(Math.max(0, idx - 12), idx)
+  const post = text.slice(idx + name.length, idx + name.length + 12)
+  return CUE_BEFORE.test(pre) || CUE_AFTER.test(post) || (/['"]$/.test(pre) && /^['"]/.test(post))
+}
+
 // מזהה חברה מהכותרת: מחזיר { company_id, company_name } או ריק.
 // דורש שם מוקף בגבול-מילה משני הצדדים. ארוך-קודם מצמצם התאמות-שווא.
 // שם דו-משמעי (AMBIGUOUS) מותאם רק אם יש הקשר פיננסי, ואחרי סילוק צירופים כוזבים.
@@ -223,24 +257,30 @@ export function matchCompany(title, companies) {
     let haystack = title
     if (AMBIGUOUS.has(c.name)) {
       if (!hasFinContext) continue
-      if (strippedCache === null) {
-        strippedCache = title
-        for (const re of FALSE_COLLOC) strippedCache = strippedCache.replace(re, ' ')
-      }
+      if (strippedCache === null) strippedCache = stripFalseColloc(title)
       haystack = strippedCache
     }
-    let from = 0
-    let idx
-    while ((idx = haystack.indexOf(c.name, from)) !== -1) {
-      const before = idx === 0 ? ' ' : haystack[idx - 1]
-      const after = idx + c.name.length >= haystack.length ? ' ' : haystack[idx + c.name.length]
-      if (BOUNDARY.test(before) && BOUNDARY.test(after)) {
-        return { company_id: c.id, company_name: c.name }
-      }
-      from = idx + 1 // אותו שם עשוי להופיע שוב במקום עם גבול תקין
-    }
+    if (hasWord(haystack, c.name)) return { company_id: c.id, company_name: c.name }
   }
   return { company_id: null, company_name: null }
+}
+
+// שם חברה סחירה שה-AI הכניס לתקציר אבל לא מופיע במקור — סימן להזיה, ופרסום
+// כזה על חברה נסחרת הוא חשיפה ללשון הרע. המקרה שהוליד את הבדיקה: כתבה על רעידות
+// אדמה סוכמה כ"החברה 'אדמה' עומדת בפני אתגר" (גלובס, 28.06.2026). צירופים כוזבים
+// ("רעידת אדמה") מסולקים משני הצדדים, כך שגם מילה שמופיעה במקור רק כחלק מצירוף
+// כזה לא נחשבת "מופיעה". במקור מתקבלות גם אותיות שימוש ("לרימון"). מחזיר את
+// השם הראשון שהומצא, או null.
+export function inventedCompany(text, source, companies) {
+  const ai = stripFalseColloc(normQuotes(text))
+  const src = stripFalseColloc(normQuotes(source))
+  for (const c of companies) {
+    if (STOP.has(c.name)) continue
+    let hits = wordHits(ai, c.name)
+    if (AMBIGUOUS.has(c.name)) hits = hits.filter((i) => companyCue(ai, i, c.name))
+    if (hits.length && !wordHits(src, c.name, true).length) return c.name
+  }
+  return null
 }
 
 // ── סינון קליקבייט ──────────────────────────────────────────────────

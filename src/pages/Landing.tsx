@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import AuthModal from '../components/AuthModal'
+import { DISCLAIMER, LEGAL_PAGES } from '../lib/legal'
 
 // ── דף נחיתה עריכותי-יוקרתי (Brand) — טיפוגרפיה עם ניגוד + אמנות-דאטה דרמטית. ──
 export default function Landing({ onGuest }: { onGuest?: () => void }) {
@@ -139,9 +141,9 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
       {/* יתרונות */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-20">
         <div className="grid gap-4 md:grid-cols-3">
-          <Feature icon={<IconTarget />} title="ציון מהותיות" body="כל ידיעה מקבלת ציון 1–10. מה שמזיז מניות — בראש הפיד." />
+          <Feature icon={<IconTarget />} title="ציון מהותיות" body="כל ידיעה מקבלת ציון 1–10. הידיעות החשובות — בראש הפיד." />
           <Feature icon={<IconLink />} title="הצלבת מקורות" body="כמה מקורות מאשרים — כך יודעים מה אמין ומה רעש." />
-          <Feature icon={<IconPen />} title="שורה תחתונה" body="בכל ידיעה — מה המשמעות שלה למשקיע, בעברית." />
+          <Feature icon={<IconPen />} title="שורה תחתונה" body="בכל ידיעה — העובדה וההקשר בשורה אחת, בעברית." />
           <Feature icon={<IconCalendar />} title="לוח אירועים" body="מבט קדימה: דוחות, פקיעות ונתוני מאקרו." />
           <Feature icon={<IconEye />} title="מעקב בעלי עניין" body="מי קונה ומוכר מבפנים — מוסדיים ובלוקים." />
           <Feature icon={<IconMail />} title="בריף יומי" body="סיכום אישי לבוקר — למייל או לטלגרם." />
@@ -170,8 +172,19 @@ export default function Landing({ onGuest }: { onGuest?: () => void }) {
         </div>
       </section>
 
-      <footer className="relative z-10 border-t border-white/5 py-6 text-center text-xs text-slate-500">
-        NewFinIL · המקום שלך בשוק ההון
+      <footer className="relative z-10 border-t border-white/5 px-6 py-6 text-center text-xs text-slate-500">
+        <p className="mx-auto max-w-3xl leading-relaxed">{DISCLAIMER}</p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+          <span>NewFinIL · המקום שלך בשוק ההון</span>
+          {LEGAL_PAGES.map((p) => (
+            <span key={p.path} className="contents">
+              <span aria-hidden>·</span>
+              <Link to={p.path} className="font-semibold text-slate-400 hover:text-slate-200 hover:underline">
+                {p.label}
+              </Link>
+            </span>
+          ))}
+        </div>
       </footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
@@ -286,12 +299,15 @@ function MarketArt({ compact = false }: { compact?: boolean }) {
 // ── מוקאפ הדשבורד ───────────────────────────────────────────────────
 const SPARK = 'M2,30 L18,24 L34,28 L50,16 L66,21 L82,9 L98,13 L116,3'
 
+// שמות החברות והידיעות בדויים בכוונה — ידיעה מומצאת על חברה נסחרת אמיתית
+// (כך היה עד 27.10.2026: טאואר, אלביט, עזריאלי) היא חשיפה ללשון הרע ולהטעיה.
+// השמות נבדקו מול טבלת החברות — אין חברה סחירה בשמות האלה.
 function FeedDashboard() {
   const items = [
-    { score: 9, tier: 'high', dir: '▲', dirC: 'text-emerald-400', company: 'טאואר', sector: 'טכנולוגיה', title: 'רבעון שיא; הרווח הנקי זינק 13.7%', bl: 'השיפור בשוליים תומך בתחזית 2026.' },
-    { score: 8, tier: 'high', dir: '▲', dirC: 'text-emerald-400', company: 'אלביט מערכות', sector: 'תעשייה', title: 'זכייה בחוזה ביטחוני מהותי באירופה' },
-    { score: 5, tier: 'mid', dir: '◆', dirC: 'text-slate-400', company: 'עזריאלי', sector: 'נדל"ן ובינוי', title: 'עדכון שווי נכסים מניב ברבעון' },
-    { score: 3, tier: 'low', dir: '◆', dirC: 'text-slate-400', sector: 'בנקים', title: 'הפיקוח על הבנקים פרסם הנחיה חדשה' },
+    { score: 9, tier: 'high', company: 'רקיע טכנולוגיות', sector: 'טכנולוגיה', title: 'דוח רבעוני: עלייה בהכנסות ובשולי הרווח', bl: 'השורה התחתונה: העובדה המרכזית וההקשר שלה, במשפט אחד.' },
+    { score: 8, tier: 'high', company: 'מגן מערכות', sector: 'תעשייה', title: 'זכייה במכרז לאספקת מערכות' },
+    { score: 5, tier: 'mid', company: 'נכסי הגליל', sector: 'נדל"ן ובינוי', title: 'עדכון שווי נכסים מניבים' },
+    { score: 3, tier: 'low', sector: 'בנקים', title: 'הנחיה רגולטורית חדשה לבנקים' },
   ]
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-900/70 shadow-2xl shadow-brand/15 backdrop-blur-xl ring-1 ring-white/[0.03]">
@@ -299,7 +315,7 @@ function FeedDashboard() {
         <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-        <span className="mr-auto text-[11px] text-slate-500">newfin · הפיד שלי</span>
+        <span className="mr-auto text-[11px] text-slate-500">דוגמה להמחשה · חברות וידיעות בדויות</span>
       </div>
       {/* רצועת מגמה — דימוי ויזואלי בלבד, בלי שמות מדדים ומספרים (אין להציג נתון בלי מקור) */}
       <div className="flex items-center gap-4 border-b border-white/5 px-4 py-3">
@@ -330,7 +346,6 @@ function FeedDashboard() {
           <div key={i} className="animate-fade-up flex gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-3" style={{ animationDelay: `${400 + i * 80}ms` }}>
             <div className="flex shrink-0 flex-col items-center gap-1">
               <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold tabular-nums ${SCORE_STYLE[it.tier]}`}>{it.score}</span>
-              <span className={`text-xs leading-none ${it.dirC}`}>{it.dir}</span>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
