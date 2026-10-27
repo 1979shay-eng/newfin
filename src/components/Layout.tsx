@@ -44,23 +44,8 @@ export default function Layout() {
 
   return (
     <div className="relative min-h-screen" style={{ backgroundColor: 'var(--bg)', color: 'var(--ink)' }}>
-      {/* ── רקע מונפש: גריד ממוסך + 3 כתמי זוהר נודדים ── */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              'linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px)',
-            backgroundSize: '36px 36px',
-            maskImage: 'radial-gradient(ellipse 100% 55% at 50% 0%, #000 30%, transparent 78%)',
-            WebkitMaskImage: 'radial-gradient(ellipse 100% 55% at 50% 0%, #000 30%, transparent 78%)',
-          }}
-        />
-        <div className="nf-drift1 absolute -top-40 right-[-8%] h-[600px] w-[600px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow1), transparent 65%)' }} />
-        <div className="nf-drift2 absolute top-[30%] left-[-10%] h-[560px] w-[560px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow2), transparent 65%)' }} />
-        <div className="nf-drift3 absolute bottom-[-12%] right-[20%] h-[520px] w-[520px] rounded-full" style={{ background: 'radial-gradient(circle, var(--glow1), transparent 65%)' }} />
-        <div className="nf-noise absolute inset-0" />
-      </div>
+      {/* בלי רקע מונפש (גריד, כתמי זוהר נודדים, רעש) — תנועה מתמדת ברקע מושכת
+          את העין ממה שזז באמת, הנתונים (DESIGN.md: The No-Ambient-Motion Rule) */}
 
       {/* ── ניווט ── */}
       <header

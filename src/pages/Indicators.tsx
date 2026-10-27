@@ -797,7 +797,7 @@ function Card({ id, className = '', style, children }: { id?: string; className?
   return (
     <div
       id={id}
-      className={`rounded-[18px] border ${className}`}
+      className={`rounded-[14px] border ${className}`}
       style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)', ...style }}
     >
       {children}
@@ -809,7 +809,7 @@ function Loading() {
   return (
     <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" aria-busy="true" aria-label="טוען אינדיקטורים">
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="h-[300px] animate-pulse rounded-[18px]" style={{ background: 'var(--chip)' }} />
+        <div key={i} className="h-[300px] animate-pulse rounded-[14px]" style={{ background: 'var(--chip)' }} />
       ))}
     </div>
   )

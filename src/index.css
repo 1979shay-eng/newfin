@@ -41,7 +41,10 @@
     --seg-active: #ffffff;
     --hover: rgba(20, 30, 60, 0.028);
     --nav: rgba(255, 255, 255, 0.85);
-    --shadow: 0 28px 64px -38px rgba(20, 30, 60, 0.26);
+    /* שטוח כברירת מחדל (DESIGN.md): כרטיסים מופרדים בקו דק, בלי צל. הצל הרך
+       הקודם + מסגרת דקה היה "הדשבורד הגנרי". צל רק לשכבה צפה (shadow-float). */
+    --shadow: none;
+    --shadow-float: 0 8px 24px -12px rgba(20, 30, 60, 0.25);
     --grid: rgba(23, 34, 60, 0.045);
     --glow1: rgba(14, 92, 107, 0.1);
     --glow2: rgba(20, 184, 166, 0.1);
@@ -79,7 +82,8 @@
     --seg-active: rgba(255, 255, 255, 0.13);
     --hover: rgba(255, 255, 255, 0.03);
     --nav: rgba(12, 19, 34, 0.82);
-    --shadow: 0 28px 64px -38px rgba(0, 0, 0, 0.6);
+    --shadow: none;
+    --shadow-float: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     --grid: rgba(255, 255, 255, 0.05);
     --glow1: rgba(95, 192, 207, 0.16);
     --glow2: rgba(124, 92, 246, 0.2);

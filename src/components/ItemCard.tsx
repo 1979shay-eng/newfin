@@ -18,13 +18,9 @@ type Props = {
   compact?: boolean
   watched?: boolean
   onToggleWatch?: () => void
-  index?: number
   isNew?: boolean
 }
 
-function delayStyle(index = 0) {
-  return { animationDelay: `${Math.min(index * 40, 360)}ms` }
-}
 
 // סימן חשיבות: 5 נקודות + תווית. יושב בתחילת שורת המטא (ימין, נקודת הכניסה של
 // העין ב-RTL) — לא בפינה השמאלית, שם נקרא אחרון.
@@ -57,7 +53,6 @@ export default function ItemCard({
   compact = false,
   watched = false,
   onToggleWatch,
-  index = 0,
   isNew = false,
 }: Props) {
   const canWatch = Boolean(item.company_id && onToggleWatch)
@@ -82,12 +77,11 @@ export default function ItemCard({
     <article
       id={`item-${item.id}`}
       style={{
-        ...delayStyle(index),
         background: 'var(--surface)',
         borderColor: 'var(--line2)',
         boxShadow: 'var(--shadow)',
       }}
-      className={`animate-fade-up scroll-mt-24 rounded-[18px] border transition-colors duration-150 hover:bg-[var(--hover)] ${
+      className={`scroll-mt-24 rounded-[14px] border transition-colors duration-150 hover:bg-[var(--hover)] ${
         major ? 'px-6 py-5' : 'px-5 py-4'
       }`}
     >
@@ -166,24 +160,26 @@ export default function ItemCard({
       {/* פירוט מהמקור — עד 3 שורות, נמתח לכל רוחב הכרטיס; מוסתר בתצוגה תמציתית */}
       {!compact && open && detail && (
         <p
-          className="mt-2 text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden"
+          className="mt-2 max-w-[75ch] text-[15px] leading-[1.65] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden"
           style={{ color: 'var(--muted)' }}
         >
           {detail}
         </p>
       )}
 
-      {/* שורה תחתונה — הניתוח וההשלכות של SIGNAL, בבלוק ציטוט מובלט */}
+      {/* שורה תחתונה — הניתוח וההשלכות של SIGNAL, בבלוק בגוון פטרול עדין.
+          בלי פס צבע בצד: זה הסממן המזוהה ביותר של ממשק שנוצר ב-AI. */}
       {!compact && bottomLine && (
         <div
-          className="mt-2.5 rounded-[10px] py-2.5 pl-4 pr-3.5 text-[14.5px] leading-[1.65]"
+          className="mt-2.5 rounded-[10px] px-3.5 py-2.5 text-[14.5px] leading-[1.65]"
           style={{
-            background: 'var(--chip)',
+            background: 'color-mix(in oklab, var(--accent) 6%, var(--surface))',
             color: 'var(--ink2)',
-            borderRight: '3px solid var(--accent)',
           }}
         >
-          <p className={open ? undefined : '[display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden'}>
+          <p
+            className={`max-w-[75ch] ${open ? '' : '[display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden'}`}
+          >
             <span className="font-bold" style={{ color: 'var(--accent)' }}>
               שורה תחתונה ·{' '}
             </span>

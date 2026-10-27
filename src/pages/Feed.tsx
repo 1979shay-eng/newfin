@@ -206,7 +206,7 @@ export default function Feed() {
           <>
             <Dot />
             <span className="flex items-center gap-1.5">
-              <span className="nf-pulse inline-block h-[7px] w-[7px] rounded-full bg-[#16a34a]" />
+              <span className="inline-block h-[7px] w-[7px] rounded-full" style={{ background: 'var(--up-fill)' }} />
               מתעדכן אוטומטית
             </span>
             <Dot />
@@ -229,7 +229,7 @@ export default function Feed() {
 
       {/* Toolbar */}
       <div
-        className="mt-3 rounded-2xl border p-3.5"
+        className="mt-3 rounded-[14px] border p-3.5"
         style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
       >
         {/* שורה 1: חיפוש + תצוגה תמציתית */}
@@ -341,7 +341,7 @@ export default function Feed() {
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
-                className="rounded-[18px] border px-6 py-5"
+                className="rounded-[14px] border px-6 py-5"
                 style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }}
               >
                 <div className="h-5 w-40 animate-pulse rounded" style={{ background: 'var(--hover)' }} />
@@ -373,7 +373,6 @@ export default function Feed() {
                   {newDay && <DayDivider label={dayLabel(item.published_at)} />}
                   <ItemCard
                     item={item}
-                    index={i}
                     compact={compact}
                     isNew={isNew(item)}
                     watched={!!item.company_id && watchSet.has(item.company_id)}
@@ -460,7 +459,7 @@ function DayDivider({ label }: { label: string }) {
 function ListCard({ children }: { children: ReactNode }) {
   return (
     <div
-      className="rounded-[18px] border"
+      className="rounded-[14px] border"
       style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
     >
       {children}

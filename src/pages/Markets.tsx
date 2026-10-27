@@ -1086,7 +1086,7 @@ function Section({ title, hint, action, children }: { title: string; hint?: stri
 function Card({ className = '', style, children }: { className?: string; style?: CSSProperties; children: ReactNode }) {
   return (
     <div
-      className={`rounded-[18px] border ${className}`}
+      className={`rounded-[14px] border ${className}`}
       style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)', ...style }}
     >
       {children}
@@ -1098,7 +1098,7 @@ function Loading() {
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-3" aria-busy="true" aria-label="טוען נתוני מסחר">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-[120px] animate-pulse rounded-[18px]" style={{ background: 'var(--chip)' }} />
+        <div key={i} className="h-[120px] animate-pulse rounded-[14px]" style={{ background: 'var(--chip)' }} />
       ))}
     </div>
   )
