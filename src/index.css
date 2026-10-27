@@ -19,11 +19,23 @@
     --ink: #141d2b;
     --ink2: #16202f;
     --muted: #5b6675;
-    --muted2: #8893a2;
+    /* כל צבעי הטקסט עומדים ב-4.5:1 (AA) על הרקע ועל המשטח — ראו DESIGN.md */
+    --muted2: #626d7c;
     --line: #eceff3;
     --line2: #e6e9ee;
     --chip: #f1f3f7;
-    --chip-ink: #6b7686;
+    --chip-ink: #5b6676;
+    /* כיוון — שלושה תפקידים: up/down לטקסט (הירוק הקודם #16a34a נתן 3.3:1 על
+       לבן — נכשל בתקן); fill לגרפים ולגוונים (קווים, עמודות, מפת חום); deep
+       למשטח מלא עם טקסט לבן (5:1 ומעלה בשתי התמות). */
+    --up: #15803d;
+    --down: #c81e1e;
+    --up-fill: #16a34a;
+    --down-fill: #dc2626;
+    --up-deep: #15803d;
+    --down-deep: #c81e1e;
+    --imp-high: #c23a20;
+    --imp-mid: #946014;
     --field: #f5f6f9;
     --seg: #eef1f5;
     --seg-active: #ffffff;
@@ -34,7 +46,7 @@
     --glow1: rgba(14, 92, 107, 0.1);
     --glow2: rgba(20, 184, 166, 0.1);
     --dot-empty: #d6dbe3;
-    --imp-low: #3f6fd1;
+    --imp-low: #3a66c4;
     --sent-flat: #64748b;
     --seg-active-shadow: 0 1px 2px rgba(20, 30, 60, 0.12);
     --ring: rgba(14, 92, 107, 0.22);
@@ -53,7 +65,11 @@
     --ink: #eef3fb;
     --ink2: #dde6f4;
     --muted: #93a1ba;
-    --muted2: #6f7d95;
+    --muted2: #8794aa;
+    --up: #4ade80;
+    --down: #f87171;
+    --imp-high: #f07a5f;
+    --imp-mid: #e0a64e;
     --line: rgba(255, 255, 255, 0.06);
     --line2: rgba(255, 255, 255, 0.08);
     --chip: rgba(255, 255, 255, 0.06);

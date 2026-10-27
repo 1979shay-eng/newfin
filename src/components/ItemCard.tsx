@@ -111,7 +111,7 @@ export default function ItemCard({
           )}
           {sectorName && (
             <span
-              className="nf-sc shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold"
+              className="nf-sc shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-[12px] font-bold"
               style={{ ['--sc' as string]: sColor }}
             >
               {sectorName}
@@ -122,7 +122,7 @@ export default function ItemCard({
           {item.direction !== 'neutral' && (
             <span
               title={SENTIMENT_NOTE}
-              className="shrink-0 cursor-help whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+              className="shrink-0 cursor-help whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-bold"
               style={{ color: sent.color, background: sent.bg }}
             >
               <span aria-hidden>{sent.symbol}</span> {sent.label}
@@ -130,7 +130,7 @@ export default function ItemCard({
           )}
           {isNew && (
             <span
-              className="nf-sc shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-bold"
+              className="nf-sc shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[12px] font-bold"
               style={{ ['--sc' as string]: 'var(--accent)' }}
             >
               חדש
@@ -189,7 +189,7 @@ export default function ItemCard({
             </span>
             {bottomLine}
           </p>
-          <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-[11.5px]" style={{ color: 'var(--muted2)' }}>
+          <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-[12px]" style={{ color: 'var(--muted2)' }}>
             <span>סיכום אוטומטי (AI) · עלול לכלול טעויות — הכתבה המקורית היא הקובעת</span>
             {!major && (
               <button

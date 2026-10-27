@@ -137,7 +137,7 @@ export default function Companies() {
                   <div className="min-w-0">
                     <div className="truncate text-sm font-bold" style={{ color: 'var(--ink2)' }}>{c.name_he}</div>
                     {c.sector && (
-                      <div className="truncate text-[11px]" style={{ color: 'var(--muted2)' }}>{c.sector}</div>
+                      <div className="truncate text-[12px]" style={{ color: 'var(--muted2)' }}>{c.sector}</div>
                     )}
                   </div>
                   <button

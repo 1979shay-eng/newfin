@@ -66,8 +66,14 @@ interface Data {
   } | null
 }
 
-const UP = '#16a34a'
-const DOWN = '#dc2626'
+// טוקנים של CSS (עומדים ב-AA בשתי התמות) — עובדים גם בתוך color-mix
+const UP = 'var(--up)'
+const DOWN = 'var(--down)'
+// גוונים ומסגרות — הצבע המקורי; משטח מלא עם טקסט לבן — הגוון העמוק
+const UPF = 'var(--up-fill)'
+const DOWNF = 'var(--down-fill)'
+const UPD = 'var(--up-deep)'
+const DOWND = 'var(--down-deep)'
 const REFRESH_MS = 5 * 60 * 1000
 const dataUrl = supabase.storage.from('public-data').getPublicUrl('market/indicators-v2.json').data.publicUrl
 
@@ -85,13 +91,14 @@ const GROUP_HINT: Record<string, string> = {
 // שבעה גוונים: רקע הכרטיס, מסגרת וצבע התווית
 const mix = (c: string, p: number, base = 'var(--surface)') => `color-mix(in oklab, ${c} ${p}%, ${base})`
 const SHADE: Record<Shade, { bg: string; border: string; fg: string; chip: string; chipFg: string }> = {
-  [-3]: { bg: mix(DOWN, 62), border: DOWN, fg: DOWN, chip: DOWN, chipFg: '#fff' },
-  [-2]: { bg: mix(DOWN, 40), border: mix(DOWN, 80), fg: DOWN, chip: DOWN, chipFg: '#fff' },
-  [-1]: { bg: mix(DOWN, 20), border: mix(DOWN, 55), fg: DOWN, chip: mix(DOWN, 30, 'transparent'), chipFg: DOWN },
+  // בגוון חזק הטקסט בדיו — צבע על רקע באותו צבע לא עומד בניגודיות
+  [-3]: { bg: mix(DOWNF, 62), border: DOWNF, fg: 'var(--ink)', chip: DOWND, chipFg: '#fff' },
+  [-2]: { bg: mix(DOWNF, 40), border: mix(DOWNF, 80), fg: 'var(--ink)', chip: DOWND, chipFg: '#fff' },
+  [-1]: { bg: mix(DOWNF, 20), border: mix(DOWNF, 55), fg: DOWN, chip: mix(DOWNF, 30, 'transparent'), chipFg: DOWN },
   0: { bg: 'var(--surface)', border: 'var(--line2)', fg: 'var(--ink2)', chip: 'var(--chip)', chipFg: 'var(--ink2)' },
-  1: { bg: mix(UP, 20), border: mix(UP, 55), fg: UP, chip: mix(UP, 30, 'transparent'), chipFg: UP },
-  2: { bg: mix(UP, 40), border: mix(UP, 80), fg: UP, chip: UP, chipFg: '#fff' },
-  3: { bg: mix(UP, 62), border: UP, fg: UP, chip: UP, chipFg: '#fff' },
+  1: { bg: mix(UPF, 20), border: mix(UPF, 55), fg: UP, chip: mix(UPF, 30, 'transparent'), chipFg: UP },
+  2: { bg: mix(UPF, 40), border: mix(UPF, 80), fg: 'var(--ink)', chip: UPD, chipFg: '#fff' },
+  3: { bg: mix(UPF, 62), border: UPF, fg: 'var(--ink)', chip: UPD, chipFg: '#fff' },
 }
 
 // בגוונים החזקים הטקסט המשני (מקור, אחוזון) מוחשך — אחרת הוא נבלע ברקע הצבעוני
@@ -275,7 +282,7 @@ function Gauge({ value, zones, neutral, size = 180, center }: { value: number; z
     const [x1, y1] = pt(g1)
     return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`
   }
-  const colors = neutral ? ['var(--chip)', 'var(--line2)', 'var(--chip)'] : [DOWN, 'var(--line2)', UP]
+  const colors = neutral ? ['var(--chip)', 'var(--line2)', 'var(--chip)'] : [DOWNF, 'var(--line2)', UPF]
   const [nx, ny] = pt(value, r - sw / 2 - 4)
   const active = value < 33 ? 0 : value < 67 ? 1 : 2
   return (
@@ -762,13 +769,13 @@ function HeatTile({ it, onClick }: { it: Indicator; onClick: () => void }) {
       </span>
       <span className="mt-1.5 flex items-center justify-between gap-2">
         {it.reading ? (
-          <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: s.chip, color: s.chipFg }}>
+          <span className="rounded-full px-2 py-0.5 text-[12px] font-bold" style={{ background: s.chip, color: s.chipFg }}>
             {it.reading}
           </span>
         ) : (
           <span />
         )}
-        <span className="text-[11px]" style={{ color: it.stale ? DOWN : 'var(--muted)' }}>
+        <span className="text-[12px]" style={{ color: it.stale ? DOWN : 'var(--muted)' }}>
           {it.period ?? shortDate(it.date)}
         </span>
       </span>

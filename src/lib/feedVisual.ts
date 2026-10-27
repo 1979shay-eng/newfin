@@ -19,8 +19,9 @@ export const impLabel: Record<ImpLevel, string> = {
 }
 
 export const impColor: Record<ImpLevel, string> = {
-  high: '#d6492f',
-  mid: '#c07d2a',
+  // טוקנים של CSS — גוון אחר לכל תמה, כולם עומדים ב-4.5:1
+  high: 'var(--imp-high)',
+  mid: 'var(--imp-mid)',
   low: 'var(--imp-low)',
 }
 
@@ -57,8 +58,8 @@ export const SENTIMENT_NOTE =
   'הערכה אוטומטית של אופי הידיעה לעסקי החברה. אינה תחזית למחיר המניה ואינה המלצה.'
 export type Sentiment = { color: string; bg: string; symbol: string; label: string }
 export function sentiment(dir: Direction): Sentiment {
-  if (dir === 'bull') return { color: '#16a34a', bg: 'rgba(22,163,74,.12)', symbol: '●', label: 'ידיעה חיובית' }
-  if (dir === 'bear') return { color: '#dc2626', bg: 'rgba(220,38,38,.12)', symbol: '●', label: 'ידיעה שלילית' }
+  if (dir === 'bull') return { color: 'var(--up)', bg: 'rgba(22,163,74,.12)', symbol: '●', label: 'ידיעה חיובית' }
+  if (dir === 'bear') return { color: 'var(--down)', bg: 'rgba(220,38,38,.12)', symbol: '●', label: 'ידיעה שלילית' }
   return { color: 'var(--sent-flat)', bg: 'rgba(100,116,139,.14)', symbol: '●', label: 'ניטרלית' }
 }
 

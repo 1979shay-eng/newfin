@@ -105,8 +105,12 @@ interface Summary {
   } | null
 }
 
-const UP = '#16a34a'
-const DOWN = '#dc2626'
+// טוקנים של CSS (עומדים ב-AA בשתי התמות) — עובדים גם בתוך color-mix
+const UP = 'var(--up)'
+const DOWN = 'var(--down)'
+// גרפים ומפת חום — הצבע המקורי (גרפיקה דורשת 3:1, לא 4.5:1)
+const UPF = 'var(--up-fill)'
+const DOWNF = 'var(--down-fill)'
 const REFRESH_MS = 2 * 60 * 1000
 const PERIODS: Period[] = ['d1', 'd7', 'mtd', 'm1', 'ytd']
 const PERIOD_LABEL: Record<Period, string> = {
@@ -659,7 +663,7 @@ function Sparkline({ days }: { days: Day[] }) {
   const max = Math.max(...closes)
   const span = max - min || 1
   const pts = closes.map((c, i) => `${(i / (closes.length - 1)) * W},${H - 2 - ((c - min) / span) * (H - 4)}`).join(' ')
-  const color = closes[closes.length - 1] >= closes[0] ? UP : DOWN
+  const color = closes[closes.length - 1] >= closes[0] ? UPF : DOWNF
   return (
     <svg
       width={W}
@@ -955,7 +959,7 @@ function HeatTile({
   const v = r[period] ?? 0
   const t = Math.min(1, Math.abs(v) / scale)
   const flat = Math.abs(v) < 0.05
-  const bg = flat ? 'var(--chip)' : `color-mix(in oklab, ${v > 0 ? UP : DOWN} ${Math.round(14 + t * 46)}%, var(--surface))`
+  const bg = flat ? 'var(--chip)' : `color-mix(in oklab, ${v > 0 ? UPF : DOWNF} ${Math.round(14 + t * 46)}%, var(--surface))`
   // המדד לא מתפרש לרוחב לפי משקל 100% — אריח בגודל רגיל
   const w = weighted && r.weight && !r.bench ? r.weight : 1
   // בהשוואה (עמודה צרה) — אריחים קטנים יותר ובלי פתיחת מניות

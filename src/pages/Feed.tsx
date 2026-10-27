@@ -326,7 +326,7 @@ export default function Feed() {
                     : `${filtered.length} דיווחים`}
             {!loading && !archive && newCount > 0 && (
               <span
-                className="nf-sc rounded-full px-2 py-0.5 text-[11.5px] font-bold"
+                className="nf-sc rounded-full px-2 py-0.5 text-[12px] font-bold"
                 style={{ ['--sc' as string]: 'var(--accent)' }}
               >
                 {newCount} חדשים מאז הביקור האחרון
@@ -548,7 +548,7 @@ function SectorChip({
     >
       {children}
       {count !== undefined && (
-        <span className="tabular-nums text-[11px] opacity-65">{count}</span>
+        <span className="tabular-nums text-[12px] opacity-65">{count}</span>
       )}
     </button>
   )
