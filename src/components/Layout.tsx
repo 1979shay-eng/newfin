@@ -67,26 +67,27 @@ export default function Layout() {
         className="sticky top-0 z-30 border-b backdrop-blur-xl"
         style={{ background: 'var(--nav)', borderColor: 'var(--line2)' }}
       >
-        <div className={`mx-auto flex ${width} items-center justify-between px-4 py-3 sm:px-6`}>
+        {/* במסך צר: שורה עליונה — לוגו + פעולות; שורה שנייה — הקישורים, נגללת לרוחב
+            בלי פס גלילה. בשורה אחת הם חרגו מרוחב הטלפון (421px מול 375) והקטינו את
+            כל האתר. מ-sm ומעלה — שורה אחת כמו קודם. */}
+        <div className={`mx-auto flex ${width} flex-wrap items-center justify-between gap-x-2 px-4 pb-1 pt-2.5 sm:flex-nowrap sm:px-6 sm:py-3`}>
           <Link to="/" className="flex items-center gap-2">
             <Logo />
-            {/* מילת הלוגו נושרת במסך צר — האייקון לבדו מקשר לבית */}
-            <span
-              className="hidden text-[19px] font-extrabold tracking-tight sm:inline"
-              style={{ color: 'var(--ink)' }}
-            >
+            <span className="text-[19px] font-extrabold tracking-tight" style={{ color: 'var(--ink)' }}>
               NewFin
             </span>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav
+            aria-label="ניווט ראשי"
+            className="order-last -mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] sm:order-none sm:mx-0 sm:w-auto sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+          >
             {items.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 end={n.end}
-                // py גבוה יותר במסך צר בלבד — מביא את שטח הנגיעה ל-44px
-                // מבלי לגזול רוחב, שאין ממנו עודף בבר.
-                className={`inline-flex items-center rounded-[9px] px-3.5 py-[13px] text-sm font-bold transition-colors sm:py-[7px]${
+                // שטח נגיעה של 44px בטלפון; במחשב — נמוך יותר
+                className={`inline-flex shrink-0 items-center rounded-[9px] px-3.5 py-[12px] text-sm font-bold transition-colors sm:py-[7px]${
                   n.desktopOnly ? ' hidden sm:inline-flex' : ''
                 }`}
                 style={({ isActive }) =>
@@ -98,8 +99,9 @@ export default function Layout() {
                 {n.label}
               </NavLink>
             ))}
-
-            <span className="mx-1.5 h-5 w-px" style={{ background: 'var(--line2)' }} />
+          </nav>
+          <div className="flex items-center gap-1">
+            <span className="mx-1.5 hidden h-5 w-px sm:block" style={{ background: 'var(--line2)' }} />
 
             {/* מתג כהה/בהיר */}
             <button
@@ -144,7 +146,7 @@ export default function Layout() {
                 כניסה
               </button>
             )}
-          </nav>
+          </div>
         </div>
       </header>
 

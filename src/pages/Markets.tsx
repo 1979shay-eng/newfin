@@ -599,7 +599,8 @@ function IndexCard({ ix }: { ix: IndexRow }) {
           {ix.source}
         </div>
       )}
-      <div className="mt-3 flex items-end justify-between gap-3">
+      {/* flex-wrap: בכרטיס צר קו המגמה יורד לשורה משלו במקום לחרוג מהכרטיס */}
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
         <div className="flex gap-5">
           {(['d1', 'd7'] as Period[]).map((p) => (
             <div key={p}>
