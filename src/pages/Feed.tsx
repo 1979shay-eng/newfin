@@ -217,25 +217,21 @@ export default function Feed() {
         )}
       </p>
 
-      {/* לשוניות */}
-      <div className="mt-5 flex gap-2">
-        <Tab active={tab === 'all'} onClick={() => setTab('all')}>
-          כללי
-        </Tab>
-        <Tab active={tab === 'watched'} onClick={() => setTab('watched')}>
-          במעקב{watch.length > 0 ? ` (${watch.length})` : ''}
-        </Tab>
-      </div>
-
-      {/* Toolbar */}
-      <div
-        className="mt-3 rounded-[14px] border p-3.5"
-        style={{ background: 'var(--surface)', borderColor: 'var(--line2)', boxShadow: 'var(--shadow)' }}
-      >
-        {/* שורה 1: חיפוש + תצוגה תמציתית */}
-        <div className="flex items-center gap-2">
+      {/* שורת סינון — שתי שורות במקום ארבע (היו ~25 בחירות לפני הידיעה הראשונה):
+          (1) מה מציגים + חיפוש + תמציתי; (2) חשיבות, מיון וסקטור. הסקטורים בבורר
+          אחד עם מונה, במקום 14 צ'יפים עם פס גלילה. */}
+      <div className="mt-5 rounded-[14px] border p-3" style={{ background: 'var(--surface)', borderColor: 'var(--line2)' }}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Seg
+            opts={[
+              { key: 'all' as Tab, label: 'כללי' },
+              { key: 'watched' as Tab, label: watch.length > 0 ? `במעקב (${watch.length})` : 'במעקב' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
           <div
-            className="nf-search flex flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5"
+            className="nf-search order-last flex w-full min-w-0 items-center gap-2.5 rounded-[11px] px-3 py-2 sm:order-none sm:w-auto sm:flex-1"
             style={{ background: 'var(--field)', border: '1px solid var(--line2)' }}
           >
             <svg
@@ -272,38 +268,23 @@ export default function Feed() {
           </div>
           <button
             onClick={() => setCompact((c) => !c)}
-            className="shrink-0 rounded-[11px] px-4 py-2.5 text-sm font-bold transition-colors"
+            aria-pressed={compact}
+            title="תצוגה תמציתית — כותרות בלבד"
+            className="ms-auto inline-flex shrink-0 items-center gap-1.5 rounded-[11px] px-3 py-2 text-[13px] font-bold transition-colors sm:ms-0"
             style={compact ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' } : { background: 'var(--field)', color: 'var(--muted)' }}
           >
-            תצוגה תמציתית
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+              <path d="M4 7h16M4 12h16M4 17h10" />
+            </svg>
+            תמציתי
           </button>
         </div>
 
-        {/* שורה 2: חשיבות + מיון */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
           <Seg label="חשיבות" opts={IMP_OPTS} value={importance} onChange={setImportance} />
           <Seg label="מיון" opts={SORT_OPTS} value={sort} onChange={setSort} />
+          {sectors.length > 0 && <SectorSelect value={sector} onChange={setSector} sectors={sectors} />}
         </div>
-
-        {/* שורה 3: צ'יפי סקטור */}
-        {sectors.length > 0 && (
-          <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
-            <SectorChip active={sector === 'all'} color="var(--accent)" onClick={() => setSector('all')}>
-              כל הסקטורים
-            </SectorChip>
-            {sectors.map(([s, n]) => (
-              <SectorChip
-                key={s}
-                active={sector === s}
-                color={sectorColor(s)}
-                count={n}
-                onClick={() => setSector(s)}
-              >
-                {s}
-              </SectorChip>
-            ))}
-          </div>
-        )}
       </div>
 
       {topNow.length > 0 && <TopNow items={topNow} />}
@@ -467,38 +448,24 @@ function ListCard({ children }: { children: ReactNode }) {
   )
 }
 
-function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-[11px] px-[18px] py-[9px] text-sm font-bold transition-colors"
-      style={
-        active
-          ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' }
-          : { background: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--line2)' }
-      }
-    >
-      {children}
-    </button>
-  )
-}
-
 function Seg<T extends string>({
   label,
   opts,
   value,
   onChange,
 }: {
-  label: string
+  label?: string
   opts: { key: T; label: string }[]
   value: T
   onChange: (v: T) => void
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[12.5px] font-bold" style={{ color: 'var(--muted2)' }}>
-        {label}
-      </span>
+      {label && (
+        <span className="text-[12.5px] font-bold" style={{ color: 'var(--muted2)' }}>
+          {label}
+        </span>
+      )}
       <div className="inline-flex gap-0.5 rounded-[11px] p-[3px]" style={{ background: 'var(--seg)' }}>
         {opts.map((o) => {
           const on = value === o.key
@@ -506,6 +473,7 @@ function Seg<T extends string>({
             <button
               key={o.key}
               onClick={() => onChange(o.key)}
+              aria-pressed={on}
               className="rounded-lg px-3 py-1.5 text-[12.5px] font-bold transition-colors"
               style={
                 on
@@ -522,34 +490,58 @@ function Seg<T extends string>({
   )
 }
 
-// צ'יפ סקטור — נושא את צבע הסקטור שלו תמיד, לא רק כשהוא פעיל. הצבע הוא
-// זהות (אותו גוון כמו התגית בכרטיס), ולכן הבר עצמו הופך למקרא של הפיד.
-// הגזירה לרקע/טקסט/טבעת יושבת ב-CSS (`.nf-sc`) כדי לתקן ניגודיות בשתי התמות.
-function SectorChip({
-  active,
-  color,
-  count,
-  onClick,
-  children,
+// בורר סקטור — select מקורי (נגיש ומוכר), במקום 14 צ'יפים. המונה בכל אפשרות
+// עונה על "איפה קורה משהו עכשיו"; כשנבחר סקטור, נקודה בצבע שלו (אותו גוון כמו
+// התגית בכרטיס) מזכירה את הסינון הפעיל.
+function SectorSelect({
+  value,
+  onChange,
+  sectors,
 }: {
-  active: boolean
-  color: string
-  count?: number
-  onClick: () => void
-  children: ReactNode
+  value: string
+  onChange: (v: string) => void
+  sectors: [string, number][]
 }) {
   return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className="nf-sc nf-chip flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[20px] px-3.5 py-1.5 text-[12.5px]"
-      style={{ ['--sc' as string]: color, fontWeight: active ? 800 : 600 }}
-    >
-      {children}
-      {count !== undefined && (
-        <span className="tabular-nums text-[12px] opacity-65">{count}</span>
-      )}
-    </button>
+    <label className="flex items-center gap-2">
+      <span className="text-[12.5px] font-bold" style={{ color: 'var(--muted2)' }}>
+        סקטור
+      </span>
+      <span
+        className="nf-search relative inline-flex items-center gap-2 rounded-[11px] py-1.5 pl-8 pr-3"
+        style={{ background: 'var(--seg)', border: '1px solid transparent' }}
+      >
+        {value !== 'all' && (
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: sectorColor(value) }} />
+        )}
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="cursor-pointer appearance-none bg-transparent text-[12.5px] font-bold outline-none"
+          style={{ color: value === 'all' ? 'var(--muted)' : 'var(--ink)' }}
+        >
+          <option value="all">כל הסקטורים</option>
+          {sectors.map(([s, n]) => (
+            <option key={s} value={s}>
+              {s} ({n})
+            </option>
+          ))}
+        </select>
+        <svg
+          aria-hidden
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--muted)"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          className="pointer-events-none absolute left-2.5"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </span>
+    </label>
   )
 }
 
