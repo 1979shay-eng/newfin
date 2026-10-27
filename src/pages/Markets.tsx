@@ -232,7 +232,7 @@ export default function Markets() {
                 <Sectors rows={data.il.breakdown[ilIndex] ?? []} bench={benchOf(data.il.indices, ilIndex)} view={view} weighted />
               </Section>
 
-              <Section title="מדדי הענף של הבורסה" hint='מדדי הענף הרשמיים של הבורסה לניירות ערך בתל אביב, מול ת"א-125 — המדד הרחב.'>
+              <Section title="מדדי הענף בתל אביב" hint='מדדי הענף הרשמיים, מול ת"א-125 — המדד הרחב.'>
                 <Sectors
                   rows={data.il.sectorIndices.map(({ name, ...s }) => ({ sector: name, ...s }))}
                   bench={benchOf(data.il.indices, 'ת"א-125')}
@@ -256,12 +256,12 @@ export default function Markets() {
             </>
           )}
 
+          {/* בלי שמות מקורות בכוונה — החלטת בעל האתר (27.10.2026) */}
           <p className="mt-6 text-[13px]" style={{ color: 'var(--muted)' }}>
-            מקור:{' '}
-            {market === 'il'
-              ? 'הבורסה לניירות ערך בתל אביב'
-              : `מחירים — Yahoo Finance; הרכב המדד, משקלים וסקטורים — קבצי האחזקות הרשמיים של קרנות SPDR (State Street)${data.us.holdingsAsOf ? `, ${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')}` : ''}`}
-            . פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד.{market === 'us' ? ' מכפילי רווח — ממוצע הרמוני משוקלל לפי משקל במדד, כולל חברות מפסידות (Yahoo Finance; עתידי = תחזית האנליסטים לשנה הבאה).' : ''} הנתונים מוצגים לצורכי מידע בלבד ואינם מהווים ייעוץ השקעות.
+            פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד
+            {market === 'us' && data.us.holdingsAsOf ? ` (${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')})` : ''}.
+            {market === 'us' ? ' מכפילי רווח — ממוצע הרמוני משוקלל לפי משקל במדד, כולל חברות מפסידות (עתידי = תחזית האנליסטים לשנה הבאה).' : ''} הנתונים
+            מוצגים לצורכי מידע בלבד ואינם מהווים ייעוץ השקעות.
           </p>
         </>
       )}

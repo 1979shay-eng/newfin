@@ -309,7 +309,7 @@ async function collectIsrael() {
     const indices = []
     for (const ix of IL_INDICES) {
       try {
-        indices.push({ id: ix.id, name: ix.name, source: `מדד ${ix.name} · מספר מדד ${ix.id} באתר הבורסה`, ...(await indexRow(ix.id)) })
+        indices.push({ id: ix.id, name: ix.name, ...(await indexRow(ix.id)) })
       } catch (e) {
         errors.push(`מדד ${ix.name}: ${e.message}`)
       }
@@ -323,7 +323,7 @@ async function collectIsrael() {
       for (const ix of cat) {
         try {
           const { days, date, ...r } = await indexRow(ix.IndexId)
-          sectorIndices.push({ id: ix.IndexId, name: ix.Text, source: `מספר מדד ${ix.IndexId} באתר הבורסה`, ...r })
+          sectorIndices.push({ id: ix.IndexId, name: ix.Text, ...r })
         } catch (e) {
           errors.push(`מדד ענף ${ix.Text}: ${e.message}`)
         }
@@ -456,7 +456,7 @@ async function collectUS() {
     try {
       const { bases: b, ...h } = await yahooHistory(ix.symbol)
       bases ??= b
-      indices.push({ symbol: ix.symbol, name: ix.name, source: `${ix.full} (${ix.symbol})`, ...h })
+      indices.push({ symbol: ix.symbol, name: ix.name, source: ix.full, ...h })
     } catch (e) {
       errors.push(e.message)
     }
@@ -786,7 +786,13 @@ for (const m of ['il', 'us']) {
 
 // --test: כתיבה לקובץ נפרד, כדי שבדיקה ידנית לא תתנגש בריצת הענן
 const OUT = process.argv.includes('--test') ? 'market/summary-test.json' : 'market/summary.json'
-const { error } = await db.storage.from(BUCKET).upload(OUT, JSON.stringify(summary), {
+// מקורות הנתונים לא נחשפים לגולשים (החלטת בעל האתר, 27.10.2026): השגיאות — שמזכירות
+// מקורות וכתובות — נשארות בלוג בלבד, ואין הפניות לאתר המקור (גם לא בנתון ישן מ-prev).
+const publicJson = (o) =>
+  JSON.stringify(o, (k, v) =>
+    k === 'errors' ? undefined : k === 'source' && typeof v === 'string' ? (/באתר הבורסה/.test(v) ? undefined : v.replace(/s*(^[^)]*)/, '')) : v,
+  )
+const { error } = await db.storage.from(BUCKET).upload(OUT, publicJson(summary), {
   upsert: true,
   contentType: 'application/json',
   cacheControl: '60',

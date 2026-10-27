@@ -8,11 +8,9 @@
 //   FRED (הפד בסנט לואיס) — מרווחי ICE BofA, ריביות ותשואות של מועצת הפד, S&P 500,
 //                     ציפיות אינפלציה של הפד בקליבלנד
 //   בנק ישראל       — ממשק הסטטיסטיקה הרשמי (ריבית, שער יציג)
+//   הבורסה בת"א     — היסטוריית ת"א-35 מהמטמון של markets.mjs (market/history.json)
+//   פרמיית הסיכון   — מחושבת: מכפיל רווח עתידי (market/summary.json) מול ריבית ריאלית לשנתיים
 //   דמודרן ושילר    — פרמיות סיכון היסטוריות (ERP_LONG)
-//
-// 27.10.2026: הוסרו ת"א-35 מול ממוצע 200 יום ופרמיית הסיכון המחושבת. שתיהן נשענו
-// על markets.mjs — נתוני הבורסה (בלי רישיון הפצה) ומכפילי Yahoo (API לא רשמי) —
-// שהושבת. לחידוש: אחרי הסדרת רישיון נתונים (ראה git log).
 //
 // עיקרון: אף מספר לא מוצג בלי מקור רשמי (המקור מתועד כאן ולא נחשף בקובץ הציבורי). אינדיקטור שנכשל — נשאר הערך הקודם, מסומן
 // בתאריך שלו. לעולם לא מנוחש.
@@ -293,8 +291,33 @@ const INDICATORS = [
     term: '200-Day Moving Average — הממוצע של מחירי הסגירה ב-200 ימי המסחר האחרונים (כ-10 חודשים). מדד שנסחר מעליו נחשב במגמה ארוכה עולה, ומתחתיו — יורדת.',
     valueHelp: 'סטיות תקן: המרחק מהממוצע חלקי התנודתיות הרגילה של המדד באותם 200 יום. 0 = על הממוצע; 1 או 1- = מרחק משמעותי; 2 או 2- = קיצוני.',
     org: 'S&P Dow Jones Indices, דרך FRED', url: FRED_URL('SP500'), unit: 'z', kind: 'trend', maxAge: 7, zones: MA_ZONES, what: MA_WHAT,
-    // FRED מתעדכן ביום-יומיים איחור — מקובל למדד מגמה של 200 יום
-    fetch: async () => vsMA200(await fred('SP500')),
+    fetch: async (ctx) => {
+      const rows = await fred('SP500')
+      // FRED מתעדכן ביום-יומיים איחור. סגירות מאוחרות יותר — מדף השווקים (אותו מדד)
+      const last = rows[rows.length - 1].date
+      for (const d of ctx.spxDays) if (d.date > last) rows.push({ date: d.date, value: d.close })
+      return vsMA200(rows)
+    },
+  },
+  {
+    id: 'ta35200', group: 'risk', name: 'ת"א-35 מול ממוצע 200 יום', nick: '200DMA', official: 'TA-35 Index vs. 200-day moving average', code: 'TA-35',
+    nickHe: 'ממוצע נע 200 יום',
+    term: '200-Day Moving Average — הממוצע של מחירי הסגירה ב-200 ימי המסחר האחרונים (כ-10 חודשים). מדד שנסחר מעליו נחשב במגמה ארוכה עולה, ומתחתיו — יורדת.',
+    valueHelp: 'סטיות תקן: המרחק מהממוצע חלקי התנודתיות הרגילה של המדד באותם 200 יום. 0 = על הממוצע; 1 או 1- = מרחק משמעותי; 2 או 2- = קיצוני.',
+    org: 'הבורסה לניירות ערך בתל אביב', url: 'https://market.tase.co.il/he/market_data/index/142/major_data', unit: 'z', kind: 'trend', maxAge: 7,
+    zones: MA_ZONES, what: MA_WHAT,
+    fetch: async (ctx) => {
+      const e = ctx.history?.idx?.['142']
+      if (!e) throw new Error('ת"א-35: אין היסטוריה במטמון')
+      const rows = Object.keys(e.rows)
+        .filter((d) => d >= e.from)
+        .sort()
+        .map((date) => ({ date, value: Array.isArray(e.rows[date]) ? e.rows[date][1] : e.rows[date] }))
+        .filter((r) => Number.isFinite(r.value))
+      const out = vsMA200(rows)
+      if (!out.length) throw new Error('ת"א-35: פחות מ-200 ימי מסחר במטמון')
+      return out
+    },
   },
   {
     id: 'hy', group: 'credit', name: 'מרווח אג"ח בדירוג נמוך', nick: 'Junk Spread · HY OAS', official: 'ICE BofA US High Yield Index Option-Adjusted Spread', code: 'BAMLH0A0HYM2',
@@ -616,22 +639,52 @@ function build(spec, rows) {
   }
 }
 
+// ── פרמיית סיכון המניות ───────────────────────────────────────────
+// תשואת הרווח העתידית (1 ÷ מכפיל רווח עתידי) פחות הריבית הריאלית לשנתיים,
+// בדומה למודל הפד. הריבית הריאלית לשנתיים = תשואת אג"ח ממשלתי לשנתיים (DGS2)
+// פחות ציפיות האינפלציה לשנתיים של הפד בקליבלנד (EXPINF2YR, חודשי) — אין אג"ח
+// צמוד לשנתיים. המכפיל — מדף השווקים (תחזית האנליסטים ב-Yahoo).
+// אין לזה מקור היסטורי — הסדרה נצברת כאן, נקודה לכל יום.
+function erp(summary, real, prevHist) {
+  const spx = summary?.us?.indices?.find((i) => i.symbol === '^GSPC')
+  if (!spx?.fpe || !real) return { block: null, hist: prevHist }
+  const calc = (fpe) => (fpe > 0 ? { ey: round(100 / fpe), erp: round(100 / fpe - real.value) } : { ey: null, erp: null })
+  const hist = { ...prevHist, [spx.date]: calc(spx.fpe).erp }
+  const series = Object.keys(hist)
+    .sort()
+    .map((d) => [d, hist[d]])
+  return {
+    hist,
+    block: {
+      date: spx.date,
+      real,
+      index: { name: 'S&P 500', fpe: spx.fpe, ...calc(spx.fpe) },
+      sectors: (summary.us.breakdown ?? [])
+        .filter((s) => s.fpe)
+        .map((s) => ({ sector: s.sector, weight: s.weight, fpe: s.fpe, ...calc(s.fpe) }))
+        .sort((a, b) => b.erp - a.erp),
+      history: series,
+      since: series[0][0],
+    },
+  }
+}
 
 // ── מד מצב-על — נגזר מהמספרים בלבד, בלי AI ─────────────────────────
 // ממוצע המיקום של האינדיקטורים שיש להם כיוון ברור והיסטוריה מלאה: פחד (5 שנים),
-// מגמת S&P 500, עקום. מרווחי האשראי בחוץ — 3 שנים זה חלון קצר מדי.
-const CORE = ['vix', 'spx200', 'curve']
+// מגמה בשני השווקים, עקום. מרווחי האשראי בחוץ — 3 שנים זה חלון קצר מדי.
+const CORE = ['vix', 'spx200', 'ta35200', 'curve']
 const OVERALL_ZONES = ['לחוצים', 'מעורבים', 'רגועים']
 function overall(items) {
   const by = Object.fromEntries(items.map((i) => [i.id, i]))
   const core = CORE.map((k) => by[k]).filter((i) => i?.gauge != null && !i.stale)
-  if (core.length < 2) return null
+  if (core.length < 3) return null
   const g = round(core.reduce((a, i) => a + i.gauge, 0) / core.length, 0)
   const sgn = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(1)}`
   const ma = (i, name) => `${name} ${i.value >= 0 ? 'מעל ' : 'מתחת ל'}ממוצע 200 יום (${sgn(i.value)} סטיות תקן, ${sgn(i.dist)}%)`
   const parts = []
   if (by.vix?.pct != null) parts.push(`מדד הפחד VIX עומד על ${by.vix.value.toFixed(2)} — גבוה מ-${by.vix.pct}% מהימים ב-5 השנים האחרונות`)
   if (by.spx200?.dist != null) parts.push(ma(by.spx200, 'S&P 500'))
+  if (by.ta35200?.dist != null) parts.push(ma(by.ta35200, 'ת"א-35'))
   if (by.curve) parts.push(`עקום התשואות ${by.curve.reading} (10 מול 2 שנים: ${by.curve.value > 0 ? '+' : ''}${by.curve.value.toFixed(2)})`)
   return {
     gauge: g,
@@ -647,14 +700,23 @@ function overall(items) {
 const t0 = Date.now()
 console.log('🧭 אינדיקטורים — מתחיל...')
 
-const prev = await loadJson('market/indicators-v2.json')
+const [summary, history, prev, prevErp] = await Promise.all([
+  loadJson('market/summary.json'),
+  loadJson('market/history.json'),
+  loadJson('market/indicators-v2.json'),
+  loadJson('market/erp-history.json'),
+])
+const ctx = {
+  history,
+  spxDays: summary?.us?.indices?.find((i) => i.symbol === '^GSPC')?.days ?? [],
+}
 
 const errors = []
 const items = []
 const today = new Date().toISOString().slice(0, 10)
 for (const spec of INDICATORS) {
   try {
-    const it = build(spec, await spec.fetch())
+    const it = build(spec, await spec.fetch(ctx))
     // מבטים משלימים (צמיחה שנתית / מחצית) — כישלון בהם לא מפיל את האינדיקטור
     if (spec.extra) {
       try {
@@ -679,6 +741,18 @@ if (!items.length) {
   for (const e of errors) console.error('  ', e)
   process.exit(1)
 }
+
+// ריבית ריאלית לשנתיים לפרמיית הסיכון
+let real = null
+const us2 = items.find((i) => i.id === 'us2' && !i.stale)
+try {
+  const exp = await fred('EXPINF2YR')
+  const e = exp[exp.length - 1]
+  if (us2) real = { value: round(us2.value - e.value), nominal: us2.value, nominalDate: us2.date, inflation: round(e.value), inflationDate: e.date }
+} catch (e) {
+  errors.push(`ציפיות אינפלציה לשנתיים: ${e.message}`)
+}
+const { block: erpBlock, hist: erpHist } = erp(summary, real, prevErp ?? {})
 
 // פרמיות סיכון עם היסטוריה ארוכה — לפרופורציה. שיטות שונות משלנו, ולכן מוצגות
 // לצד הפרמיה שלנו ולא מושוות אליה אחד-לאחד. החלון = כל ההיסטוריה של המקור.
@@ -720,6 +794,7 @@ for (const spec of ERP_LONG) {
     if (old) erpLong.push({ ...old, name: spec.name, stale: true })
   }
 }
+if (!erpBlock) errors.push('פרמיית סיכון: חסר מכפיל עתידי של S&P 500 או ריבית ריאלית לשנתיים')
 
 // מקורות הנתונים לא נחשפים לגולשים: שם הגוף, הקישור, השם הרשמי וקוד הסדרה נשארים
 // בהגדרות לתיעוד פנימי ולא נכתבים לקובץ הציבורי (גם לא מנתון ישן שנשמר לפני כן).
@@ -729,7 +804,7 @@ const out = {
   updated_at: new Date().toISOString(),
   overall: overall(items),
   groups: GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.group === g.id).map(strip) })).filter((g) => g.items.length),
-  erp: null, // פרמיית הסיכון המחושבת הושבתה (מכפילי Yahoo) — ראה הערה בראש הקובץ
+  erp: erpBlock ?? (prev?.erp?.real?.value != null ? prev.erp : null),
   erpLong: erpLong.map(strip),
 }
 
@@ -738,8 +813,13 @@ const put = (path, obj) =>
   db.storage.from(BUCKET).upload(path, JSON.stringify(obj), { upsert: true, contentType: 'application/json', cacheControl: '60' })
 const { error } = await put(TEST ? 'market/indicators-test.json' : 'market/indicators-v2.json', out)
 if (error) throw error
+if (erpBlock && !TEST) {
+  const { error: e2 } = await put('market/erp-history.json', erpHist)
+  if (e2) throw e2
+}
 
 for (const i of items) console.log(`  ${i.stale ? '⚠️' : '✅'} ${i.name}: ${i.value} (${i.date}) — ${i.reading ?? '—'}, מד ${i.gauge ?? '—'}, גוון ${i.shade}`)
+if (erpBlock) console.log(`  ✅ פרמיית סיכון S&P 500: ${erpBlock.index.erp}% מול ריאלית לשנתיים ${real.value}% (${erpBlock.sectors.length} סקטורים)`)
 for (const i of erpLong) console.log(`  ${i.stale ? '⚠️' : '✅'} ${i.name}: ${i.value}% (${i.date}, מאז ${i.since}) — ${i.reading}, אחוזון ${i.pct}, מד ${i.gauge}, גוון ${i.shade}`)
 if (out.overall) console.log(`📝 תנאי השוק ${out.overall.reading} (${out.overall.gauge}): ${out.overall.text}`)
 if (errors.length) console.warn(`⚠️ ${errors.length} שגיאות:`, errors)

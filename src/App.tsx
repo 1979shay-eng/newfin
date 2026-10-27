@@ -1,7 +1,8 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import Feed from './pages/Feed'
 import Companies from './pages/Companies'
+import Markets from './pages/Markets'
 import Indicators from './pages/Indicators'
 import CompanyProfile from './pages/CompanyProfile'
 import About from './pages/About'
@@ -55,9 +56,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Feed />} />
-          {/* דף השווקים מושבת: נתוני הבורסה (TASE) ו-Yahoo נמשכו בלי רישיון הפצה.
-              הקוד נשאר (pages/Markets.tsx, collector/markets.mjs) לחידוש אחרי הסדרת רישיון. */}
-          <Route path="markets" element={<Navigate to="/" replace />} />
+          <Route path="markets" element={<Markets />} />
           <Route path="indicators" element={<Indicators />} />
           <Route path="companies" element={<Companies />} />
           <Route path="company/:slug" element={<CompanyProfile />} />

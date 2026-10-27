@@ -9,13 +9,14 @@ import { DISCLAIMER, LEGAL_PAGES } from '../lib/legal'
 // ליעדים האמיתיים (פיד, חברות). "אודות" מופיע בפוטר בכל הרזולוציות.
 const navItems: { to: string; label: string; end?: boolean; adminOnly?: boolean; desktopOnly?: boolean }[] = [
   { to: '/', label: 'פיד', end: true },
+  { to: '/markets', label: 'שווקים' },
   { to: '/indicators', label: 'אינדיקטורים' },
   { to: '/companies', label: 'חברות' },
   { to: '/about', label: 'אודות', desktopOnly: true },
   { to: '/admin', label: 'ניהול', adminOnly: true },
 ]
 
-const WIDE_ROUTES = ['/indicators']
+const WIDE_ROUTES = ['/markets', '/indicators']
 
 function Logo() {
   return (
