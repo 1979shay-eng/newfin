@@ -380,7 +380,9 @@ function Compare({
   const usRows = data.us.breakdown ?? data.us.sectors
   return (
     <>
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-3">
+      {/* רשת משותפת (subgrid): כותרת, שורת מדדים, הערה וטבלה — כל שורה באותו גובה
+          בשלוש העמודות, גם כשבישראל יש בורר מדד גבוה או כששורת המדדים נשברת */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-3 lg:grid-rows-[auto_auto_auto_1fr] lg:gap-y-0">
         <RegionPanel
           title="ישראל"
           indices={data.il.indices}
@@ -428,15 +430,16 @@ function RegionPanel({
   action?: ReactNode
   children: ReactNode
 }) {
+  // ארבעה ילדים תמיד (גם הערה ריקה) — כדי שה-subgrid ישבץ כל אחד בשורה שלו
   return (
-    <section className="min-w-0">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+    <section className="min-w-0 lg:row-span-4 lg:grid lg:grid-rows-subgrid">
+      <div className="mb-2 flex min-h-[42px] flex-wrap items-center justify-between gap-2">
         <h2 className="text-[20px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
           {title}
         </h2>
         {action}
       </div>
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap content-start gap-2">
         {indices.map((ix) => (
           <span key={ix.name} className="rounded-[10px] border px-2.5 py-1.5 text-[14px] font-bold" style={{ borderColor: 'var(--line2)', background: 'var(--surface)', color: 'var(--ink2)' }}>
             {ix.name}{' '}
@@ -446,12 +449,14 @@ function RegionPanel({
           </span>
         ))}
       </div>
-      {stale && (
-        <p className="mb-2 text-[13px] font-semibold" style={{ color: 'var(--muted)' }}>
-          לא עודכן מאז {new Date(stale).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
-        </p>
-      )}
-      <Card className="overflow-hidden">{children}</Card>
+      <div>
+        {stale && (
+          <p className="mb-2 text-[13px] font-semibold" style={{ color: 'var(--muted)' }}>
+            לא עודכן מאז {new Date(stale).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
+      </div>
+      <Card className="self-start overflow-hidden">{children}</Card>
     </section>
   )
 }
