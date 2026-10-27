@@ -9,7 +9,11 @@
 
   /* ── טוקני עיצוב לפי ה-handoff — בהיר (ברירת מחדל) ──────────────── */
   :root {
-    --accent: #2f6df0;
+    /* פטרול עמוק — הבחירה, הקישור והפוקוס. accent לטקסט ולסימון; accent-fill
+       למשטח של כפתור, ו-on-accent לטקסט עליו (בבהיר הם אותו גוון, בכהה לא). */
+    --accent: #0e5c6b;
+    --accent-fill: #0e5c6b;
+    --on-accent: #ffffff;
     --bg: #eef0f3;
     --surface: #ffffff;
     --ink: #141d2b;
@@ -27,19 +31,23 @@
     --nav: rgba(255, 255, 255, 0.85);
     --shadow: 0 28px 64px -38px rgba(20, 30, 60, 0.26);
     --grid: rgba(23, 34, 60, 0.045);
-    --glow1: rgba(47, 109, 240, 0.13);
+    --glow1: rgba(14, 92, 107, 0.1);
     --glow2: rgba(20, 184, 166, 0.1);
     --dot-empty: #d6dbe3;
     --imp-low: #3f6fd1;
     --sent-flat: #64748b;
     --seg-active-shadow: 0 1px 2px rgba(20, 30, 60, 0.12);
-    --ring: rgba(47, 109, 240, 0.18);
+    --ring: rgba(14, 92, 107, 0.22);
     --noise-opacity: 0.5;
     color-scheme: light;
   }
 
   /* ── כהה ──────────────────────────────────────────────────────── */
   :root[data-theme='dark'] {
+    /* בכהה: פטרול בהיר לטקסט (8.4:1), ומשטח כהה יותר לכפתורים עם טקסט לבן (5.7:1) */
+    --accent: #5fc0cf;
+    --accent-fill: #17707f;
+    --on-accent: #ffffff;
     --bg: #0a0f1a;
     --surface: #101827;
     --ink: #eef3fb;
@@ -57,13 +65,13 @@
     --nav: rgba(12, 19, 34, 0.82);
     --shadow: 0 28px 64px -38px rgba(0, 0, 0, 0.6);
     --grid: rgba(255, 255, 255, 0.05);
-    --glow1: rgba(47, 109, 240, 0.26);
+    --glow1: rgba(95, 192, 207, 0.16);
     --glow2: rgba(124, 92, 246, 0.2);
     --dot-empty: rgba(255, 255, 255, 0.14);
     --imp-low: #6f9bff;
     --sent-flat: #9aa6bb;
     --seg-active-shadow: none;
-    --ring: rgba(111, 155, 255, 0.22);
+    --ring: rgba(95, 192, 207, 0.25);
     --noise-opacity: 0.35;
     color-scheme: dark;
   }

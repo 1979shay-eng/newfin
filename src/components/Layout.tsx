@@ -22,7 +22,7 @@ function Logo() {
   return (
     <span
       className="flex h-[27px] w-[27px] items-center justify-center rounded-lg text-white"
-      style={{ background: 'var(--accent)' }}
+      style={{ background: 'var(--accent-fill)' }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 17l5-5 4 4 8-8" />
@@ -118,7 +118,7 @@ export default function Layout() {
               <div className="mr-1.5 flex items-center gap-1.5 border-r pr-2" style={{ borderColor: 'var(--line2)' }}>
                 <span
                   className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white"
-                  style={{ background: 'var(--accent)' }}
+                  style={{ background: 'var(--accent-fill)' }}
                   title={user.email ?? ''}
                 >
                   {initial}
@@ -139,7 +139,7 @@ export default function Layout() {
               <button
                 onClick={() => setAuthOpen(true)}
                 className="mr-1.5 inline-flex items-center rounded-full px-4 py-[12px] text-sm font-semibold text-white sm:py-1.5"
-                style={{ background: 'var(--accent)' }}
+                style={{ background: 'var(--accent-fill)' }}
               >
                 כניסה
               </button>

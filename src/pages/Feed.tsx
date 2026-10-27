@@ -273,7 +273,7 @@ export default function Feed() {
           <button
             onClick={() => setCompact((c) => !c)}
             className="shrink-0 rounded-[11px] px-4 py-2.5 text-sm font-bold transition-colors"
-            style={compact ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--field)', color: 'var(--muted)' }}
+            style={compact ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' } : { background: 'var(--field)', color: 'var(--muted)' }}
           >
             תצוגה תמציתית
           </button>
@@ -475,7 +475,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
       className="rounded-[11px] px-[18px] py-[9px] text-sm font-bold transition-colors"
       style={
         active
-          ? { background: 'var(--accent)', color: '#fff' }
+          ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' }
           : { background: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--line2)' }
       }
     >

@@ -284,7 +284,7 @@ function ReportForm({ item, onDone }: { item: FeedItem; onDone: () => void }) {
           onClick={send}
           disabled={!note.trim()}
           className="rounded-[10px] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-50"
-          style={{ background: 'var(--accent)' }}
+          style={{ background: 'var(--accent-fill)' }}
         >
           שליחה
         </button>

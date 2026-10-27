@@ -622,7 +622,7 @@ function Erp({ erp }: { erp: NonNullable<Data['erp']> }) {
                     <span className="flex min-w-0 items-center gap-2 text-[16px] font-bold" style={{ color: 'var(--ink)' }}>
                       <span className={bench ? 'font-extrabold' : 'truncate'}>{r.sector ?? r.name}</span>
                       {bench && (
-                        <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>
+                        <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] font-bold" style={{ background: 'var(--accent-fill)', color: 'var(--on-accent)' }}>
                           המדד
                         </span>
                       )}
@@ -695,7 +695,7 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
           aria-pressed={view === v}
           onClick={() => onChange(v)}
           className="rounded-[8px] px-4 py-1.5 text-[14px] font-bold transition-colors"
-          style={view === v ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--muted)' }}
+          style={view === v ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' } : { color: 'var(--muted)' }}
         >
           {v === 'cards' ? 'כרטיסים' : 'מפת חום'}
         </button>

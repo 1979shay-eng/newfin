@@ -919,7 +919,7 @@ function Sectors({
 const BENCH_BG = 'color-mix(in oklab, var(--accent) 7%, transparent)'
 function BenchTag() {
   return (
-    <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] font-bold" style={{ background: 'var(--accent)', color: '#fff' }}>
+    <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] font-bold" style={{ background: 'var(--accent-fill)', color: 'var(--on-accent)' }}>
       המדד
     </span>
   )
@@ -1111,7 +1111,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
       className="rounded-[11px] px-[18px] py-[9px] text-sm font-bold transition-colors"
       style={
         active
-          ? { background: 'var(--accent)', color: '#fff' }
+          ? { background: 'var(--accent-fill)', color: 'var(--on-accent)' }
           : { background: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--line2)' }
       }
     >
