@@ -87,6 +87,7 @@ interface Summary {
     stale_since?: string
     indices: IndexRow[]
     sectors: SectorRow[]
+    weightsAsOf?: string | null // משקלי הסקטורים במדד — מתעדכנים פעם ברבעון
     notes: { d1: string | null; d7: string | null }
   }
   // ענפים מקבילים בשלושת האזורים + מתאם תשואות שבועיות מתחילת השנה
@@ -155,6 +156,8 @@ const tone = (x: number | null | undefined) => (x == null || x === 0 ? 'var(--se
 const arrow = (x: number | null | undefined) => (x == null || x === 0 ? '' : x > 0 ? '▲' : '▼')
 // "2026-10-14" → "14.10"
 const shortDate = (iso: string) => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}`
+// יש משקלים לסקטורים (אירופה — רק אחרי שהאספן הוריד אותם)
+const hasWeights = (rows?: SectorRow[]) => Boolean(rows?.some((r) => r.weight != null))
 // מדד דגל → שורת השוואה בטבלת הסקטורים
 const benchOf = (indices: IndexRow[], name: string): SectorRow | undefined => {
   const ix = indices.find((i) => i.name === name)
@@ -204,6 +207,7 @@ export default function Markets() {
   const table = { period, sort, onSort }
 
   const updated = data ? new Date(data.updated_at) : null
+  const euWeighted = hasWeights(data?.eu?.sectors)
   const m = data?.[market]
   const lead = m?.indices[0]
   const windowLabel =
@@ -335,14 +339,21 @@ export default function Markets() {
             </>
           )}
           {market === 'eu' && data.eu && (
-            <Section title="סקטורים באירופה" hint="19 הסקטורים של STOXX Europe 600 — תשואת כל סקטור לפי קרן הסל העוקבת אחריו, מול המדד עצמו.">
-              <Sectors rows={data.eu.sectors} bench={benchOf(data.eu.indices, 'STOXX 600')} view={view} {...table} />
+            <Section
+              title="סקטורים באירופה"
+              hint={`19 הסקטורים של STOXX Europe 600 — תשואת כל סקטור לפי קרן הסל העוקבת אחריו, מול המדד עצמו.${
+                euWeighted ? ` המשקל — חלקו של הסקטור במדד${data.eu.weightsAsOf ? ` (נכון ל-${data.eu.weightsAsOf})` : ''}; מתעדכן פעם ברבעון.` : ''
+              }`}
+            >
+              <Sectors rows={data.eu.sectors} bench={benchOf(data.eu.indices, 'STOXX 600')} view={view} weighted={euWeighted} {...table} />
             </Section>
           )}
 
           {/* בלי שמות מקורות בכוונה — החלטת בעל האתר (27.10.2026) */}
           <p className="mt-6 text-[13px]" style={{ color: 'var(--muted)' }}>
-            {market === 'eu' ? 'תשואת כל סקטור — לפי קרן הסל העוקבת אחריו.' : 'פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד'}
+            {market === 'eu'
+              ? 'תשואת כל סקטור — לפי קרן הסל העוקבת אחריו. מכפיל רווח נוכחי — לפי הרווח ב-12 החודשים האחרונים.'
+              : 'פילוח הסקטורים מחושב לפי ההרכב הנוכחי של המדד'}
             {market === 'us' && data.us.holdingsAsOf ? ` (${data.us.holdingsAsOf.replace('As of ', 'נכון ל-')})` : ''}
             {market === 'eu' ? '' : '.'}
             {market === 'us' ? ' מכפילי רווח — ממוצע הרמוני משוקלל לפי משקל במדד, כולל חברות מפסידות (עתידי = תחזית האנליסטים לשנה הבאה).' : ''} הנתונים
@@ -397,7 +408,7 @@ function Compare({
         </RegionPanel>
         <RegionPanel title="אירופה" indices={data.eu?.indices ?? []} stale={data.eu?.stale_since} period={table.period}>
           {data.eu ? (
-            <Sectors rows={data.eu.sectors} bench={benchOf(data.eu.indices, 'STOXX 600')} view={view} compact {...table} />
+            <Sectors rows={data.eu.sectors} bench={benchOf(data.eu.indices, 'STOXX 600')} view={view} weighted={hasWeights(data.eu.sectors)} compact {...table} />
           ) : (
             <p className="px-5 py-6 text-[15px]" style={{ color: 'var(--muted)' }}>
               הנתונים של אירופה יתעדכנו בסבב האיסוף הבא.
@@ -606,14 +617,19 @@ function IndexCard({ ix }: { ix: IndexRow }) {
         </div>
         <Sparkline days={ix.days} />
       </div>
+      {/* כל מכפיל מוצג רק כשיש לו נתון (ב-STOXX 600 — נוכחי בלבד) */}
       {(ix.pe != null || ix.fpe != null) && (
         <div className="mt-3 flex gap-5 text-[14px] font-bold" style={{ color: 'var(--ink2)' }}>
-          <span>
-            מכפיל נוכחי <span className="tabular-nums">{fmtPE(ix.pe)}</span>
-          </span>
-          <span>
-            מכפיל עתידי <span className="tabular-nums">{fmtPE(ix.fpe)}</span>
-          </span>
+          {ix.pe != null && (
+            <span>
+              מכפיל נוכחי <span className="tabular-nums">{fmtPE(ix.pe)}</span>
+            </span>
+          )}
+          {ix.fpe != null && (
+            <span>
+              מכפיל עתידי <span className="tabular-nums">{fmtPE(ix.fpe)}</span>
+            </span>
+          )}
         </div>
       )}
       <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3" style={{ borderColor: 'var(--line2)' }}>

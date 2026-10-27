@@ -11,6 +11,8 @@
 //   הבורסה בת"א     — היסטוריית ת"א-35 מהמטמון של markets.mjs (market/history.json)
 //   פרמיית הסיכון   — מחושבת: מכפיל רווח עתידי (market/summary.json) מול ריבית ריאלית לשנתיים
 //   דמודרן ושילר    — פרמיות סיכון היסטוריות (ERP_LONG)
+//   אירופה          — הבנק המרכזי האירופי (ריבית, עקום AAA, אירו-דולר), Eurostat (אינפלציה,
+//                     תוצר), STOXX (VSTOXX), FRED (מרווח אג"ח באירו), STOXX 600 עצמו (מגמה)
 //
 // עיקרון: אף מספר לא מוצג בלי מקור רשמי (המקור מתועד כאן ולא נחשף בקובץ הציבורי). אינדיקטור שנכשל — נשאר הערך הקודם, מסומן
 // בתאריך שלו. לעולם לא מנוחש.
@@ -88,6 +90,65 @@ async function boi(flow, key, minRows = 30) {
     .filter((r) => /^\d{4}-\d\d-\d\d$/.test(r.date) && Number.isFinite(r.value))
     .sort((a, b) => (a.date < b.date ? -1 : 1))
   if (rows.length < minRows) throw new Error(`בנק ישראל ${key}: היסטוריה קצרה מדי`)
+  return rows
+}
+
+// ── אירופה ────────────────────────────────────────────────────────
+// תקופה של SDMX/Eurostat: יומי כמו שהוא, חודשי "2026-09", רבעוני "2026-Q2" → תחילת התקופה
+const periodDate = (t) =>
+  t.replace(/^(\d{4})-Q([1-4])$/, (_, y, q) => `${y}-${String((q - 1) * 3 + 1).padStart(2, '0')}-01`).replace(/^(\d{4}-\d\d)$/, '$1-01')
+
+// הבנק המרכזי האירופי (ECB Data Portal, SDMX → CSV). העמודות הראשונות בלי פסיקים בתוכן.
+async function ecb(flow, key, minRows = 30) {
+  const from = isoAgo(new Date().toISOString().slice(0, 10), 365 * 6)
+  const csv = await get(`https://data-api.ecb.europa.eu/service/data/${flow}/${key}?startPeriod=${from}&format=csvdata`)
+  const [head, ...lines] = csv.trim().split('\n')
+  const cols = head.split(',')
+  const di = cols.indexOf('TIME_PERIOD')
+  const vi = cols.indexOf('OBS_VALUE')
+  const rows = lines
+    .map((l) => l.split(','))
+    .map((c) => ({ date: periodDate(c[di] ?? ''), value: +c[vi] }))
+    .filter((r) => /^\d{4}-\d\d-\d\d$/.test(r.date) && Number.isFinite(r.value))
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+  if (rows.length < minRows) throw new Error(`ECB ${key}: היסטוריה קצרה מדי`)
+  return rows
+}
+
+// Eurostat (JSON-stat) — סדרה אחת: כל שאר הממדים מסוננים בפרמטרים
+async function eurostat(dataset, params, minRows = 12) {
+  const j = JSON.parse(await get(`https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/${dataset}?${params}`))
+  const rows = Object.entries(j.dimension.time.category.index)
+    .map(([t, i]) => ({ date: periodDate(t), value: j.value[i] }))
+    .filter((r) => Number.isFinite(r.value))
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+  if (rows.length < minRows) throw new Error(`Eurostat ${dataset}: היסטוריה קצרה מדי`)
+  return rows
+}
+
+// קובץ ההיסטוריה של STOXX ("04.01.1999;V2TX;18.2033")
+async function stoxxHistory(file) {
+  const txt = await get(`https://www.stoxx.com/document/Indices/Current/HistoricalData/${file}.txt`)
+  const rows = txt
+    .trim()
+    .split('\n')
+    .slice(1)
+    .map((l) => l.trim().split(';'))
+    .map(([d, , v]) => ({ date: `${d.slice(6, 10)}-${d.slice(3, 5)}-${d.slice(0, 2)}`, value: +v }))
+    .filter((r) => /^\d{4}-\d\d-\d\d$/.test(r.date) && Number.isFinite(r.value))
+  if (rows.length < 30) throw new Error(`STOXX ${file}: היסטוריה קצרה מדי`)
+  return rows
+}
+
+// סגירות יומיות של מדד (שנתיים — מספיק לממוצע 200 יום ולשנה של היסטוריה)
+async function yahooCloses(symbol) {
+  const j = JSON.parse(await get(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=2y&interval=1d`))
+  const res = j.chart?.result?.[0]
+  const closes = res?.indicators?.quote?.[0]?.close ?? []
+  const rows = (res?.timestamp ?? [])
+    .map((t, i) => ({ date: new Date(t * 1000).toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' }), value: closes[i] }))
+    .filter((r) => Number.isFinite(r.value))
+  if (rows.length < 260) throw new Error(`${symbol}: היסטוריה קצרה מדי`)
   return rows
 }
 
@@ -490,13 +551,127 @@ INDICATORS.push(
   },
 )
 
+// אירופה — הבנק המרכזי האירופי, Eurostat, STOXX, ומדד STOXX 600 עצמו.
+// אינדיקטור שאין לו נתון לא נכנס לקובץ (ולא מוצג) — אין ניחושים.
+const EA_GDP = 'geo=EA20&unit=CLV10_MEUR&s_adj=SCA&na_item=B1GQ&sinceTimePeriod=2019-Q1'
+const EA_YC = (tenor) => `B.U2.EUR.4F.G_N_A.SV_C_YM.SR_${tenor}`
+const ECB_ORG = 'הבנק המרכזי האירופי'
+const ECB_URL = 'https://data.ecb.europa.eu/'
+const YC_TERM =
+  'עקום התשואות שהבנק המרכזי האירופי מחשב מאג"ח ממשלתיות בדירוג AAA בגוש היורו (בעיקר גרמניה והולנד) — המקבילה האירופית לאג"ח ממשלת ארה"ב.'
+INDICATORS.push(
+  {
+    id: 'hicp_eu', group: 'macro_eu', name: 'אינפלציה שנתית', nick: 'HICP YoY', nickHe: 'מדד המחירים לצרכן המתואם, שנתי',
+    official: 'HICP — all items, annual rate of change, euro area', code: 'prc_hicp_minr',
+    term: 'HICP = Harmonised Index of Consumer Prices, מדד המחירים לצרכן המתואם של האיחוד האירופי — המדד שלפיו הבנק המרכזי האירופי מכוון ליעד של 2%. YoY = השינוי לעומת אותו חודש לפני שנה.',
+    valueHelp: 'עליית המחירים ב-12 החודשים האחרונים, באחוזים. יעד הבנק המרכזי האירופי: 2%.',
+    org: 'Eurostat', url: 'https://ec.europa.eu/eurostat/web/hicp', unit: 'pp', kind: 'target', period: 'month', maxAge: 80, sparkYears: 3,
+    zones: ['רחוק מהיעד', 'קרוב ליעד', 'ביעד'],
+    what: 'כמה עלו המחירים לצרכן בגוש היורו בשנה האחרונה. המד: ככל שהאינפלציה קרובה יותר ליעד של 2% — ירוק יותר.',
+    // מאגר ECOICOP 2 — המאגר הקודם (prc_hicp_manr) הוקפא בדצמבר 2025 עם שינוי השיטה
+    fetch: () => eurostat('prc_hicp_minr', 'geo=EA&unit=RCH_A&coicop18=TOTAL&sinceTimePeriod=2019-01'),
+  },
+  {
+    id: 'gdp_eu', group: 'macro_eu', name: 'צמיחת התוצר בגוש היורו', nick: 'Real GDP Growth', nickHe: 'צמיחת התוצר הריאלי',
+    official: 'GDP, chain linked volumes, seasonally and calendar adjusted — annualized quarterly change', code: 'namq_10_gdp',
+    term: 'התוצר המקומי הגולמי (GDP) של 20 מדינות גוש היורו, במחירים קבועים (בניכוי אינפלציה). מתפרסם בידי Eurostat.',
+    valueHelp: 'הצמיחה ברבעון האחרון לעומת הרבעון שלפניו, בקצב שנתי (כמו בארה"ב ובישראל) ובניכוי עונתיות. באירופה מקובל לצטט את השינוי הרבעוני בלי הכפלה — בערך רבע מהמספר הזה.',
+    org: 'Eurostat', url: 'https://ec.europa.eu/eurostat/web/national-accounts', unit: 'pp', kind: 'growth', period: 'quarter', maxAge: 240, sparkYears: 5,
+    zones: ['חלשה', 'מתונה', 'חזקה'],
+    what: 'קצב הצמיחה של כלכלת גוש היורו ברבעון האחרון. שלילי = המשק מתכווץ.',
+    // קצב שנתי מתוך רמת התוצר — אותה הגדרה כמו בארה"ב ובישראל, כדי שיהיה אפשר להשוות
+    fetch: async () => {
+      const lv = await eurostat('namq_10_gdp', EA_GDP)
+      return lv.slice(1).map((r, i) => ({ date: r.date, value: ((r.value / lv[i].value) ** 4 - 1) * 100 }))
+    },
+    extra: async () => gdpViews(await eurostat('namq_10_gdp', EA_GDP), 'namq_10_gdp'),
+  },
+  {
+    id: 'ecb', group: 'europe', name: 'ריבית הבנק המרכזי האירופי', nick: 'ECB Deposit Rate', nickHe: 'ריבית הפיקדון',
+    official: 'ECB Deposit Facility Rate', code: 'DFR',
+    term: 'הריבית שהבנק המרכזי האירופי (ECB) משלם לבנקים על פיקדונות ללילה — הריבית המובילה של גוש היורו.',
+    valueHelp: 'אחוזים בשנה.',
+    org: ECB_ORG, url: ECB_URL, unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
+    what: 'הריבית שקובע הבנק המרכזי האירופי — הכלי המרכזי של המדיניות המוניטרית בגוש היורו.',
+    fetch: () => ecb('FM', 'D.U2.EUR.4F.KR.DFR.LEV'),
+  },
+  {
+    id: 'eu2', group: 'europe', name: 'תשואת אג"ח גוש היורו ל-2 שנים', nick: '2Y Euro AAA', nickHe: 'אג"ח ממשלתי AAA לשנתיים',
+    official: 'Euro area AAA government bond yield curve, 2-year spot rate', code: 'SR_2Y',
+    term: YC_TERM, valueHelp: 'התשואה לפדיון, באחוזים בשנה.',
+    org: ECB_ORG, url: ECB_URL, unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
+    what: 'משקפת בעיקר את ציפיות השוק לריבית הבנק המרכזי האירופי בשנתיים הקרובות.',
+    fetch: () => ecb('YC', EA_YC('2Y')),
+  },
+  {
+    id: 'eu10', group: 'europe', name: 'תשואת אג"ח גוש היורו ל-10 שנים', nick: '10Y Euro AAA', nickHe: 'אג"ח ממשלתי AAA ל-10 שנים',
+    official: 'Euro area AAA government bond yield curve, 10-year spot rate', code: 'SR_10Y',
+    term: YC_TERM, valueHelp: 'התשואה לפדיון, באחוזים בשנה.',
+    org: ECB_ORG, url: ECB_URL, unit: 'pct', kind: 'pct', years: 5, maxAge: 7, zones: RATE_ZONES,
+    what: 'ריבית העוגן של אירופה — משמשת להיוון נכסים ולתמחור משכנתאות בגוש היורו.',
+    fetch: () => ecb('YC', EA_YC('10Y')),
+  },
+  {
+    id: 'eucurve', group: 'europe', name: 'שיפוע העקום באירופה: 10 מול 2 שנים', nick: '2s10s', nickHe: 'שנתיים-עשר',
+    official: 'Euro area AAA yield curve: 10-year minus 2-year spot rate', code: 'SR_10Y − SR_2Y',
+    term: '2s10s ("twos-tens") — הפרש התשואות בין אג"ח ל-10 שנים לאג"ח לשנתיים. כשהוא שלילי העקום "הפוך": הריבית הקצרה גבוהה מהארוכה.',
+    valueHelp: 'נקודות אחוז: תשואת ה-10 שנים פחות תשואת השנתיים.',
+    org: ECB_ORG, url: ECB_URL, unit: 'pct', kind: 'curve', maxAge: 7, zones: ['הפוך', 'שטוח', 'חיובי'],
+    what: 'הפרש התשואות בין 10 ל-2 שנים באירופה. שלילי = עקום הפוך, שקדם היסטורית להאטות.',
+    fetch: async () => {
+      const [ten, two] = await Promise.all([ecb('YC', EA_YC('10Y')), ecb('YC', EA_YC('2Y'))])
+      const at = Object.fromEntries(two.map((r) => [r.date, r.value]))
+      return ten.filter((r) => at[r.date] != null).map((r) => ({ date: r.date, value: r.value - at[r.date] }))
+    },
+  },
+  {
+    id: 'vstoxx', group: 'europe', name: 'מדד הפחד האירופי', nick: 'VSTOXX', nickHe: 'מדד התנודתיות של אירופה',
+    official: 'EURO STOXX 50 Volatility (VSTOXX)', code: 'V2TX',
+    term: 'VSTOXX — המקבילה האירופית ל-VIX: התנודתיות שהשוק מתמחר במדד EURO STOXX 50 ל-30 הימים הקרובים, מתוך מחירי האופציות.',
+    valueHelp: 'נקודות מדד. 20 פירושו שהשוק מתמחר תנודה שנתית של כ-20%.',
+    org: 'STOXX', url: 'https://www.stoxx.com/', unit: 'pts', kind: 'pct', years: 5, maxAge: 7,
+    zones: ['לחוץ', 'תקין', 'רגוע'],
+    what: 'כמה תנודתיות השוק מתמחר במניות הגדולות של גוש היורו ל-30 הימים הקרובים.',
+    fetch: () => stoxxHistory('h_v2tx'),
+  },
+  {
+    id: 'stoxx200', group: 'europe', name: 'STOXX 600 מול ממוצע 200 יום', nick: '200DMA', nickHe: 'ממוצע נע 200 יום',
+    official: 'STOXX Europe 600 vs. 200-day moving average', code: 'SXXP',
+    term: '200-Day Moving Average — הממוצע של מחירי הסגירה ב-200 ימי המסחר האחרונים (כ-10 חודשים). מדד שנסחר מעליו נחשב במגמה ארוכה עולה, ומתחתיו — יורדת.',
+    valueHelp: 'סטיות תקן: המרחק מהממוצע חלקי התנודתיות הרגילה של המדד באותם 200 יום. 0 = על הממוצע; 1 או 1- = מרחק משמעותי; 2 או 2- = קיצוני.',
+    org: 'STOXX', url: 'https://www.stoxx.com/', unit: 'z', kind: 'trend', maxAge: 7, zones: MA_ZONES, what: MA_WHAT,
+    fetch: async () => vsMA200(await yahooCloses('^STOXX')),
+  },
+  {
+    id: 'euhy', group: 'europe', name: 'מרווח אג"ח בדירוג נמוך — אירופה', nick: 'Euro HY OAS', nickHe: 'מרווח הזבל באירו',
+    official: 'ICE BofA Euro High Yield Index Option-Adjusted Spread', code: 'BAMLHE00EHYIOAS',
+    term: 'High Yield (תשואה גבוהה) = אג"ח של חברות בדירוג נמוך מ-BBB-, כאן — אג"ח באירו. OAS = Option-Adjusted Spread, מרווח מתוקנן לאופציות של פדיון מוקדם.',
+    valueHelp: 'אחוזים מעל אג"ח ממשלתי באותו מח"מ. 1% = 100 נקודות בסיס (נ״ב).',
+    org: ICE, url: FRED_URL('BAMLHE00EHYIOAS'), unit: 'pct', kind: 'pct', years: 3, maxAge: 7, zones: RATE_ZONES,
+    what: 'התוספת שחברות בדירוג נמוך משלמות על אג"ח באירו. עלייה = המלווים דורשים יותר על הסיכון.',
+    fetch: () => fred('BAMLHE00EHYIOAS'),
+  },
+  {
+    id: 'eurusd', group: 'europe', name: 'שער אירו-דולר', nick: 'EUR/USD', nickHe: 'אירו-דולר',
+    official: 'ECB euro reference exchange rate, US dollar', code: 'EXR.D.USD.EUR',
+    term: 'שער הייחוס הרשמי שהבנק המרכזי האירופי מפרסם בכל יום עסקים (14:15 שעון מרכז אירופה).',
+    valueHelp: 'דולרים לאירו אחד.',
+    org: ECB_ORG, url: ECB_URL, unit: 'usd', kind: 'pct', dir: 'none', years: 5, maxAge: 7,
+    zones: ['אירו חלש', 'בינוני', 'אירו חזק'],
+    what: 'שער הייחוס של הבנק המרכזי האירופי. אין כאן טוב או רע: אירו חזק מקשה על היצואנים, אירו חלש מייקר את היבוא.',
+    fetch: () => ecb('EXR', 'D.USD.EUR.SP00.A'),
+  },
+)
+
 const GROUPS = [
   { id: 'macro', title: 'מאקרו — ארה"ב' },
   { id: 'macro_il', title: 'מאקרו — ישראל' },
+  { id: 'macro_eu', title: 'מאקרו — גוש היורו' },
   { id: 'risk', title: 'פחד ומגמה' },
   { id: 'credit', title: 'אשראי' },
   { id: 'rates', title: 'ריביות ועקום התשואות — ארה"ב' },
   { id: 'israel', title: 'ישראל' },
+  { id: 'europe', title: 'אירופה' },
 ]
 
 // ── צמיחה: שני מבטים יציבים יותר מהנתון הרבעוני בקצב שנתי ─────────────
@@ -542,7 +717,7 @@ const valueAt = (rows, iso) => {
 function change(unit, now, then) {
   if (then == null) return null
   if (unit === 'pct') return round((now - then) * 100, 0) // נקודות בסיס
-  if (unit === 'ils') return round((now / then - 1) * 100) // אחוזים
+  if (unit === 'ils' || unit === 'usd') return round((now / then - 1) * 100) // שער חליפין — אחוזים
   if (unit === 'pp') return round(now - then) // נקודות אחוז (נתוני מאקרו)
   return round(now - then) // נקודות / סטיות תקן
 }
@@ -619,7 +794,7 @@ function build(spec, rows) {
     kind: spec.kind,
     date: last.date,
     ...(spec.period ? { period: periodOf(spec.period, last.date) } : {}),
-    value: round(last.value, spec.unit === 'ils' ? 3 : 2),
+    value: round(last.value, spec.unit === 'ils' ? 3 : spec.unit === 'usd' ? 4 : 2),
     ...(last.close != null ? { close: round(last.close), ma: round(last.ma), dist: round(last.dist) } : {}),
     // נתון חודשי/רבעוני — מול התצפית הקודמת (החודש/הרבעון הקודם); יומי — מול לפני 30 יום
     ch1m: change(spec.unit, last.value, spec.period ? rows[rows.length - 2]?.value : valueAt(rows, isoAgo(last.date, 30))),

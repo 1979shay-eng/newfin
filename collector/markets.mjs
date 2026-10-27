@@ -58,25 +58,25 @@ const EU_INDICES = [
   { symbol: '^FTSE', name: 'FTSE 100', full: '100 החברות הגדולות בבריטניה' },
 ]
 const EU_SECTORS = [
-  { symbol: 'EXV1.DE', name: 'בנקים', full: 'STOXX Europe 600 Banks' },
-  { symbol: 'EXH5.DE', name: 'ביטוח', full: 'STOXX Europe 600 Insurance' },
-  { symbol: 'EXH2.DE', name: 'שירותים פיננסיים', full: 'STOXX Europe 600 Financial Services' },
-  { symbol: 'EXV3.DE', name: 'טכנולוגיה', full: 'STOXX Europe 600 Technology' },
-  { symbol: 'EXV4.DE', name: 'בריאות', full: 'STOXX Europe 600 Health Care' },
-  { symbol: 'EXH4.DE', name: 'תעשייה', full: 'STOXX Europe 600 Industrial Goods & Services' },
-  { symbol: 'EXH1.DE', name: 'נפט וגז', full: 'STOXX Europe 600 Oil & Gas' },
-  { symbol: 'EXH9.DE', name: 'תשתיות', full: 'STOXX Europe 600 Utilities' },
-  { symbol: 'EXI5.DE', name: 'נדל"ן', full: 'STOXX Europe 600 Real Estate' },
-  { symbol: 'EXV6.DE', name: 'משאבי טבע', full: 'STOXX Europe 600 Basic Resources' },
-  { symbol: 'EXV7.DE', name: 'כימיה', full: 'STOXX Europe 600 Chemicals' },
-  { symbol: 'EXV8.DE', name: 'בנייה וחומרי בניין', full: 'STOXX Europe 600 Construction & Materials' },
-  { symbol: 'EXV5.DE', name: 'רכב', full: 'STOXX Europe 600 Automobiles & Parts' },
-  { symbol: 'EXH3.DE', name: 'מזון ומשקאות', full: 'STOXX Europe 600 Food & Beverage' },
-  { symbol: 'EXH7.DE', name: 'מוצרי צריכה', full: 'STOXX Europe 600 Personal & Household Goods' },
-  { symbol: 'EXH8.DE', name: 'קמעונאות', full: 'STOXX Europe 600 Retail' },
-  { symbol: 'EXV2.DE', name: 'תקשורת', full: 'STOXX Europe 600 Telecommunications' },
-  { symbol: 'EXH6.DE', name: 'מדיה', full: 'STOXX Europe 600 Media' },
-  { symbol: 'EXV9.DE', name: 'תיירות ופנאי', full: 'STOXX Europe 600 Travel & Leisure' },
+  { symbol: 'EXV1.DE', name: 'בנקים', full: 'STOXX Europe 600 Banks', fund: 251934 },
+  { symbol: 'EXH5.DE', name: 'ביטוח', full: 'STOXX Europe 600 Insurance', fund: 251950 },
+  { symbol: 'EXH2.DE', name: 'שירותים פיננסיים', full: 'STOXX Europe 600 Financial Services', fund: 251942 },
+  { symbol: 'EXV3.DE', name: 'טכנולוגיה', full: 'STOXX Europe 600 Technology', fund: 251961 },
+  { symbol: 'EXV4.DE', name: 'בריאות', full: 'STOXX Europe 600 Health Care', fund: 251946 },
+  { symbol: 'EXH4.DE', name: 'תעשייה', full: 'STOXX Europe 600 Industrial Goods & Services', fund: 251948 },
+  { symbol: 'EXH1.DE', name: 'נפט וגז', full: 'STOXX Europe 600 Oil & Gas', fund: 251954 },
+  { symbol: 'EXH9.DE', name: 'תשתיות', full: 'STOXX Europe 600 Utilities', fund: 251967 },
+  { symbol: 'EXI5.DE', name: 'נדל"ן', full: 'STOXX Europe 600 Real Estate', fund: 251958 },
+  { symbol: 'EXV6.DE', name: 'משאבי טבע', full: 'STOXX Europe 600 Basic Resources', fund: 251936 },
+  { symbol: 'EXV7.DE', name: 'כימיה', full: 'STOXX Europe 600 Chemicals', fund: 251938 },
+  { symbol: 'EXV8.DE', name: 'בנייה וחומרי בניין', full: 'STOXX Europe 600 Construction & Materials', fund: 251940 },
+  { symbol: 'EXV5.DE', name: 'רכב', full: 'STOXX Europe 600 Automobiles & Parts', fund: 251932 },
+  { symbol: 'EXH3.DE', name: 'מזון ומשקאות', full: 'STOXX Europe 600 Food & Beverage', fund: 251944 },
+  { symbol: 'EXH7.DE', name: 'מוצרי צריכה', full: 'STOXX Europe 600 Personal & Household Goods', fund: 251956 },
+  { symbol: 'EXH8.DE', name: 'קמעונאות', full: 'STOXX Europe 600 Retail', fund: 251959 },
+  { symbol: 'EXV2.DE', name: 'תקשורת', full: 'STOXX Europe 600 Telecommunications', fund: 251963 },
+  { symbol: 'EXH6.DE', name: 'מדיה', full: 'STOXX Europe 600 Media', fund: 251952 },
+  { symbol: 'EXV9.DE', name: 'תיירות ופנאי', full: 'STOXX Europe 600 Travel & Leisure', fund: 251965 },
 ]
 
 // השוואה בין האזורים: ענפים מקבילים (ישראל — מדד הענף הרשמי; ארה"ב ואירופה — קרן
@@ -557,16 +557,111 @@ async function collectEU() {
       errors.push(e.message)
     }
   }
+  // משקל כל סקטור במדד — מטמון רבעוני; כישלון לא מפיל את התשואות
+  let w = null
+  try {
+    w = await euWeights()
+  } catch (e) {
+    errors.push(`משקלי אירופה: ${e.message}`)
+  }
   const sectors = []
   for (const s of EU_SECTORS) {
     try {
       const { days, date, last, bases: _b, ...h } = await yahooHistory(s.symbol, 'Europe/Berlin')
-      sectors.push({ symbol: s.symbol, sector: s.name, source: s.full, ...h })
+      sectors.push({ symbol: s.symbol, sector: s.name, source: s.full, ...(w?.weights[s.symbol] != null ? { weight: w.weights[s.symbol] } : {}), ...h })
     } catch (e) {
       errors.push(e.message)
     }
   }
-  return { indices, sectors, bases, errors }
+  // מכפיל רווח נוכחי של STOXX 600 (12 החודשים האחרונים). עתידי — רק כשיימצא מקור יציב.
+  const stoxx = indices.find((i) => i.symbol === '^STOXX')
+  if (stoxx) {
+    try {
+      stoxx.pe = await fundTrailingPE(EU_INDEX_FUND)
+    } catch (e) {
+      errors.push(`מכפיל STOXX 600: ${e.message}`)
+    }
+  }
+  return { indices, sectors, bases, weightsAsOf: w?.as_of ? deDate(w.as_of) : null, errors }
+}
+
+// ── משקלי הסקטורים באירופה ────────────────────────────────────────
+// קובץ האחזקות של קרן המדד (כ-600 מניות ומשקל לכל אחת) + קבצי האחזקות של 19 קרנות
+// הסקטורים — כל אחת מחזיקה בדיוק את מניות הסקטור שלה. משקל סקטור = סכום משקלי
+// מניותיו בקרן המדד. 20 הורדות, ולכן מטמון: מתעדכן פעם ברבעון (החלטת בעל האתר).
+const EU_INDEX_FUND = { id: 251931, symbol: 'EXSA.DE' }
+const EU_WEIGHTS_DAYS = 90
+const holdingsUrl = (id) => `https://www.ishares.com/de/privatanleger/de/produkte/${id}/x/latest-holdings.csv`
+
+// "26.Okt.2026" → "26.10.2026" (תאריך הקובץ בגרמנית)
+const DE_MON = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+const deDate = (s) =>
+  s.replace(/\.([A-Za-zä]{3})\./, (m, mon) => {
+    const i = DE_MON.indexOf(mon)
+    return i < 0 ? m : `.${i + 1}.`
+  })
+
+// CSV של האחזקות: שורת תאריך, שורה ריקה, כותרות, ואז שורה לכל נייר. מספרים בפורמט
+// גרמני ("1.234,56"). מחזיר מניות בלבד: { key, weight }. min — סף שפיות (קרן המדיה
+// מחזיקה 8 מניות בלבד; קרן המדד ~600).
+function parseHoldings(csv, min) {
+  const lines = csv.replace(/^﻿/, '').split(/\r?\n/)
+  const asOf = deDate(lines[0].match(/"([^"]+)"/)?.[1] ?? '') || null
+  const hi = lines.findIndex((l) => l.startsWith('Emittententicker'))
+  if (hi < 0) throw new Error('קובץ אחזקות: אין שורת כותרות')
+  const split = (l) => [...l.matchAll(/"([^"]*)"|([^,]+)|(?<=,)(?=,|$)/g)].map((m) => m[1] ?? m[2] ?? '')
+  const head = split(lines[hi])
+  const col = (name) => head.indexOf(name)
+  const [ti, ni, ai, wi, xi] = [col('Emittententicker'), col('Name'), col('Anlageklasse'), col('Gewichtung (%)'), col('Börse')]
+  const rows = []
+  for (const l of lines.slice(hi + 1)) {
+    const c = split(l)
+    if (c[ai] !== 'Aktien') continue
+    const weight = +String(c[wi]).replace(/\./g, '').replace(',', '.')
+    if (Number.isFinite(weight)) rows.push({ key: `${c[ti]}|${c[xi]}`, name: c[ni], weight })
+  }
+  if (rows.length < min) throw new Error(`קובץ אחזקות: ${rows.length} מניות בלבד`)
+  return { asOf, rows }
+}
+
+async function euWeights() {
+  const cached = await loadJson('market/eu-weights.json')
+  if (cached?.fetched_at && Date.now() - Date.parse(cached.fetched_at) < EU_WEIGHTS_DAYS * 864e5) return cached
+  const fetchHoldings = async (id, min = 3) => {
+    const r = await fetch(holdingsUrl(id), { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) })
+    if (!r.ok) throw new Error(`אחזקות ${id} -> ${r.status}`)
+    return parseHoldings(await r.text(), min)
+  }
+  const index = await fetchHoldings(EU_INDEX_FUND.id, 300)
+  const byKey = new Map(index.rows.map((r) => [r.key, r.weight]))
+  const weights = {}
+  let matched = 0
+  for (const s of EU_SECTORS) {
+    const { rows } = await fetchHoldings(s.fund)
+    const sum = rows.reduce((a, r) => a + (byKey.get(r.key) ?? 0), 0)
+    weights[s.symbol] = round(sum, 1)
+    matched += sum
+    await sleep(500)
+  }
+  const total = index.rows.reduce((a, r) => a + r.weight, 0)
+  const coverage = round((matched / total) * 100, 1)
+  // שיוך חלקי (שינוי מבנה בקבצים) — עדיף הנתון הקודם על משקלים שגויים
+  if (coverage < 80) throw new Error(`משקלי אירופה: רק ${coverage}% מהמדד שויך לסקטורים`)
+  const out = { fetched_at: new Date().toISOString(), as_of: index.asOf, coverage, weights }
+  await db.storage.from(BUCKET).upload('market/eu-weights.json', JSON.stringify(out), { upsert: true, contentType: 'application/json' })
+  console.log(`⚖️ משקלי אירופה עודכנו (${index.asOf}): שויך ${coverage}% מהמדד`)
+  return out
+}
+
+// מכפיל רווח נוכחי של קרן מדד (summaryDetail.trailingPE)
+async function fundTrailingPE(fund) {
+  const { cookie, crumb } = await yahooSession()
+  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(fund.symbol)}?modules=summaryDetail&crumb=${encodeURIComponent(crumb)}`
+  const r = await fetch(url, { headers: { 'User-Agent': UA, Cookie: cookie } })
+  if (!r.ok) throw new Error(`-> ${r.status}`)
+  const pe = (await r.json()).quoteSummary?.result?.[0]?.summaryDetail?.trailingPE?.raw
+  if (!Number.isFinite(pe) || pe <= 0 || pe > 100) throw new Error('אין מכפיל')
+  return round(pe, 1)
 }
 
 // ── מתאם בין האזורים ──────────────────────────────────────────────
