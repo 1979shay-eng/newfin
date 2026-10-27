@@ -157,7 +157,11 @@ export default function Layout() {
         className="relative z-10 mt-12 border-t px-4 py-6 text-center text-xs"
         style={{ borderColor: 'var(--line2)', color: 'var(--muted2)' }}
       >
-        <p className="mx-auto max-w-[900px] leading-relaxed">{DISCLAIMER}</p>
+        {/* הבהרה משפטית — בתחתית כל עמוד (סעיף 3(ב) לחוק הייעוץ: מידע כללי, עניין אישי) */}
+        <p role="note" className="mx-auto max-w-[900px] leading-relaxed">
+          <b style={{ color: 'var(--muted)' }}>לתשומת לבך: </b>
+          {DISCLAIMER}
+        </p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
           <span>NewFinIL · המקום שלך בשוק ההון</span>
           {[{ path: '/about', label: 'אודות' }, ...LEGAL_PAGES].map((p) => (

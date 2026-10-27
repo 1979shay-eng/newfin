@@ -13,7 +13,6 @@ import {
   markSeenNow,
 } from '../lib/feedVisual'
 import type { FeedItem } from '../types/db'
-import { DISCLAIMER } from '../lib/legal'
 
 type Sort = 'smart' | 'importance' | 'time'
 type Tab = 'all' | 'watched'
@@ -205,16 +204,6 @@ export default function Feed() {
             </span>
           </>
         )}
-      </p>
-
-      {/* הבהרה משפטית — קבועה בראש הפיד (סעיף 3(ב) לחוק הייעוץ: מידע כללי, עניין אישי) */}
-      <p
-        role="note"
-        className="mt-3 rounded-xl border px-3.5 py-2.5 text-[12.5px] leading-relaxed"
-        style={{ borderColor: 'var(--line2)', background: 'var(--surface)', color: 'var(--muted)' }}
-      >
-        <b style={{ color: 'var(--ink2)' }}>לתשומת לבך: </b>
-        {DISCLAIMER}
       </p>
 
       {/* לשוניות */}
