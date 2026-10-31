@@ -21,7 +21,9 @@ permissions:
 
 jobs:
   collect:
-    runs-on: ubuntu-latest
+    # נעוץ ל-24.04: מ-30.10.2026 ubuntu-latest עבר לאובונטו 26, ושם התקנת
+    # תלויות הדפדפן של Playwright נכשלת — כל ריצות מאיה נפלו בשלב ההתקנה.
+    runs-on: ubuntu-24.04
     timeout-minutes: 355 # מתחת למגבלת 6 שעות של GitHub
     steps:
       # GitHub מכבה אוטומטית schedule בריפו ציבורי אחרי 60 יום בלי commit
