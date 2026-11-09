@@ -36,9 +36,26 @@ async function get(url, tries = 3) {
       if (!r.ok) throw new Error(`${r.status}`)
       return await r.text()
     } catch (e) {
+      // כל ניסיון שנכשל נכתב מיד ללוג — כך רואים מקור תקוע גם אם הריצה נקטעת
+      console.warn(`    ↻ ${new URL(url).host} ניסיון ${i}/${tries} נכשל: ${e.message}`)
       if (i >= tries) throw new Error(`${new URL(url).host}: ${e.message}`)
       await sleep(i * 5000)
     }
+  }
+}
+
+// מדידת זמן לכל שלב: שורת "▶" לפני ושורת "⏱️" אחרי. אם הריצה נתקעת,
+// השורה האחרונה בלוג היא "▶" של השלב התקוע.
+async function timed(label, fn) {
+  const t = Date.now()
+  console.log(`  ▶ ${label}`)
+  try {
+    const out = await fn()
+    console.log(`  ⏱️ ${label}: ${((Date.now() - t) / 1000).toFixed(1)} שניות`)
+    return out
+  } catch (e) {
+    console.log(`  ⏱️ ${label}: ${((Date.now() - t) / 1000).toFixed(1)} שניות — נכשל: ${e.message}`)
+    throw e
   }
 }
 
@@ -875,12 +892,14 @@ function overall(items) {
 const t0 = Date.now()
 console.log('🧭 אינדיקטורים — מתחיל...')
 
-const [summary, history, prev, prevErp] = await Promise.all([
-  loadJson('market/summary.json'),
-  loadJson('market/history.json'),
-  loadJson('market/indicators-v2.json'),
-  loadJson('market/erp-history.json'),
-])
+const [summary, history, prev, prevErp] = await timed('קבצים קודמים מהאחסון', () =>
+  Promise.all([
+    loadJson('market/summary.json'),
+    loadJson('market/history.json'),
+    loadJson('market/indicators-v2.json'),
+    loadJson('market/erp-history.json'),
+  ]),
+)
 const ctx = {
   history,
   spxDays: summary?.us?.indices?.find((i) => i.symbol === '^GSPC')?.days ?? [],
@@ -891,11 +910,11 @@ const items = []
 const today = new Date().toISOString().slice(0, 10)
 for (const spec of INDICATORS) {
   try {
-    const it = build(spec, await spec.fetch(ctx))
+    const it = build(spec, await timed(spec.name, () => spec.fetch(ctx)))
     // מבטים משלימים (צמיחה שנתית / מחצית) — כישלון בהם לא מפיל את האינדיקטור
     if (spec.extra) {
       try {
-        it.extra = await spec.extra()
+        it.extra = await timed(`${spec.name} (מבטים משלימים)`, () => spec.extra())
       } catch (e) {
         errors.push(`${spec.name} (מבטים משלימים): ${e.message}`)
       }
@@ -921,7 +940,7 @@ if (!items.length) {
 let real = null
 const us2 = items.find((i) => i.id === 'us2' && !i.stale)
 try {
-  const exp = await fred('EXPINF2YR')
+  const exp = await timed('ציפיות אינפלציה לשנתיים', () => fred('EXPINF2YR'))
   const e = exp[exp.length - 1]
   if (us2) real = { value: round(us2.value - e.value), nominal: us2.value, nominalDate: us2.date, inflation: round(e.value), inflationDate: e.date }
 } catch (e) {
@@ -957,7 +976,7 @@ const ERP_LONG = [
 const erpLong = []
 for (const spec of ERP_LONG) {
   try {
-    const rows = await spec.fetch()
+    const rows = await timed(spec.name, () => spec.fetch())
     // החלון = כל ההיסטוריה של המקור (שנים שלמות)
     const it = build({ ...spec, years: Math.floor((Date.parse(rows[rows.length - 1].date) - Date.parse(rows[0].date)) / DAY / 365) }, rows)
     it.since = rows[0].date
@@ -986,7 +1005,7 @@ const out = {
 const TEST = process.argv.includes('--test')
 const put = (path, obj) =>
   db.storage.from(BUCKET).upload(path, JSON.stringify(obj), { upsert: true, contentType: 'application/json', cacheControl: '60' })
-const { error } = await put(TEST ? 'market/indicators-test.json' : 'market/indicators-v2.json', out)
+const { error } = await timed('כתיבה לאחסון', () => put(TEST ? 'market/indicators-test.json' : 'market/indicators-v2.json', out))
 if (error) throw error
 if (erpBlock && !TEST) {
   const { error: e2 } = await put('market/erp-history.json', erpHist)

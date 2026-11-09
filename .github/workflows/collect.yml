@@ -1,18 +1,19 @@
 name: איסוף נתונים ממאיה
 
 on:
+  # המפעיל הראשי: Worker בקלאודפלר (worker/collector-cron.js) שולח הפעלה כל 15 דקות.
+  # כל הפעלה = סבב איסוף אחד, קצר. ה-schedule כאן הוא גיבוי בלבד, אם ה-Worker נופל.
+  # (עד 09.11.2026 כאן רצה לולאה של 5.5 שעות; כל הפעלה של ה-Worker ביטלה את
+  # הקודמת אחרי 15 דקות, ושלב האינדיקטורים לא הסתיים מאז 27.10.)
   schedule:
-    # אסטרטגיית "ריצה מתמשכת": ה-scheduler של GitHub לא אמין (מעיר כל 2.5-4.5 שעות
-    # בפועל). לכן כל ריצה נשארת חיה ~5.5 שעות ואוספת בלולאה כל 10 דקות.
-    # כך מספיקות 4-5 התעוררויות ביום לכיסוי מלא — בלי PAT ובלי שעון חיצוני.
-    # ה-concurrency מבטיח שריצה חדשה לא תרוץ במקביל לקיימת.
     - cron: '7 */3 * * *'
   workflow_dispatch: {} # מאפשר גם הרצה ידנית בלחיצת כפתור מ-GitHub
 
-# ריצה אחת בלבד בכל רגע; חדשה מבטלת את הישנה (שכבר קרובה לסוף חייה)
+# ריצה אחת בכל רגע. סבב שמתארך לא נקטע: ההפעלה הבאה ממתינה בתור,
+# ו-GitHub שומר בתור הפעלה ממתינה אחת בלבד (חדשה מחליפה ישנה שטרם התחילה).
 concurrency:
   group: collector
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # נדרש לשלב "שמירה בחיים" — הפעלה מחדש של ה-workflows דרך ה-API
 permissions:
@@ -24,16 +25,16 @@ jobs:
     # נעוץ ל-24.04: מ-30.10.2026 ubuntu-latest עבר לאובונטו 26, ושם התקנת
     # תלויות הדפדפן של Playwright נכשלת — כל ריצות מאיה נפלו בשלב ההתקנה.
     runs-on: ubuntu-24.04
-    timeout-minutes: 355 # מתחת למגבלת 6 שעות של GitHub
+    timeout-minutes: 30 # סבב אחד; סבב תקוע לא יחסום את התור יותר מחצי שעה
     steps:
       # GitHub מכבה אוטומטית schedule בריפו ציבורי אחרי 60 יום בלי commit
       # (קרה ב-06.10.2026 — הפיד קפא 8 ימים). הפעלה מחדש דרך ה-API מאפסת
-      # את מונה חוסר הפעילות, כך שכל ריצה שומרת את שני ה-workflows בחיים.
+      # את מונה חוסר הפעילות, כך שכל ריצה שומרת את שלושת ה-workflows בחיים.
       - name: שמירה בחיים (מניעת כיבוי אחרי 60 יום)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for wf in collect.yml collect-news.yml; do
+          for wf in collect.yml collect-news.yml indicators.yml; do
             gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable" && echo "✅ $wf פעיל" || echo "⚠️ הפעלת $wf נכשלה — ממשיכים"
           done
 
@@ -73,41 +74,31 @@ jobs:
           done
           echo "⛔ התקנת הדפדפן נכשלה 3 פעמים"; exit 1
 
-      - name: לולאת איסוף (כל 10 דקות, עד ~5.5 שעות)
+      - name: סבב איסוף
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          END=$((SECONDS + 19800))  # 5.5 שעות
-          CYCLE=0
           MODEL_DEAD=0 # קוד יציאה 3 = מודל ה-AI הוסר מהשירות (ראה flagDeadModel)
-          while [ $SECONDS -lt $END ]; do
-            CYCLE=$((CYCLE + 1))
-            echo "════════ סבב איסוף #$CYCLE ════════"
-            node collector/run.mjs || { [ $? -eq 3 ] && MODEL_DEAD=1; echo "⚠️ סבב מאיה #$CYCLE נכשל — ממשיכים"; }
-            node collector/run-news.mjs || { [ $? -eq 3 ] && MODEL_DEAD=1; echo "⚠️ סבב חדשות #$CYCLE נכשל — ממשיכים"; }
-            # סיכום מסחר (דף "שווקים") — כל סבב שלישי (~חצי שעה): כ-200 בקשות לאתר
-            # הבורסה, ונתוני סוף-יום ממילא לא משתנים מהר. הסבב הראשון תמיד רץ.
-            if [ $((CYCLE % 3)) -eq 1 ]; then
-              node collector/markets.mjs || echo "⚠️ סיכום מסחר #$CYCLE נכשל — ממשיכים"
-              # אינדיקטורים (דף "אינדיקטורים") — אחרי סיכום המסחר, כי פרמיית הסיכון
-              # נשענת על המכפילים שלו. קל: ~15 בקשות למקורות רשמיים, בלי דפדפן.
-              node collector/indicators.mjs || echo "⚠️ אינדיקטורים #$CYCLE נכשלו — ממשיכים"
-            fi
-            # השלמת שורות תחתונות לפריטים ישנים. האספן שולף רק ~יום אחורה ולכן
-            # לעולם לא יחזור אליהם לבד. רץ אחרון בכוונה: הידיעות הטריות מקבלות
-            # את מכסת Groq קודם, וההשלמה לוקחת רק את מה שנשאר ועוצרת מיד כשאין.
-            # שני מעברים: חשיבות עליונה (8+) תמיד ראשונה — כרטיס בציון 9 בלי
-            # שורת הסבר הוא הכישלון הבולט ביותר בפיד — ורק אחריה השאר.
-            node collector/backfill-bottomlines.mjs --min 8 --limit 6 --quick --apply || echo "⚠️ השלמה (8+) #$CYCLE נכשלה — ממשיכים"
-            node collector/backfill-bottomlines.mjs --limit 6 --quick --apply || echo "⚠️ השלמה #$CYCLE נכשלה — ממשיכים"
-            # אם נשאר פחות מ-10 דקות לסוף — לא שווה לישון, מסיימים
-            REMAIN=$((END - SECONDS))
-            if [ $REMAIN -lt 600 ]; then break; fi
-            echo "😴 המתנה 10 דקות לסבב הבא ($((REMAIN / 60)) דק' נותרו לריצה)..."
-            sleep 600
-          done
-          echo "✅ הריצה המתמשכת הסתיימה אחרי $CYCLE סבבים"
+          node collector/run.mjs || { [ $? -eq 3 ] && MODEL_DEAD=1; echo "⚠️ סבב מאיה נכשל — ממשיכים"; }
+          node collector/run-news.mjs || { [ $? -eq 3 ] && MODEL_DEAD=1; echo "⚠️ סבב חדשות נכשל — ממשיכים"; }
+          # סיכום מסחר (דף "שווקים") — כל חצי שעה, ברבע הראשון והשלישי של השעה:
+          # כ-200 בקשות לאתר הבורסה, ונתוני סוף-יום ממילא לא משתנים מהר.
+          # האינדיקטורים כבר לא כאן — הם בתהליך נפרד, indicators.yml.
+          QUARTER=$(( 10#$(date -u +%M) / 15 ))
+          if [ $((QUARTER % 2)) -eq 0 ]; then
+            node collector/markets.mjs || echo "⚠️ סיכום מסחר נכשל — ממשיכים"
+          else
+            echo "⏭️ סיכום מסחר — לא ברבע שעה הזה"
+          fi
+          # השלמת שורות תחתונות לפריטים ישנים. האספן שולף רק ~יום אחורה ולכן
+          # לעולם לא יחזור אליהם לבד. רץ אחרון בכוונה: הידיעות הטריות מקבלות
+          # את מכסת Groq קודם, וההשלמה לוקחת רק את מה שנשאר ועוצרת מיד כשאין.
+          # שני מעברים: חשיבות עליונה (8+) תמיד ראשונה — כרטיס בציון 9 בלי
+          # שורת הסבר הוא הכישלון הבולט ביותר בפיד — ורק אחריה השאר.
+          node collector/backfill-bottomlines.mjs --min 8 --limit 6 --quick --apply || echo "⚠️ השלמה (8+) נכשלה — ממשיכים"
+          node collector/backfill-bottomlines.mjs --limit 6 --quick --apply || echo "⚠️ השלמה נכשלה — ממשיכים"
+          echo "✅ הסבב הסתיים"
           # האיסוף עצמו עבד, אבל בלי AI אין שורות תחתונות — מכשילים כדי שתישלח התראה
           if [ $MODEL_DEAD -eq 1 ]; then echo "⛔ מודל ה-AI לא קיים — יש להחליף ב-signal.mjs"; exit 1; fi
