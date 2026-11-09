@@ -37,4 +37,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # מפתח חינמי של FRED. בלעדיו הסקריפט חוזר לקובץ הגרף, שחסום לשרתי גיטהאב
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: node collector/indicators.mjs

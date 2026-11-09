@@ -29,7 +29,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const round = (x, d = 2) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10 ** d) / 10 ** d)
 const isoAgo = (iso, days) => new Date(Date.parse(iso) - days * DAY).toISOString().slice(0, 10)
 
+// מפסק מהיר: שרת שנכשל בכל הניסיונות בגלל זמן קצוב או תקלת רשת נחסם להמשך
+// הריצה, ושאר הסדרות שלו נכשלות מיד (ומוצגות מהקובץ הקודם, מסומנות "ישן").
+// כך שרת אחד שחוסם את גיטהאב לא מוסיף 150 שניות לכל סדרה. שגיאת HTTP (404 וכו')
+// לא חוסמת — היא שייכת לסדרה מסוימת, לא לשרת כולו.
+const deadHosts = new Set()
+
 async function get(url, tries = 3) {
+  const host = new URL(url).host
+  if (deadHosts.has(host)) throw new Error(`${host}: דולג — השרת לא הגיב קודם בריצה הזו`)
   for (let i = 1; ; i++) {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(45000) })
@@ -37,8 +45,14 @@ async function get(url, tries = 3) {
       return await r.text()
     } catch (e) {
       // כל ניסיון שנכשל נכתב מיד ללוג — כך רואים מקור תקוע גם אם הריצה נקטעת
-      console.warn(`    ↻ ${new URL(url).host} ניסיון ${i}/${tries} נכשל: ${e.message}`)
-      if (i >= tries) throw new Error(`${new URL(url).host}: ${e.message}`)
+      console.warn(`    ↻ ${host} ניסיון ${i}/${tries} נכשל: ${e.message}`)
+      if (i >= tries) {
+        if (!/^\d{3}$/.test(e.message)) {
+          deadHosts.add(host)
+          console.warn(`    ⛔ ${host} נחסם להמשך הריצה`)
+        }
+        throw new Error(`${host}: ${e.message}`)
+      }
       await sleep(i * 5000)
     }
   }
@@ -60,7 +74,22 @@ async function timed(label, fn) {
 }
 
 // ── שליפה: כל מקור מחזיר [{ date: 'YYYY-MM-DD', value }] ממוין ─────────
+// שני נתיבים לאותן סדרות. עם מפתח (סוד FRED_API_KEY) — ממשק הנתונים הרשמי,
+// api.stlouisfed.org. בלי מפתח — קובץ הגרף, fred.stlouisfed.org, שמאז סוף
+// אוקטובר 2026 לא עונה לשרתי גיטהאב (זמן קצוב בכל בקשה). המפתח לא נכתב ללוג:
+// הודעות השגיאה מציגות את שם השרת בלבד.
+const FRED_KEY = process.env.FRED_API_KEY?.trim()
 async function fred(id) {
+  if (FRED_KEY) {
+    const j = JSON.parse(
+      await get(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${FRED_KEY}&file_type=json`),
+    )
+    const rows = (j.observations ?? [])
+      .filter((o) => /^\d{4}-\d\d-\d\d$/.test(o.date) && o.value !== '.' && o.value !== '' && Number.isFinite(+o.value))
+      .map((o) => ({ date: o.date, value: +o.value }))
+    if (rows.length < 30) throw new Error(`FRED ${id}: היסטוריה קצרה מדי`)
+    return rows
+  }
   const csv = await get(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}`)
   const rows = csv
     .trim()
