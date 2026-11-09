@@ -1,0 +1,34 @@
+name: אינדיקטורים בלבד (הרצה ידנית)
+
+# הרצה עצמאית של איסוף האינדיקטורים. בתהליך הראשי (collect.yml) כל הפעלה חדשה
+# כל 15 דקות מבטלת את הקודמת, ושלב האינדיקטורים נקטע לפני שהוא מסתיים.
+# כאן יש קבוצת ריצה נפרדת, כך ששום הפעלה של האיסוף הראשי לא תבטל אותו.
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: indicators-only
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  indicators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: שליפת הקוד
+        uses: actions/checkout@v4
+      - name: התקנת Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: התקנת תלויות
+        run: npm ci
+      - name: איסוף אינדיקטורים
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node collector/indicators.mjs
