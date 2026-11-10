@@ -488,6 +488,19 @@ async function yahooHistory(symbol, tz = 'America/New_York') {
       raw: raw[i],
     }))
     .filter((r) => Number.isFinite(r.close))
+  // היום האחרון בלי סגירה: בקרנות הסל של אירופה (Xetra) המקור מחזיר את הנר של
+  // היום האחרון עם close=null, והמחיר האמיתי נמצא רק ב-meta.regularMarketPrice.
+  // בלי ההשלמה הזו הנר נזרק, וכל 19 הסקטורים באירופה הציגו את היום הקודם
+  // (התגלה 10.11.2026: STOXX 600 עלה 1.3% והסקטורים "ירדו" 1.2%).
+  // משלימים רק כשזמן המחיר האחרון נופל באותו תאריך מסחר כמו הנר החסר.
+  const lastTs = ts[ts.length - 1]
+  const mp = res.meta?.regularMarketPrice
+  const mt = res.meta?.regularMarketTime
+  if (lastTs != null && Number.isFinite(mp) && mt != null) {
+    const d = new Date(lastTs * 1000).toLocaleDateString('en-CA', { timeZone: tz })
+    const dm = new Date(mt * 1000).toLocaleDateString('en-CA', { timeZone: tz })
+    if (d === dm && (!rows.length || rows[rows.length - 1].date < d)) rows.push({ date: d, close: mp, raw: mp })
+  }
   if (rows.length < DAYS + 1) throw new Error(`Yahoo ${symbol}: היסטוריה קצרה מדי`)
   SERIES.set(symbol, rows.map((r) => [r.date, r.close]))
   const b = baseDates(rows.map((r) => r.date))
@@ -500,6 +513,18 @@ async function yahooHistory(symbol, tz = 'America/New_York') {
     days: rows.slice(-DAYS).map((r) => ({ date: r.date, close: round(r.close) })),
     bases: b,
   }
+}
+
+// הגנה: סקטור שהיום האחרון שלו שונה מהיום האחרון של המדד המוביל באותו אזור —
+// התשואות שלו מחושבות על זוג ימים אחר, ולכן לא מוצגות ("—") ולא נכנסות לשורה
+// הכתובה. עדיף חור גלוי ממספר שגוי. התאריך נשמר בקובץ לבדיקה.
+function alignSectors(sectors, latest, errors, region) {
+  if (!latest) return sectors
+  return sectors.map((s) => {
+    if (s.date === latest) return s
+    errors.push(`${region} ${s.symbol}: היום האחרון ${s.date} שונה מהמדד ${latest} — התשואות הוסתרו`)
+    return { ...s, ...Object.fromEntries(RANGES.map((k) => [k, null])), misaligned: true }
+  })
 }
 
 async function collectUS() {
@@ -518,12 +543,13 @@ async function collectUS() {
   const sectors = []
   for (const s of US_SECTORS) {
     try {
-      const { days, date, last, bases: _b, ...h } = await yahooHistory(s.symbol)
+      const { days, last, bases: _b, ...h } = await yahooHistory(s.symbol)
       sectors.push({ symbol: s.symbol, sector: s.name, source: `${s.full} (${s.symbol})`, ...h })
     } catch (e) {
       errors.push(e.message)
     }
   }
+  const aligned = alignSectors(sectors, bases?.latest, errors, 'ארה"ב')
   // פילוח S&P 500 לפי סקטורים מתוך 500 המניות (כמו ת"א-35/125)
   let breakdown = null
   let holdingsAsOf = null
@@ -539,7 +565,7 @@ async function collectUS() {
       errors.push(e.message)
     }
   }
-  return { indices, sectors, breakdown, holdingsAsOf, bases, errors }
+  return { indices, sectors: aligned, breakdown, holdingsAsOf, bases, errors }
 }
 
 // ── אירופה ────────────────────────────────────────────────────────
@@ -567,7 +593,7 @@ async function collectEU() {
   const sectors = []
   for (const s of EU_SECTORS) {
     try {
-      const { days, date, last, bases: _b, ...h } = await yahooHistory(s.symbol, 'Europe/Berlin')
+      const { days, last, bases: _b, ...h } = await yahooHistory(s.symbol, 'Europe/Berlin')
       sectors.push({ symbol: s.symbol, sector: s.name, source: s.full, ...(w?.weights[s.symbol] != null ? { weight: w.weights[s.symbol] } : {}), ...h })
     } catch (e) {
       errors.push(e.message)
@@ -582,7 +608,7 @@ async function collectEU() {
       errors.push(`מכפיל STOXX 600: ${e.message}`)
     }
   }
-  return { indices, sectors, bases, weightsAsOf: w?.as_of ? deDate(w.as_of) : null, errors }
+  return { indices, sectors: alignSectors(sectors, bases?.latest, errors, 'אירופה'), bases, weightsAsOf: w?.as_of ? deDate(w.as_of) : null, errors }
 }
 
 // ── משקלי הסקטורים באירופה ────────────────────────────────────────
