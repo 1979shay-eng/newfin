@@ -1,0 +1,55 @@
+name: הבאת דוחות כספיים לקפלר (לפי דרישה)
+
+# מופעל מקפלר (כלי kepler_fetch_reports ב-claude.ai) דרך ה-API של GitHub, או ידנית.
+# מוריד את הדוחות הכספיים של חברה אחת ממאיה לאחסון של קפלר, וכותב jobs/{job}.json בסיום.
+on:
+  workflow_dispatch:
+    inputs:
+      company:
+        description: 'שם החברה (כמו במאיה)'
+        required: true
+        type: string
+      limit:
+        description: 'כמה דוחות אחרונים (עד 20)'
+        required: false
+        default: '8'
+        type: string
+      job:
+        description: 'מזהה הבקשה (קפלר קורא לפיו את התוצאה)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: fetch-reports-${{ inputs.company }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04 # ראה collect.yml — ב-26 התקנת Playwright נכשלת
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: קאש דפדפן Playwright
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}
+      - name: התקנת דפדפן Playwright
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+      - name: הורדת הדוחות
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node collector/financial-reports.mjs --company "${{ inputs.company }}" --limit "${{ inputs.limit }}" --job "${{ inputs.job }}"

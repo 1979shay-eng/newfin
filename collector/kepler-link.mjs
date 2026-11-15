@@ -74,6 +74,18 @@ export function periodEndFromTitle(title) {
   if (m) return `${m[1]}-06-30`
   m = t.match(/(?:תקופתי|שנתי|לשנת)\D{0,12}(\d{4})/)
   if (m) return `${m[1]}-12-31`
+  // אנגלית: "As of June 30, 2026" / "as at 30 June 2026" / "Q3 2026"
+  const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12' }
+  m = t.match(/\b([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\b/) || t.match(/\b(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})\b/)
+  if (m) {
+    const [a, b] = /^\d/.test(m[1]) ? [m[2], m[1]] : [m[1], m[2]]
+    const mm = MONTHS[a.toLowerCase()]
+    if (mm) return `${m[3]}-${mm}-${String(b).padStart(2, '0')}`
+  }
+  m = t.match(/\bQ([1-4])[\s-]*(\d{4})\b/i)
+  if (m) return `${m[2]}-${['03-31', '06-30', '09-30', '12-31'][Number(m[1]) - 1]}`
+  m = t.match(/\b(?:annual report|10-?K)\D{0,12}(\d{4})\b/i)
+  if (m) return `${m[1]}-12-31`
   return null
 }
 
@@ -130,4 +142,71 @@ export async function uploadToKepler(path, buf, contentType) {
   const { error } = await db.storage.from(BUCKET).upload(path, buf, { contentType, upsert: true })
   if (error) throw new Error(`אחסון נכשל (${path}): ${error.message}`)
   return path
+}
+
+// תוצאת הבאה לפי דרישה — קפלר (kepler_fetch_status) קורא את הקובץ הזה כדי לדעת שהסתיים.
+export async function writeJobStatus(job, obj) {
+  if (!job) return
+  const body = Buffer.from(JSON.stringify({ job, ...obj, finished_at: new Date().toISOString() }))
+  await uploadToKepler(`jobs/${job}.json`, body, 'application/json').catch((e) => console.error('כתיבת סטטוס נכשלה:', e.message))
+}
+
+// ── הורדת דוח ממאיה ושמירתו ─────────────────────────────────────────
+// משותף להבאה לפי דרישה (financial-reports.mjs) ולשמירה כשהדוח עובר בפיד (run.mjs).
+const MAYA = 'https://maya.tase.co.il'
+const MAYA_FILES = 'https://mayafiles.tase.co.il'
+
+export async function mayaGet(ctx, path) {
+  const r = await ctx.request.get(MAYA + path, { headers: { Accept: 'application/json' }, timeout: 20000 })
+  if (r.status() !== 200) throw new Error(`GET ${path} -> ${r.status()}`)
+  return r.json()
+}
+
+// אילו דיווחים כבר שמורים (עם טקסט) מתוך רשימת מזהים / לחברה
+export async function savedReportIds({ ids, mayaCompanyId } = {}) {
+  let q = db.from('kepler_reports').select('maya_report_id,text')
+  if (ids) q = q.in('maya_report_id', ids.map(String))
+  if (mayaCompanyId) q = q.eq('maya_company_id', String(mayaCompanyId))
+  const { data, error } = await q
+  if (error) throw error
+  return new Set((data || []).filter((r) => r.text).map((r) => r.maya_report_id))
+}
+
+// rep: { id, title, kind, publishDate } · company: { maya_company_id, name_he } · entity: { id } | null
+export async function fetchAndStoreReport(ctx, rep, company, entity) {
+  const full = await mayaGet(ctx, `/api/v1/reports/${rep.id}`)
+  const pdf = (full.attachments || []).find((a) => String(a.fileType).startsWith('pdf'))
+  const xbrl = (full.attachments || []).find((a) => String(a.fileType) === 'xbrl')
+  const row = {
+    maya_report_id: String(rep.id),
+    maya_company_id: String(company.maya_company_id),
+    company_name: company.name_he,
+    entity_id: entity?.id ?? null,
+    title: rep.title,
+    report_kind: rep.kind,
+    period_end: periodEndFromTitle(rep.title),
+    published_at: new Date(String(full.publishDate || rep.publishDate).replace(/([+-]\d{2}:?\d{2}|Z)?$/, '+02:00')).toISOString(),
+    pdf_url: pdf ? `${MAYA_FILES}/${pdf.url}` : `${MAYA}/he/reports/companies/${company.maya_company_id}`,
+    xbrl_url: xbrl ? `${MAYA_FILES}/${xbrl.url}` : null,
+    form_id: full.formId || null,
+    fetched_at: new Date().toISOString(),
+    error: null,
+  }
+  if (!pdf) {
+    row.error = 'אין קובץ PDF מצורף'
+  } else {
+    const r = await ctx.request.get(row.pdf_url, { timeout: 120000 })
+    if (r.status() !== 200) throw new Error(`הורדת PDF נכשלה (${r.status()})`)
+    const buf = await r.body()
+    row.bytes = buf.length
+    row.file_path = await uploadToKepler(`reports/${company.maya_company_id}/${rep.id}.pdf`, buf, 'application/pdf')
+    const { text, pages } = await pdfToText(buf)
+    row.text = text
+    row.pages = pages
+    row.chars = text.length
+    if (text.replace(/\[עמוד \d+\]/g, '').trim().length < 200) row.error = 'PDF סרוק — אין שכבת טקסט'
+  }
+  const { error } = await db.from('kepler_reports').upsert(row, { onConflict: 'maya_report_id' })
+  if (error) throw new Error(`כתיבה ל-kepler_reports נכשלה: ${error.message}`)
+  return row
 }

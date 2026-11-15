@@ -6,6 +6,36 @@ import { scoreReport } from './materiality.mjs'
 import { enrich, blendScore, signalEnabled } from './signal.mjs'
 import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap } from './db.mjs'
 import { classifyCompanySectors } from './sectors.mjs'
+import { classifyReport, matchKeplerEntity, savedReportIds, fetchAndStoreReport } from './kepler-link.mjs'
+
+// שכבת הדוחות של קפלר: כשדוח רבעוני/שנתי של חברה שכבר בקפלר עובר בפיד — שומרים
+// אותו מיד (PDF + טקסט). בלי סריקה: הדיווחים ממילא כבר כאן, רק בודקים מי מהם דוח.
+async function saveKeplerReports(ctx, raw) {
+  const cands = []
+  for (const r of raw) {
+    const kind = classifyReport(r.title)
+    if (kind !== 'quarterly' && kind !== 'annual') continue
+    const co = r.companies?.[0]
+    if (!co?.companyId) continue
+    cands.push({ rep: { id: String(r.id), title: r.title, kind, publishDate: r.publishDate }, company: { maya_company_id: String(co.companyId), name_he: co.name } })
+  }
+  if (!cands.length) return 0
+  const have = await savedReportIds({ ids: cands.map((c) => c.rep.id) })
+  let saved = 0
+  for (const c of cands) {
+    if (have.has(c.rep.id)) continue
+    const entity = await matchKeplerEntity(c.company.name_he)
+    if (!entity) continue // לא בקפלר — לא מורידים (לפי דרישה בלבד)
+    try {
+      const row = await fetchAndStoreReport(ctx, c.rep, c.company, entity)
+      saved++
+      console.log(`📄 קפלר: נשמר "${c.rep.title}" של ${entity.name} (${row.pages ?? '?'} עמ')`)
+    } catch (e) {
+      console.warn(`⚠️  קפלר: "${c.rep.title}" לא נשמר — ${e.message}`)
+    }
+  }
+  return saved
+}
 
 const ENRICH_TOP = 16 // כמה פריטים מהותיים להעשיר ב-AI לכל ריצה (מאוזן מול מגבלת 15 דק')
 const ENRICH_MIN = 5 // סף ציון-כללים להעשרה — מתחתיו לא שורפים מכסת Groq על שגרה טכנית
@@ -99,6 +129,13 @@ try {
 
   const { count } = await upsertItems(items)
   console.log(`✅ נשמרו/עודכנו: ${count} פריטים ממאיה`)
+
+  // דוחות כספיים חדשים של חברות קפלר — נשמרים כשהם עוברים כאן (ראה למעלה)
+  try {
+    await saveKeplerReports(ctx, raw)
+  } catch (e) {
+    console.warn('⚠️  שמירת דוחות לקפלר נכשלה:', e.message)
+  }
 
   // ── סיווג חברות לסקטור (ממלא בהדרגה את companies.sector) ──
   try {

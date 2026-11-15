@@ -192,7 +192,11 @@ FocusFin (dash.focusfin.co.il) כבר עושה קרולר פיננסי ממוק�
 
 **סקריפט תיקון רטרואקטיבי:** `node collector/rescore-noise.mjs` (מצב יבש) / `--apply`. נחוץ כי האספן מדרג רק דיווחים שנשלפים מחדש (חלון ~יום), ו-`getEnrichedMap` משמר ציון קיים לפריטים מועשרים. המדיניות: טופס שגרתי נכפה למטה **גם אם ה-AI נתן ציון גבוה** (ה-AI נתן 8 ל"פתיחת מסחר — עושה שוק"); פריט מועשר שאינו טופס שגרתי — לא נוגעים.
 
-**15.11.2026 — שכבת הדוחות של קפלר (באספן הזה, לטבלאות `kepler_*`).** קפלר (`Downloads\kepler`, מחבר MCP) מקבל את הדוחות הכספיים דרך שני אספנים כאן, כי כאן כבר יש Playwright שעובר את מאיה ואותו Supabase: `collector/financial-reports.mjs` (PDF ממאיה דרך `siblings` של הדיווח האחרון בטבלת items → `kepler-files` + טקסט pdfjs → `kepler_reports`; **לפי דרישה / חברות קפלר בלבד**, לא שאיבה המונית) ו-`collector/magna-xbrl.mjs` (API רשמי חינמי של מגנא, נתוני iXBRL → `kepler_financials`; ~43 חברות). עזרים משותפים ב-`collector/kepler-link.mjs` (סיווג כותרת → quarterly/annual/presentation, תאריך תקופה, קישור לישות קפלר לפי שם מנורמל). שניהם רצים ב-`collect.yml` 4 פעמים ביום (02/08/14/20 UTC, ברבע הראשון של השעה; הסבב עצמו מוגבל ל-30 דק', ולכן `--max-total 10` הורדות לריצה). תלות חדשה: `pdfjs-dist`.
+**15.11.2026 — שכבת הדוחות של קפלר (באספן הזה, לטבלאות `kepler_*`). הכל לפי דרישה, אין סריקה.** קפלר (`Downloads\kepler`, מחבר MCP) משיג דוחות כספיים דרך הקוד כאן, כי כאן יש Playwright שעובר את מאיה ואותו Supabase:
+- `collector/financial-reports.mjs --company X [--job id]` — PDF ממאיה דרך `siblings` של הדיווח האחרון בטבלת items → `kepler-files` + טקסט pdfjs → `kepler_reports`. מופעל **מ-claude.ai** דרך `.github/workflows/fetch-reports.yml` (workflow_dispatch; קפלר קורא ל-GitHub API עם PAT) או ידנית. בסיום כותב `jobs/{job}.json` לאחסון.
+- `run.mjs → saveKeplerReports`: כשדוח רבעוני/שנתי של חברה **שכבר בקפלר** עובר בפיד הרגיל — נשמר מיד. בלי חיפוש לפי חברות.
+- `collector/magna-xbrl.mjs` — נתוני iXBRL ממגנא (API רשמי, חינמי) → `kepler_financials`. לא חובה: הכלי `kepler_financials` שולף ממגנא בעצמו כשאין שמור.
+- עזרים משותפים: `collector/kepler-link.mjs` (סיווג כותרת, תאריך תקופה כולל אנגלית, קישור לישות קפלר, `fetchAndStoreReport`). תלות חדשה: `pdfjs-dist`.
 
 **מפתחות:** `.env.local` (אתר), `collector/.env` (מנוע: service key + GROQ). ב-GitHub Secrets: SUPABASE_URL / SUPABASE_SERVICE_KEY / GROQ_API_KEY. הכל מחוץ ל-git.
 
