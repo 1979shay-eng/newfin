@@ -21,7 +21,7 @@
 //        [--job <id>] [--dry]
 import { openMaya } from './maya.mjs'
 import { db } from './db.mjs'
-import { classifyReport, periodEndFromTitle, DOSSIER_SLOTS, DOSSIER_MAX_MONTHS, monthsAgo, matchKeplerEntity, normName, mayaGet, savedReportIds, fetchAndStoreReport, writeJobStatus } from './kepler-link.mjs'
+import { classifyReport, periodEndFromTitle, DOSSIER_SLOTS, DOSSIER_MAX_MONTHS, monthsAgo, matchKeplerEntity, normName, mayaGet, mayaPost, savedReportIds, fetchAndStoreReport, writeJobStatus } from './kepler-link.mjs'
 
 const args = process.argv.slice(2)
 const flag = (f) => args.includes(f)
@@ -62,6 +62,14 @@ async function seedReportId(companyId) {
   const { data } = await db.from('items').select('maya_report_id').eq('company_id', companyId).not('maya_report_id', 'is', null).order('published_at', { ascending: false }).limit(1)
   const id = data?.[0]?.maya_report_id
   return id && /^\d+$/.test(id) ? id : null
+}
+
+// אין דיווח של החברה בפיד (חברה שקטה / לא נאספה) → הזרם המלא של מאיה מסונן לחברה (companyId)
+async function seedFromMaya(ctx, mayaCompanyId) {
+  const d = await mayaPost(ctx, '/api/v1/reports/companies', { pageNumber: 1, limit: 20, offset: 0, companyId: Number(mayaCompanyId) })
+  const arr = Array.isArray(d) ? d : d?.reports || d?.result || d?.items || d?.data || []
+  const id = arr.find((r) => r?.id != null)?.id
+  return id != null ? String(id) : null
 }
 
 // מדפדף אחורה בדיווחי החברה. done(cands) מחזיר true כשאפשר להפסיק.
@@ -126,12 +134,12 @@ try {
   result.maya_company_id = company.maya_company_id
   const entity = await matchKeplerEntity(company.name_he)
   result.kepler_entity = entity?.name ?? null
-  const seed = await seedReportId(company.id)
-  if (!seed) throw new Error('אין אף דיווח של החברה בטבלת items (נדרש כזרע לדפדוף במאיה)')
   const have = await savedReportIds({ mayaCompanyId: company.maya_company_id })
 
   console.log(`▸ ${company.name_he} (מאיה ${company.maya_company_id})${entity ? ' → קפלר: ' + entity.name : ''}; ${have.size} דוחות כבר שמורים; מצב: ${MODE}`)
   ;({ browser, ctx } = await openMaya())
+  const seed = (await seedReportId(company.id)) || (await seedFromMaya(ctx, company.maya_company_id))
+  if (!seed) throw new Error(`לא נמצא אף דיווח של ${company.name_he} במאיה`)
 
   let toFetch = []
   if (MODE === 'bundle') {

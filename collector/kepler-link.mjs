@@ -248,6 +248,10 @@ export async function mayaGet(ctx, path) {
   const r = await withRewarm(ctx, `GET ${path}`, () => ctx.request.get(MAYA + path, { headers: { Accept: 'application/json' }, timeout: 20000 }))
   return r.json()
 }
+export async function mayaPost(ctx, path, body) {
+  const r = await withRewarm(ctx, `POST ${path}`, () => ctx.request.post(MAYA + path, { headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: body, timeout: 20000 }))
+  return r.json()
+}
 export async function mayaFile(ctx, url, timeout = 120000) {
   const r = await withRewarm(ctx, `הורדה ${url.split('/').pop()}`, () => ctx.request.get(url, { timeout }))
   return r.body()
