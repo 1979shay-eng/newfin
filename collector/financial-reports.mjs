@@ -1,21 +1,27 @@
-// דוחות כספיים ממאיה → kepler_reports (PDF באחסון kepler-files + טקסט מחולץ)
+// דוחות כספיים ממאיה → kepler_reports (PDF/HTML באחסון kepler-files + טקסט מחולץ)
 //
 // **לפי דרישה בלבד.** מורידים את הדוחות של חברה אחת כשמבקשים אותם:
 //   - מ-claude.ai: קפלר (kepler_fetch_reports) מעיר את התהליך fetch-reports.yml ב-GitHub,
 //     שמריץ את הסקריפט הזה עם --job; בסיום נכתב jobs/{job}.json לאחסון וקפלר קורא אותו.
-//   - מהמחשב: node collector/financial-reports.mjs --company "מטריקס" [--limit 8]
+//   - מהמחשב: node collector/financial-reports.mjs --company "מטריקס"
 // דוחות חדשים של חברות שכבר בקפלר נשמרים בלי הסקריפט הזה: run.mjs רואה אותם
 // כשהם עוברים בפיד (ראה saveKeplerReports שם). אין סריקה של חברות.
 //
-// איך מוצאים את הדוחות: אין במאיה נקודת קצה "דיווחים לפי חברה" פתוחה, אבל
+// שני מצבים:
+//   --bundle (ברירת מחדל)  הסט המלא לניתוח: דוח שנתי אחרון, רבעוני אחרון, מצגת אחרונה,
+//                           מצגת שנתית, דוח דירוג (מעקב) אחרון, מצבת התחייבויות אחרונה (HTML).
+//                           מדווח אילו משבצות לא נמצאו (missing) — קפלר מתריע למשתמש.
+//   --latest N              N הדוחות/מצגות האחרונים בלי משבצות (היסטוריה).
+//
+// איך מוצאים: אין במאיה נקודת קצה "דיווחים לפי חברה" פתוחה, אבל
 // GET /api/v1/reports/{id}/siblings מחזיר את דיווחי אותה חברה (30 לעמוד, אחורה בזמן).
 // הזרע: הדיווח האחרון של החברה בטבלת items של האתר.
 //
-// דגלים: --company <שם> | --maya-company-id <id>   --limit 8   --kinds quarterly,annual,presentation
-//        --pages 40 (עומק הדפדוף)   --job <id> (כתיבת סטטוס לאחסון)   --dry (רשימה בלבד)
+// דגלים: --company <שם> | --maya-company-id <id>   [--bundle | --latest 8]   [--pages 60]
+//        [--job <id>] [--dry]
 import { openMaya } from './maya.mjs'
 import { db } from './db.mjs'
-import { classifyReport, matchKeplerEntity, normName, mayaGet, savedReportIds, fetchAndStoreReport, writeJobStatus } from './kepler-link.mjs'
+import { classifyReport, periodEndFromTitle, DOSSIER_SLOTS, matchKeplerEntity, normName, mayaGet, savedReportIds, fetchAndStoreReport, writeJobStatus } from './kepler-link.mjs'
 
 const args = process.argv.slice(2)
 const flag = (f) => args.includes(f)
@@ -23,9 +29,9 @@ const opt = (f, d) => {
   const i = args.indexOf(f)
   return i > -1 ? args[i + 1] : d
 }
-const LIMIT = Math.min(Number(opt('--limit', 8)) || 8, 20)
-const KINDS = new Set(opt('--kinds', 'quarterly,annual,presentation').split(','))
-const MAX_PAGES = Number(opt('--pages', 40)) // 40 × 30 = 1,200 דיווחים אחורה (~2-3 שנים לחברה פעילה)
+const MODE = opt('--latest') ? 'latest' : 'bundle'
+const LATEST_N = Math.min(Number(opt('--latest', 8)) || 8, 20)
+const MAX_PAGES = Number(opt('--pages', 60)) // 60 × 30 = 1,800 דיווחים אחורה (~שנה-שלוש, תלוי בחברה)
 const JOB = opt('--job', null)
 const DRY = flag('--dry')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -58,41 +64,57 @@ async function seedReportId(companyId) {
   return id && /^\d+$/.test(id) ? id : null
 }
 
-// מדפדף אחורה בדיווחי החברה ואוסף את הדוחות הכספיים הראשונים שעדיין לא נשמרו
-async function findReports(ctx, seedId, have, { limit }) {
-  const found = []
+// מדפדף אחורה בדיווחי החברה. done(cands) מחזיר true כשאפשר להפסיק.
+async function* walkReports(ctx, seedId) {
   const seen = new Set()
-  for (let p = 0; p < MAX_PAGES && found.length < limit; p++) {
+  for (let p = 0; p < MAX_PAGES; p++) {
     let arr
     try {
       arr = await mayaGet(ctx, `/api/v1/reports/${seedId}/siblings?offset=${p * 30}&limit=30`)
     } catch (e) {
       if (p === 0) throw e
-      break
+      return
     }
-    if (!Array.isArray(arr) || !arr.length) break
+    if (!Array.isArray(arr) || !arr.length) return
     for (const s of arr) {
       const id = String(s.id)
       if (seen.has(id)) continue
       seen.add(id)
       const kind = classifyReport(s.title)
-      if (!KINDS.has(kind) || have.has(id)) continue
-      found.push({ id, title: s.title, kind, publishDate: s.publishDate })
-      if (found.length >= limit) break
+      if (kind === 'other') continue
+      yield { id, title: s.title, kind, publishDate: s.publishDate, period_end: periodEndFromTitle(s.title), report_kind: kind }
     }
-    if (arr.length < 30) break
+    if (arr.length < 30) return
   }
-  return found
+}
+
+// הסט המלא: המופע האחרון לכל משבצת (הדפדוף הולך אחורה בזמן, לכן הראשון שנמצא = האחרון שפורסם)
+async function findBundle(ctx, seedId) {
+  const slots = Object.fromEntries(DOSSIER_SLOTS.map((s) => [s.key, null]))
+  for await (const rep of walkReports(ctx, seedId)) {
+    for (const s of DOSSIER_SLOTS) if (!slots[s.key] && s.match(rep)) slots[s.key] = rep
+    if (DOSSIER_SLOTS.every((s) => slots[s.key])) break
+  }
+  return slots
+}
+
+async function findLatest(ctx, seedId, n) {
+  const out = []
+  for await (const rep of walkReports(ctx, seedId)) {
+    if (['quarterly', 'annual', 'presentation'].includes(rep.kind)) out.push(rep)
+    if (out.length >= n) break
+  }
+  return out
 }
 
 // ── הפעלה ─────────────────────────────────────────────────────────
 if (!opt('--company') && !opt('--maya-company-id')) {
-  console.log('שימוש: --company <שם> | --maya-company-id <id>   [--limit 8] [--kinds quarterly,annual,presentation] [--pages 40] [--job <id>] [--dry]')
+  console.log('שימוש: --company <שם> | --maya-company-id <id>   [--bundle | --latest 8] [--pages 60] [--job <id>] [--dry]')
   process.exit(2)
 }
 
 const t0 = Date.now()
-const result = { ok: false, company: opt('--company') || null, saved: [], errors: [] }
+const result = { ok: false, mode: MODE, company: opt('--company') || null, saved: [], already: [], missing: [], errors: [] }
 let browser
 let ctx
 try {
@@ -104,13 +126,35 @@ try {
   const seed = await seedReportId(company.id)
   if (!seed) throw new Error('אין אף דיווח של החברה בטבלת items (נדרש כזרע לדפדוף במאיה)')
   const have = await savedReportIds({ mayaCompanyId: company.maya_company_id })
-  result.already_saved = have.size
 
-  console.log(`▸ ${company.name_he} (מאיה ${company.maya_company_id})${entity ? ' → קפלר: ' + entity.name : ''}; ${have.size} דוחות כבר שמורים`)
+  console.log(`▸ ${company.name_he} (מאיה ${company.maya_company_id})${entity ? ' → קפלר: ' + entity.name : ''}; ${have.size} דוחות כבר שמורים; מצב: ${MODE}`)
   ;({ browser, ctx } = await openMaya())
-  const reps = await findReports(ctx, seed, have, { limit: LIMIT })
-  result.found = reps.length
-  for (const rep of reps) {
+
+  let toFetch = []
+  if (MODE === 'bundle') {
+    const slots = await findBundle(ctx, seed)
+    result.slots = {}
+    for (const s of DOSSIER_SLOTS) {
+      const rep = slots[s.key]
+      if (!rep) {
+        result.missing.push(s.label)
+        console.log(`   ✗ ${s.label}: לא נמצא ב-${MAX_PAGES * 30} הדיווחים האחרונים`)
+        continue
+      }
+      result.slots[s.key] = { label: s.label, title: rep.title, published: rep.publishDate.slice(0, 10), period_end: rep.period_end, maya_report_id: rep.id }
+      if (have.has(rep.id)) {
+        result.already.push(s.label)
+        console.log(`   = ${s.label}: כבר שמור — ${rep.title}`)
+      } else if (!toFetch.some((r) => r.id === rep.id)) toFetch.push(rep)
+    }
+  } else {
+    const reps = await findLatest(ctx, seed, LATEST_N)
+    toFetch = reps.filter((r) => !have.has(r.id))
+    result.already = reps.filter((r) => have.has(r.id)).map((r) => r.title)
+  }
+  result.found = toFetch.length
+
+  for (const rep of toFetch) {
     if (DRY) {
       console.log(`   · ${rep.publishDate.slice(0, 10)}  [${rep.kind}]  ${rep.title}`)
       continue
@@ -134,6 +178,6 @@ try {
   if (browser) await browser.close()
 }
 result.seconds = Math.round((Date.now() - t0) / 1000)
-console.log(`דוחות: ${result.saved.length} נשמרו, ${result.errors.length} כשלים, ${result.seconds} שניות`)
+console.log(`דוחות: ${result.saved.length} נשמרו, ${result.already.length} כבר היו, ${result.missing.length} חסרים, ${result.errors.length} כשלים, ${result.seconds} שניות`)
 await writeJobStatus(JOB, result)
 process.exit(result.ok ? 0 : 1)

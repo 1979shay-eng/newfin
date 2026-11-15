@@ -47,15 +47,36 @@ export async function matchKeplerEntity(...names) {
 
 // ── סיווג דיווחים ממאיה ────────────────────────────────────────────
 // מסווג לפי הכותרת בלבד (ה-formId במאיה לא אחיד בין חברות רגילות לדואליות).
+// סוגים: annual · quarterly · presentation · rating (דוח מעקב/אשרור דירוג, לא דירוג הנפקה) ·
+//        debt (מצבת התחייבויות לפי מועדי פירעון — דיווח HTML) · other
 const NOT_REPORT = /מועד פרסום|צפוי(ה)? לפרסם|זימון|שיחת ועידה|אישור סקירת|Form 52-109|הודעה בדבר|דחיית|תזכורת/
+const RATING_AGENCY = /מידרוג|מעלות|S&P|Fitch|Moody/i
+// דירוג של הנפקה/סדרה חדשה — לא זה שמבקשים לניתוח
+const RATING_ISSUANCE = /להנפק|שתנפיק|שינפיק|הנפקת|קובעת דירוג|מתן דירוג|נתנה דירוג|דירוג מקדמי|דרוג מקדמי|מותנה|\(P\)|סדרה חדשה|מסירה את ההתניה|ני["״]?ע מסחריים/
+const RATING_FOLLOWUP = /מותירה על כנ|מאשרר|אשרר|אישרור|מעקב|מעלה (את )?(ה)?דירוג|מורידה (את )?(ה)?דירוג|מעדכנת|משנה (את )?(ה)?אופק|אופק הדירוג|תחזית הדירוג|דוח הדירוג המלא|הערכת האיתנות/
 export function classifyReport(title) {
   const t = String(title ?? '')
+  if (/מצבת התחייבו(ת|יות)|מועדי פר[יע]?עון/.test(t) && !/דחיית/.test(t)) return 'debt'
+  if (RATING_AGENCY.test(t) || /דו["״]?ח דירוג/.test(t)) {
+    if (RATING_FOLLOWUP.test(t) && !RATING_ISSUANCE.test(t)) return 'rating'
+    return 'other'
+  }
   if (NOT_REPORT.test(t)) return 'other'
-  if (/מצגת/.test(t)) return /דוח|רבעון|תוצאות|שוק ההון|משקיעים|כספי/.test(t) ? 'presentation' : 'other'
+  if (/מצגת/.test(t)) return /דוח|רבעון|תוצאות|שוק ההון|משקיעים|כספי|שנת/.test(t) ? 'presentation' : 'other'
   if (/דו["״]?ח(ות)? (תקופתי|שנתי)|תקופתי ושנתי|annual report|10-?K\b/i.test(t)) return 'annual'
   if (/דו["״]?ח(ות)? (רבעוני|רבעון|כספי|ביניים|לרבעון)|רבעון \d|חצי שנתי|quarterly report|10-?Q\b|6-?K\b/i.test(t)) return 'quarterly'
   return 'other'
 }
+
+// "משבצות" הסט המלא לניתוח חברה. מצגת שנתית = מצגת שתקופתה מסתיימת ב-31.12.
+export const DOSSIER_SLOTS = [
+  { key: 'annual', label: 'דוח שנתי אחרון', match: (r) => r.report_kind === 'annual' },
+  { key: 'quarterly', label: 'דוח רבעוני אחרון', match: (r) => r.report_kind === 'quarterly' },
+  { key: 'presentation', label: 'מצגת אחרונה', match: (r) => r.report_kind === 'presentation' },
+  { key: 'presentation_annual', label: 'מצגת שנתית', match: (r) => r.report_kind === 'presentation' && /-12-31$/.test(r.period_end || '') },
+  { key: 'rating', label: 'דוח דירוג אחרון (מעקב)', match: (r) => r.report_kind === 'rating' },
+  { key: 'debt', label: 'מצבת התחייבויות אחרונה (HTML)', match: (r) => r.report_kind === 'debt' },
+]
 
 // תאריך סוף התקופה מתוך הכותרת. מחזיר 'YYYY-MM-DD' או null.
 export function periodEndFromTitle(title) {
@@ -137,6 +158,46 @@ export async function pdfToText(buf, { maxPages = 400 } = {}) {
   }
 }
 
+// ── דיווחי HTML של מאיה (טפסים מובנים כמו מצבת התחייבויות, ת126) ───────
+// הקבצים ב-windows-1255. טבלאות → שורה לכל <tr>, תאים מופרדים ב-" | ".
+export function htmlToText(buf) {
+  let html
+  try {
+    html = new TextDecoder('windows-1255').decode(buf)
+    if (/charset=["']?utf-?8/i.test(html.slice(0, 2000)) || /[�]/.test(html.slice(0, 5000))) html = buf.toString('utf8')
+  } catch {
+    html = buf.toString('utf8')
+  }
+  const strip = (s) =>
+    s
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+      .replace(/\s+/g, ' ')
+      .trim()
+  html = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/gi, '')
+  const lines = []
+  // טבלאות: כל שורה בנפרד
+  const rows = html.split(/<\/tr\s*>/i)
+  for (const row of rows) {
+    const cells = row
+      .split(/<\/t[dh]\s*>/i)
+      .map((c) => strip(c.replace(/^[\s\S]*<t[dh][^>]*>/i, (m) => m.replace(/^[\s\S]*?(<t[dh][^>]*>)$/i, '$1')).replace(/^[\s\S]*?<t[dh][^>]*>/i, '')))
+      .filter((c) => c)
+    if (cells.length) lines.push(cells.join(' | '))
+    else {
+      const t = strip(row)
+      if (t) lines.push(t)
+    }
+  }
+  return lines
+    .map((l) => l.replace(/^(\|\s*)+|(\s*\|)+$/g, '').trim())
+    .filter((l) => l && !/^_+$/.test(l) && l !== 'false' && !/^\|( \|)*$/.test(l))
+    .join('\n')
+}
+
 export const BUCKET = 'kepler-files'
 export async function uploadToKepler(path, buf, contentType) {
   const { error } = await db.storage.from(BUCKET).upload(path, buf, { contentType, upsert: true })
@@ -176,7 +237,10 @@ export async function savedReportIds({ ids, mayaCompanyId } = {}) {
 export async function fetchAndStoreReport(ctx, rep, company, entity) {
   const full = await mayaGet(ctx, `/api/v1/reports/${rep.id}`)
   const pdf = (full.attachments || []).find((a) => String(a.fileType).startsWith('pdf'))
+  const htm = (full.attachments || []).find((a) => String(a.fileType) === 'htm')
   const xbrl = (full.attachments || []).find((a) => String(a.fileType) === 'xbrl')
+  // טפסים מובנים (מצבת התחייבויות) מגיעים כ-HTML בלבד; עבורם ה-HTML הוא המקור
+  const useHtml = htm && (!pdf || rep.kind === 'debt')
   const row = {
     maya_report_id: String(rep.id),
     maya_company_id: String(company.maya_company_id),
@@ -186,13 +250,24 @@ export async function fetchAndStoreReport(ctx, rep, company, entity) {
     report_kind: rep.kind,
     period_end: periodEndFromTitle(rep.title),
     published_at: new Date(String(full.publishDate || rep.publishDate).replace(/([+-]\d{2}:?\d{2}|Z)?$/, '+02:00')).toISOString(),
-    pdf_url: pdf ? `${MAYA_FILES}/${pdf.url}` : `${MAYA}/he/reports/companies/${company.maya_company_id}`,
+    pdf_url: pdf ? `${MAYA_FILES}/${pdf.url}` : htm ? `${MAYA_FILES}/${htm.url}` : `${MAYA}/he/reports/companies/${company.maya_company_id}`,
     xbrl_url: xbrl ? `${MAYA_FILES}/${xbrl.url}` : null,
     form_id: full.formId || null,
     fetched_at: new Date().toISOString(),
     error: null,
   }
-  if (!pdf) {
+  if (useHtml) {
+    const r = await ctx.request.get(`${MAYA_FILES}/${htm.url}`, { timeout: 60000 })
+    if (r.status() !== 200) throw new Error(`הורדת HTML נכשלה (${r.status()})`)
+    const buf = await r.body()
+    row.bytes = buf.length
+    row.file_path = await uploadToKepler(`reports/${company.maya_company_id}/${rep.id}.htm`, buf, 'text/html; charset=windows-1255')
+    const text = htmlToText(buf).slice(0, MAX_TEXT)
+    row.text = text
+    row.pages = 1
+    row.chars = text.length
+    if (text.length < 100) row.error = 'HTML ריק'
+  } else if (!pdf) {
     row.error = 'אין קובץ PDF מצורף'
   } else {
     const r = await ctx.request.get(row.pdf_url, { timeout: 120000 })

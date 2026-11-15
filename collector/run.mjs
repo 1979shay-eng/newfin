@@ -8,13 +8,14 @@ import { db, upsertCompany, getMayaSourceId, upsertItems, getEnrichedMap } from 
 import { classifyCompanySectors } from './sectors.mjs'
 import { classifyReport, matchKeplerEntity, savedReportIds, fetchAndStoreReport } from './kepler-link.mjs'
 
-// שכבת הדוחות של קפלר: כשדוח רבעוני/שנתי של חברה שכבר בקפלר עובר בפיד — שומרים
-// אותו מיד (PDF + טקסט). בלי סריקה: הדיווחים ממילא כבר כאן, רק בודקים מי מהם דוח.
+// שכבת הדוחות של קפלר: כשדוח (רבעוני/שנתי/מצגת/דירוג מעקב/מצבת התחייבויות) של חברה
+// שכבר בקפלר עובר בפיד — שומרים אותו מיד (PDF/HTML + טקסט). בלי סריקה: הדיווחים ממילא
+// כבר כאן, רק בודקים מי מהם דוח.
 async function saveKeplerReports(ctx, raw) {
   const cands = []
   for (const r of raw) {
     const kind = classifyReport(r.title)
-    if (kind !== 'quarterly' && kind !== 'annual') continue
+    if (!['quarterly', 'annual', 'presentation', 'rating', 'debt'].includes(kind)) continue
     const co = r.companies?.[0]
     if (!co?.companyId) continue
     cands.push({ rep: { id: String(r.id), title: r.title, kind, publishDate: r.publishDate }, company: { maya_company_id: String(co.companyId), name_he: co.name } })

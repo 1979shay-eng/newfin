@@ -9,8 +9,13 @@ on:
         description: 'שם החברה (כמו במאיה)'
         required: true
         type: string
+      mode:
+        description: 'bundle = הסט המלא לניתוח (שנתי, רבעוני, מצגות, דירוג, מצבת חוב) · latest = N האחרונים'
+        required: false
+        default: 'bundle'
+        type: string
       limit:
-        description: 'כמה דוחות אחרונים (עד 20)'
+        description: 'ל-latest: כמה דוחות אחרונים (עד 20)'
         required: false
         default: '8'
         type: string
@@ -52,4 +57,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: node collector/financial-reports.mjs --company "${{ inputs.company }}" --limit "${{ inputs.limit }}" --job "${{ inputs.job }}"
+        run: |
+          if [ "${{ inputs.mode }}" = "latest" ]; then EXTRA="--latest ${{ inputs.limit }}"; else EXTRA="--bundle"; fi
+          node collector/financial-reports.mjs --company "${{ inputs.company }}" $EXTRA --job "${{ inputs.job }}"
