@@ -49,7 +49,8 @@ export async function matchKeplerEntity(...names) {
 // מסווג לפי הכותרת בלבד (ה-formId במאיה לא אחיד בין חברות רגילות לדואליות).
 // סוגים: annual · quarterly · presentation · rating (דוח מעקב/אשרור דירוג, לא דירוג הנפקה) ·
 //        debt (מצבת התחייבויות לפי מועדי פירעון — דיווח HTML) · other
-const NOT_REPORT = /מועד פרסום|צפוי(ה)? לפרסם|זימון|שיחת ועידה|אישור סקירת|Form 52-109|הודעה בדבר|דחיית|תזכורת/
+// "דוחות שנתיים של הנאמן לאג"ח" הוא דוח של הנאמן, לא של החברה — מסונן
+const NOT_REPORT = /מועד פרסום|צפוי(ה)? לפרסם|זימון|שיחת ועידה|אישור סקירת|Form 52-109|הודעה בדבר|דחיית|תזכורת|נאמן|שטר נאמנות/
 const RATING_AGENCY = /מידרוג|מעלות|S&P|Fitch|Moody/i
 // דירוג של הנפקה/סדרה חדשה — לא זה שמבקשים לניתוח
 const RATING_ISSUANCE = /להנפק|שתנפיק|שינפיק|הנפקת|קובעת דירוג|מתן דירוג|נתנה דירוג|דירוג מקדמי|דרוג מקדמי|מותנה|\(P\)|סדרה חדשה|מסירה את ההתניה|ני["״]?ע מסחריים/
@@ -69,14 +70,17 @@ export function classifyReport(title) {
 }
 
 // "משבצות" הסט המלא לניתוח חברה. מצגת שנתית = מצגת שתקופתה מסתיימת ב-31.12.
+// maxMonths = חלון סביר אחורה; מסמך ישן יותר לא ממלא את המשבצת (עדיף "חסר" מאשר מצגת מ-2016).
 export const DOSSIER_SLOTS = [
-  { key: 'annual', label: 'דוח שנתי אחרון', match: (r) => r.report_kind === 'annual' },
-  { key: 'quarterly', label: 'דוח רבעוני אחרון', match: (r) => r.report_kind === 'quarterly' },
-  { key: 'presentation', label: 'מצגת אחרונה', match: (r) => r.report_kind === 'presentation' },
-  { key: 'presentation_annual', label: 'מצגת שנתית', match: (r) => r.report_kind === 'presentation' && /-12-31$/.test(r.period_end || '') },
-  { key: 'rating', label: 'דוח דירוג אחרון (מעקב)', match: (r) => r.report_kind === 'rating' },
-  { key: 'debt', label: 'מצבת התחייבויות אחרונה (HTML)', match: (r) => r.report_kind === 'debt' },
+  { key: 'annual', label: 'דוח שנתי אחרון', maxMonths: 15, match: (r) => r.report_kind === 'annual' },
+  { key: 'quarterly', label: 'דוח רבעוני אחרון', maxMonths: 6, match: (r) => r.report_kind === 'quarterly' },
+  { key: 'presentation', label: 'מצגת אחרונה', maxMonths: 6, match: (r) => r.report_kind === 'presentation' },
+  { key: 'presentation_annual', label: 'מצגת שנתית', maxMonths: 15, match: (r) => r.report_kind === 'presentation' && /-12-31$/.test(r.period_end || '') },
+  { key: 'rating', label: 'דוח דירוג אחרון (מעקב)', maxMonths: 24, match: (r) => r.report_kind === 'rating' },
+  { key: 'debt', label: 'מצבת התחייבויות אחרונה (HTML)', maxMonths: 6, match: (r) => r.report_kind === 'debt' },
 ]
+export const DOSSIER_MAX_MONTHS = Math.max(...DOSSIER_SLOTS.map((s) => s.maxMonths))
+export const monthsAgo = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / (30.44 * 86400000) : Infinity)
 
 // תאריך סוף התקופה מתוך הכותרת. מחזיר 'YYYY-MM-DD' או null.
 export function periodEndFromTitle(title) {
@@ -95,6 +99,9 @@ export function periodEndFromTitle(title) {
   if (m) return `${m[1]}-06-30`
   m = t.match(/(?:תקופתי|שנתי|לשנת)\D{0,12}(\d{4})/)
   if (m) return `${m[1]}-12-31`
+  // "מצגת לסיכום שנת 2025" / "תוצאות שנת 2025" — שנה בלי רבעון = מצגת שנתית
+  m = t.match(/(?:סיכום |תוצאות )?שנת\s*(\d{4})/)
+  if (m && !/רבעון|חצי|Q[1-3]|תשעת|ששת|שלושת/.test(t)) return `${m[1]}-12-31`
   // אנגלית: "As of June 30, 2026" / "as at 30 June 2026" / "Q3 2026"
   const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12' }
   m = t.match(/\b([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\b/) || t.match(/\b(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})\b/)
@@ -217,10 +224,33 @@ export async function writeJobStatus(job, obj) {
 const MAYA = 'https://maya.tase.co.il'
 const MAYA_FILES = 'https://mayafiles.tase.co.il'
 
+// Incapsula מחדשת אתגר באמצע ריצה (בעיקר מכתובות IP של GitHub) → 403. טעינת עמוד
+// מחדש מקבעת עוגיות חדשות באותו context, ואז הבקשה עוברת. מנסים עד פעמיים.
+export async function rewarmMaya(ctx) {
+  const page = await ctx.newPage()
+  try {
+    await page.goto(MAYA + '/he', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    await page.waitForTimeout(3000)
+  } finally {
+    await page.close()
+  }
+}
+async function withRewarm(ctx, label, fn) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fn()
+    if (r.status() === 200) return r
+    if (r.status() !== 403 || attempt >= 2) throw new Error(`${label} -> ${r.status()}`)
+    await rewarmMaya(ctx)
+    await new Promise((res) => setTimeout(res, 2000 * (attempt + 1)))
+  }
+}
 export async function mayaGet(ctx, path) {
-  const r = await ctx.request.get(MAYA + path, { headers: { Accept: 'application/json' }, timeout: 20000 })
-  if (r.status() !== 200) throw new Error(`GET ${path} -> ${r.status()}`)
+  const r = await withRewarm(ctx, `GET ${path}`, () => ctx.request.get(MAYA + path, { headers: { Accept: 'application/json' }, timeout: 20000 }))
   return r.json()
+}
+export async function mayaFile(ctx, url, timeout = 120000) {
+  const r = await withRewarm(ctx, `הורדה ${url.split('/').pop()}`, () => ctx.request.get(url, { timeout }))
+  return r.body()
 }
 
 // אילו דיווחים כבר שמורים (עם טקסט) מתוך רשימת מזהים / לחברה
@@ -257,9 +287,7 @@ export async function fetchAndStoreReport(ctx, rep, company, entity) {
     error: null,
   }
   if (useHtml) {
-    const r = await ctx.request.get(`${MAYA_FILES}/${htm.url}`, { timeout: 60000 })
-    if (r.status() !== 200) throw new Error(`הורדת HTML נכשלה (${r.status()})`)
-    const buf = await r.body()
+    const buf = await mayaFile(ctx, `${MAYA_FILES}/${htm.url}`, 60000)
     row.bytes = buf.length
     row.file_path = await uploadToKepler(`reports/${company.maya_company_id}/${rep.id}.htm`, buf, 'text/html; charset=windows-1255')
     const text = htmlToText(buf).slice(0, MAX_TEXT)
@@ -270,9 +298,7 @@ export async function fetchAndStoreReport(ctx, rep, company, entity) {
   } else if (!pdf) {
     row.error = 'אין קובץ PDF מצורף'
   } else {
-    const r = await ctx.request.get(row.pdf_url, { timeout: 120000 })
-    if (r.status() !== 200) throw new Error(`הורדת PDF נכשלה (${r.status()})`)
-    const buf = await r.body()
+    const buf = await mayaFile(ctx, row.pdf_url)
     row.bytes = buf.length
     row.file_path = await uploadToKepler(`reports/${company.maya_company_id}/${rep.id}.pdf`, buf, 'application/pdf')
     const { text, pages } = await pdfToText(buf)

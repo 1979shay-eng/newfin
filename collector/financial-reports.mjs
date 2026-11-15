@@ -21,7 +21,7 @@
 //        [--job <id>] [--dry]
 import { openMaya } from './maya.mjs'
 import { db } from './db.mjs'
-import { classifyReport, periodEndFromTitle, DOSSIER_SLOTS, matchKeplerEntity, normName, mayaGet, savedReportIds, fetchAndStoreReport, writeJobStatus } from './kepler-link.mjs'
+import { classifyReport, periodEndFromTitle, DOSSIER_SLOTS, DOSSIER_MAX_MONTHS, monthsAgo, matchKeplerEntity, normName, mayaGet, savedReportIds, fetchAndStoreReport, writeJobStatus } from './kepler-link.mjs'
 
 const args = process.argv.slice(2)
 const flag = (f) => args.includes(f)
@@ -88,11 +88,14 @@ async function* walkReports(ctx, seedId) {
   }
 }
 
-// הסט המלא: המופע האחרון לכל משבצת (הדפדוף הולך אחורה בזמן, לכן הראשון שנמצא = האחרון שפורסם)
+// הסט המלא: המופע האחרון לכל משבצת (הדפדוף הולך אחורה בזמן, לכן הראשון שנמצא = האחרון שפורסם).
+// כל משבצת עם חלון זמן; מעבר לחלון הארוך ביותר מפסיקים לדפדף — מה שלא נמצא מדווח כחסר.
 async function findBundle(ctx, seedId) {
   const slots = Object.fromEntries(DOSSIER_SLOTS.map((s) => [s.key, null]))
   for await (const rep of walkReports(ctx, seedId)) {
-    for (const s of DOSSIER_SLOTS) if (!slots[s.key] && s.match(rep)) slots[s.key] = rep
+    const age = monthsAgo(rep.publishDate)
+    if (age > DOSSIER_MAX_MONTHS) break
+    for (const s of DOSSIER_SLOTS) if (!slots[s.key] && age <= s.maxMonths && s.match(rep)) slots[s.key] = rep
     if (DOSSIER_SLOTS.every((s) => slots[s.key])) break
   }
   return slots
@@ -138,7 +141,7 @@ try {
       const rep = slots[s.key]
       if (!rep) {
         result.missing.push(s.label)
-        console.log(`   ✗ ${s.label}: לא נמצא ב-${MAX_PAGES * 30} הדיווחים האחרונים`)
+        console.log(`   ✗ ${s.label}: לא נמצא ב-${s.maxMonths} החודשים האחרונים`)
         continue
       }
       result.slots[s.key] = { label: s.label, title: rep.title, published: rep.publishDate.slice(0, 10), period_end: rep.period_end, maya_report_id: rep.id }
@@ -167,7 +170,7 @@ try {
       result.errors.push(`${rep.title}: ${e.message}`)
       console.error(`   ✗ ${rep.title}: ${e.message}`)
     }
-    await sleep(1500)
+    await sleep(3000) // קצב נינוח — Incapsula רגישה לרצף מהיר, במיוחד מ-GitHub
   }
   result.ok = true
 } catch (e) {
